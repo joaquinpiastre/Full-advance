@@ -9,10 +9,11 @@ import { Cliente, CategoriaCliente } from '../../types';
 import Buscador from '../../components/Buscador';
 
 const FORM_VACIO = {
-  nombre: '', direccion: '', lat: '', lng: '', telefono: '', notas: '',
+  nombre: '', direccion: '', telefono: '', notas: '',
   categoria: '' as CategoriaCliente | '',
   razon_social: '', cuit: '', rubro: '', email: '', contacto_nombre: '', horario_atencion: '',
   monto_compra_promedio: '', frecuencia_compra: '', forma_pago: '', dia_visita_preferido: '',
+  zona: '', departamento: '',
 };
 
 const CATEGORIAS: CategoriaCliente[] = ['A', 'B', 'C', 'D', 'E', 'F'];
@@ -82,8 +83,6 @@ export default function Clientes() {
     setForm({
       nombre: c.nombre,
       direccion: c.direccion,
-      lat: String(c.lat),
-      lng: String(c.lng),
       telefono: c.telefono ?? '',
       notas: c.notas ?? '',
       categoria: c.categoria ?? '',
@@ -97,6 +96,8 @@ export default function Clientes() {
       frecuencia_compra: c.frecuencia_compra ?? '',
       forma_pago: c.forma_pago ?? '',
       dia_visita_preferido: c.dia_visita_preferido ?? '',
+      zona: c.zona ?? '',
+      departamento: c.departamento ?? '',
     });
     setModalVisible(true);
   };
@@ -109,8 +110,8 @@ export default function Clientes() {
     const data = {
       nombre: form.nombre.trim(),
       direccion: form.direccion.trim(),
-      lat: parseFloat(form.lat) || 0,
-      lng: parseFloat(form.lng) || 0,
+      lat: 0,
+      lng: 0,
       telefono: form.telefono.trim() || null,
       notas: form.notas.trim() || null,
       categoria: form.categoria || null,
@@ -124,6 +125,8 @@ export default function Clientes() {
       frecuencia_compra: form.frecuencia_compra || null,
       forma_pago: form.forma_pago || null,
       dia_visita_preferido: form.dia_visita_preferido || null,
+      zona: form.zona.trim() || null,
+      departamento: form.departamento.trim() || null,
     };
     try {
       if (editando) {
@@ -145,7 +148,9 @@ export default function Clientes() {
         || c.nombre?.toLowerCase().includes(q)
         || c.direccion?.toLowerCase().includes(q)
         || c.rubro?.toLowerCase().includes(q)
-        || c.razon_social?.toLowerCase().includes(q);
+        || c.razon_social?.toLowerCase().includes(q)
+        || c.zona?.toLowerCase().includes(q)
+        || c.departamento?.toLowerCase().includes(q);
       const coincideCategoria = !categoriaFiltro || c.categoria === categoriaFiltro;
       return coincideTexto && coincideCategoria;
     });
@@ -163,7 +168,7 @@ export default function Clientes() {
       </View>
 
       <View style={styles.filtros}>
-        <Buscador valor={busqueda} onCambiar={setBusqueda} placeholder="Buscar por nombre, dirección, rubro..." />
+        <Buscador valor={busqueda} onCambiar={setBusqueda} placeholder="Buscar por nombre, dirección, rubro, zona..." />
         <View style={styles.categoriasFila}>
           {(['A', 'B', 'C', 'D', 'E', 'F'] as CategoriaCliente[]).map((cat) => {
             const activo = categoriaFiltro === cat;
@@ -201,6 +206,9 @@ export default function Clientes() {
             <Text style={styles.cardDir}>{item.direccion}</Text>
             {item.telefono && <Text style={styles.cardTel}>📞 {item.telefono}</Text>}
             {item.rubro && <Text style={styles.cardTel}>🏷️ {item.rubro}</Text>}
+            {(item.departamento || item.zona) && (
+              <Text style={styles.cardTel}>📍 {[item.departamento, item.zona].filter(Boolean).join(' · ')}</Text>
+            )}
           </TouchableOpacity>
         )}
         ListEmptyComponent={<Text style={styles.vacio}>No se encontraron clientes con ese filtro</Text>}
@@ -219,8 +227,6 @@ export default function Clientes() {
             {([
               { key: 'nombre', label: 'Nombre *', placeholder: 'Nombre del cliente' },
               { key: 'direccion', label: 'Dirección *', placeholder: 'Dirección' },
-              { key: 'lat', label: 'Latitud', placeholder: '-34.6037', keyboard: 'numeric' },
-              { key: 'lng', label: 'Longitud', placeholder: '-58.3816', keyboard: 'numeric' },
               { key: 'telefono', label: 'Teléfono', placeholder: 'Opcional', keyboard: 'phone-pad' },
             ] as any[]).map((f) => (
               <View key={f.key} style={styles.formGroup}>
@@ -252,6 +258,8 @@ export default function Clientes() {
               { key: 'razon_social', label: 'Razón social', placeholder: 'Nombre legal / fantasía' },
               { key: 'cuit', label: 'CUIT / CUIL', placeholder: '20-12345678-9', keyboard: 'numbers-and-punctuation' },
               { key: 'rubro', label: 'Rubro', placeholder: 'Kiosco, supermercado, restaurante...' },
+              { key: 'departamento', label: 'Departamento', placeholder: 'Ej: SAN RAFAEL' },
+              { key: 'zona', label: 'Zona', placeholder: 'Ej: CENTRO' },
               { key: 'contacto_nombre', label: 'Persona de contacto', placeholder: 'Nombre del encargado' },
               { key: 'email', label: 'Email', placeholder: 'Opcional', keyboard: 'email-address' },
               { key: 'horario_atencion', label: 'Horario de atención', placeholder: 'Ej: Lun a Vie 9 a 18' },

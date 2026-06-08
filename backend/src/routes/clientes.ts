@@ -9,7 +9,7 @@ const router = Router();
 const CAMPOS_CARTILLA = [
   'razon_social', 'cuit', 'rubro', 'email', 'contacto_nombre', 'horario_atencion',
   'monto_compra_promedio', 'frecuencia_compra', 'forma_pago', 'dia_visita_preferido',
-  'telefono', 'notas',
+  'telefono', 'notas', 'zona', 'departamento',
 ] as const;
 
 router.get('/', authMiddleware, async (_req: Request, res: Response) => {
@@ -26,6 +26,7 @@ router.post('/', authMiddleware, soloAdmin, async (req: AuthRequest, res: Respon
     nombre, direccion, lat, lng, telefono, notas,
     categoria, razon_social, cuit, rubro, email, contacto_nombre, horario_atencion,
     monto_compra_promedio, frecuencia_compra, forma_pago, dia_visita_preferido,
+    zona, departamento,
   } = req.body;
   if (!nombre || !direccion) return res.status(400).json({ error: 'Nombre y dirección requeridos' });
   try {
@@ -33,13 +34,15 @@ router.post('/', authMiddleware, soloAdmin, async (req: AuthRequest, res: Respon
       `INSERT INTO clientes (
         nombre, direccion, lat, lng, telefono, notas,
         categoria, razon_social, cuit, rubro, email, contacto_nombre, horario_atencion,
-        monto_compra_promedio, frecuencia_compra, forma_pago, dia_visita_preferido
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
+        monto_compra_promedio, frecuencia_compra, forma_pago, dia_visita_preferido,
+        zona, departamento
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
       [
         nombre, direccion, lat ?? 0, lng ?? 0, telefono ?? null, notas ?? null,
         categoria ?? null, razon_social ?? null, cuit ?? null, rubro ?? null, email ?? null,
         contacto_nombre ?? null, horario_atencion ?? null,
         monto_compra_promedio ?? null, frecuencia_compra ?? null, forma_pago ?? null, dia_visita_preferido ?? null,
+        zona ?? null, departamento ?? null,
       ]
     );
     res.status(201).json(rows[0]);
@@ -54,6 +57,7 @@ router.put('/:id', authMiddleware, soloAdmin, async (req: AuthRequest, res: Resp
     nombre, direccion, lat, lng, telefono, notas,
     categoria, razon_social, cuit, rubro, email, contacto_nombre, horario_atencion,
     monto_compra_promedio, frecuencia_compra, forma_pago, dia_visita_preferido,
+    zona, departamento,
   } = req.body;
   try {
     const { rows } = await pool.query(
@@ -61,13 +65,15 @@ router.put('/:id', authMiddleware, soloAdmin, async (req: AuthRequest, res: Resp
         nombre=$1, direccion=$2, lat=$3, lng=$4, telefono=$5, notas=$6,
         categoria=$7, razon_social=$8, cuit=$9, rubro=$10, email=$11, contacto_nombre=$12, horario_atencion=$13,
         monto_compra_promedio=$14, frecuencia_compra=$15, forma_pago=$16, dia_visita_preferido=$17,
+        zona=$18, departamento=$19,
         cartilla_actualizada_at=NOW()
-       WHERE id=$18 AND activo=true RETURNING *`,
+       WHERE id=$20 AND activo=true RETURNING *`,
       [
         nombre, direccion, lat ?? 0, lng ?? 0, telefono ?? null, notas ?? null,
         categoria ?? null, razon_social ?? null, cuit ?? null, rubro ?? null, email ?? null,
         contacto_nombre ?? null, horario_atencion ?? null,
         monto_compra_promedio ?? null, frecuencia_compra ?? null, forma_pago ?? null, dia_visita_preferido ?? null,
+        zona ?? null, departamento ?? null,
         id,
       ]
     );

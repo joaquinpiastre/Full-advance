@@ -40,7 +40,7 @@ export default function InicioRepartidor() {
           try {
             const res = await iniciarJornada();
             setJornada(res.data);
-            await iniciarGps(res.data.id);
+            try { await iniciarGps(res.data.id); } catch {}
             router.push('/(repartidor)/jornada');
           } catch (e: any) {
             Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo iniciar');
@@ -116,7 +116,7 @@ export default function InicioRepartidor() {
         </TouchableOpacity>
       )}
 
-      <TouchableOpacity style={styles.btnLogout} onPress={logout}>
+      <TouchableOpacity style={styles.btnLogout} onPress={() => { logout(); router.replace('/(auth)/login'); }}>
         <Text style={styles.btnLogoutTexto}>Cerrar sesión</Text>
       </TouchableOpacity>
     </ScrollView>

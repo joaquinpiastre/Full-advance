@@ -11,7 +11,8 @@ router.get('/', authMiddleware, async (_req: Request, res: Response) => {
       `SELECT rc.*,
         c.nombre as cliente_nombre, c.direccion, c.lat, c.lng, c.telefono, c.notas,
         c.categoria, c.razon_social, c.cuit, c.rubro, c.email, c.contacto_nombre, c.horario_atencion,
-        c.monto_compra_promedio, c.frecuencia_compra, c.forma_pago, c.dia_visita_preferido, c.cartilla_actualizada_at
+        c.monto_compra_promedio, c.frecuencia_compra, c.forma_pago, c.dia_visita_preferido, c.cartilla_actualizada_at,
+        c.zona, c.departamento
        FROM ruta_clientes rc JOIN clientes c ON c.id=rc.cliente_id ORDER BY rc.ruta_id, rc.orden`
     );
     const result = rutas.map((r) => ({
@@ -29,6 +30,7 @@ router.get('/', authMiddleware, async (_req: Request, res: Response) => {
           monto_compra_promedio: x.monto_compra_promedio, frecuencia_compra: x.frecuencia_compra,
           forma_pago: x.forma_pago, dia_visita_preferido: x.dia_visita_preferido,
           cartilla_actualizada_at: x.cartilla_actualizada_at,
+          zona: x.zona, departamento: x.departamento,
         },
       })),
     }));
@@ -47,7 +49,8 @@ router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
       `SELECT rc.*,
         c.nombre as cliente_nombre, c.direccion, c.lat, c.lng, c.telefono, c.notas,
         c.categoria, c.razon_social, c.cuit, c.rubro, c.email, c.contacto_nombre, c.horario_atencion,
-        c.monto_compra_promedio, c.frecuencia_compra, c.forma_pago, c.dia_visita_preferido, c.cartilla_actualizada_at
+        c.monto_compra_promedio, c.frecuencia_compra, c.forma_pago, c.dia_visita_preferido, c.cartilla_actualizada_at,
+        c.zona, c.departamento
        FROM ruta_clientes rc JOIN clientes c ON c.id=rc.cliente_id
        WHERE rc.ruta_id=$1 ORDER BY rc.orden`,
       [id]
@@ -67,6 +70,7 @@ router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
           monto_compra_promedio: x.monto_compra_promedio, frecuencia_compra: x.frecuencia_compra,
           forma_pago: x.forma_pago, dia_visita_preferido: x.dia_visita_preferido,
           cartilla_actualizada_at: x.cartilla_actualizada_at,
+          zona: x.zona, departamento: x.departamento,
         },
       })),
     });

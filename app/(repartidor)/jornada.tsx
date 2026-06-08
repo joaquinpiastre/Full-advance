@@ -51,13 +51,16 @@ export default function JornadaRepartidor() {
     setClientesModal(false);
     setProcesando(true);
     try {
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      const res = await registrarParada({
-        jornada_id: jornada.id,
-        lat: loc.coords.latitude,
-        lng: loc.coords.longitude,
-        cliente_id: cliente.id,
-      });
+      // Intentamos obtener la ubicación; si falla (GPS apagado, permisos, etc.)
+      // continuamos igual con coordenadas 0 para no bloquear el flujo de fotos.
+      let lat = 0, lng = 0;
+      try {
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        lat = loc.coords.latitude;
+        lng = loc.coords.longitude;
+      } catch {}
+
+      const res = await registrarParada({ jornada_id: jornada.id, lat, lng, cliente_id: cliente.id });
       setParadaActual(res.data);
       setEstadoFotos('foto1');
       setFoto1(null);
@@ -70,23 +73,30 @@ export default function JornadaRepartidor() {
   };
 
   const tomarFoto = async (numero: 1 | 2) => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permiso requerido', 'Necesitás permitir el acceso a la cámara');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      quality: 0.7,
-      allowsEditing: false,
-    });
-    if (result.canceled) return;
-    const uri = result.assets[0].uri;
-    if (numero === 1) {
-      setFoto1(uri);
-      setEstadoFotos('foto2');
-    } else {
-      setFoto2(uri);
-      setEstadoFotos('nota');
+    try {
+      const permiso = await ImagePicker.requestCameraPermissionsAsync();
+      if (permiso.status !== 'granted') {
+        Alert.alert(
+          'Permiso de cámara',
+          permiso.canAskAgain
+            ? 'Necesitás permitir el acceso a la cámara.'
+            : 'El permiso fue denegado permanentemente. Habilitalo en Ajustes → Aplicaciones → Permisos → Cámara.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({ quality: 0.7, allowsEditing: false });
+      if (result.canceled) return;
+      const uri = result.assets[0].uri;
+      if (numero === 1) {
+        setFoto1(uri);
+        setEstadoFotos('foto2');
+      } else {
+        setFoto2(uri);
+        setEstadoFotos('nota');
+      }
+    } catch {
+      Alert.alert('Error', 'No se pudo abrir la cámara. Verificá que la app tiene permiso de cámara en la configuración del teléfono.');
     }
   };
 
@@ -146,12 +156,27 @@ export default function JornadaRepartidor() {
               <Text style={styles.fotoPanelTitulo}>Foto 1 de 2</Text>
               <Text style={styles.fotoPanelDesc}>Sacá la primera foto del cliente</Text>
               {foto1
-                ? <Image source={{ uri: foto1 }} style={styles.fotoPreview} />
+                ? (
+                  <>
+                    <Image source={{ uri: foto1 }} style={styles.fotoPreview} />
+                    <TouchableOpacity style={styles.btnFotoRetomar} onPress={() => tomarFoto(1)}>
+                      <Text style={styles.btnFotoRetomarTexto}>🔄 Retomar foto</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.btnConfirmar} onPress={() => setEstadoFotos('foto2')}>
+                      <Text style={styles.btnTexto}>Siguiente →</Text>
+                    </TouchableOpacity>
+                  </>
+                )
                 : (
-                  <TouchableOpacity style={styles.btnFoto} onPress={() => tomarFoto(1)}>
-                    <Text style={styles.btnFotoIcono}>📷</Text>
-                    <Text style={styles.btnFotoTexto}>Tomar Foto 1</Text>
-                  </TouchableOpacity>
+                  <>
+                    <TouchableOpacity style={styles.btnFoto} onPress={() => tomarFoto(1)}>
+                      <Text style={styles.btnFotoIcono}>📷</Text>
+                      <Text style={styles.btnFotoTexto}>Tomar Foto 1</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.btnSaltear} onPress={() => setEstadoFotos('nota')}>
+                      <Text style={styles.btnSaltearTexto}>Saltear fotos e ir directo a nota</Text>
+                    </TouchableOpacity>
+                  </>
                 )}
             </>
           )}
@@ -167,6 +192,9 @@ export default function JornadaRepartidor() {
                   <Text style={styles.btnFotoTexto}>Tomar Foto 2</Text>
                 </TouchableOpacity>
               </View>
+              <TouchableOpacity style={styles.btnSaltear} onPress={() => setEstadoFotos('nota')}>
+                <Text style={styles.btnSaltearTexto}>Saltear foto 2</Text>
+              </TouchableOpacity>
             </>
           )}
 
@@ -316,8 +344,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  btnFotoIcono: { fontSize: 32 },
-  btnFotoTexto: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  btnFotoIcono: { fontSize: 40 },
+  btnFotoTexto: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  btnFotoRetomar: { alignItems: 'center', paddingVertical: 8 },
+  btnFotoRetomarTexto: { color: COLORS.textLight, fontSize: 13 },
+  btnSaltear: { alignItems: 'center', paddingVertical: 10 },
+  btnSaltearTexto: { color: COLORS.textLight, fontSize: 13, textDecorationLine: 'underline' },
   notaInput: {
     borderWidth: 1,
     borderColor: COLORS.border,

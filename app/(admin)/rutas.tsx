@@ -164,7 +164,9 @@ export default function Rutas() {
               <Text style={styles.modalCerrar}>✕</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
+
+          {/* Campos fijos arriba */}
+          <View style={styles.formCabecera}>
             <View style={styles.formGroup}>
               <Text style={styles.label}>Nombre *</Text>
               <TextInput
@@ -185,40 +187,53 @@ export default function Rutas() {
                 onChangeText={setDescripcion}
               />
             </View>
-            <Text style={styles.label}>Clientes ({clientesSel.length} de {clientes.length} seleccionados)</Text>
+            <Text style={styles.label}>Clientes ({clientesSel.length} seleccionados)</Text>
             {clientesSel.length > 0 && (
-              <View style={styles.seleccionadosFila}>
-                {clientesSel.map((id) => {
-                  const c = clientes.find((x) => x.id === id);
-                  if (!c) return null;
-                  return (
-                    <TouchableOpacity key={id} style={styles.seleccionadoChip} onPress={() => toggleCliente(id)}>
-                      <Text style={styles.seleccionadoChipTexto}>{c.nombre} ✕</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
+                <View style={styles.seleccionadosFila}>
+                  {clientesSel.map((id) => {
+                    const c = clientes.find((x) => x.id === id);
+                    if (!c) return null;
+                    return (
+                      <TouchableOpacity key={id} style={styles.seleccionadoChip} onPress={() => toggleCliente(id)}>
+                        <Text style={styles.seleccionadoChipTexto}>{c.nombre} ✕</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </ScrollView>
             )}
-            <Buscador valor={busquedaCliente} onCambiar={setBusquedaCliente} placeholder="Buscar cliente por nombre, dirección, rubro..." />
-            {clientesFiltrados.map((c) => (
+            <Buscador valor={busquedaCliente} onCambiar={setBusquedaCliente} placeholder="Buscar por nombre, dirección, zona..." />
+          </View>
+
+          {/* Lista virtualizada — no freezea con 669 clientes */}
+          <FlatList
+            data={clientesFiltrados}
+            keyExtractor={(item) => String(item.id)}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8, gap: 8 }}
+            renderItem={({ item: c }) => (
               <TouchableOpacity
-                key={c.id}
                 style={[styles.opcion, clientesSel.includes(c.id) && styles.opcionSel]}
                 onPress={() => toggleCliente(c.id)}
               >
                 <Text style={styles.opcionTexto}>
                   {clientesSel.includes(c.id) ? '✅ ' : ''}{c.nombre}
                 </Text>
-                <Text style={styles.opcionDir}>{c.direccion}</Text>
+                <Text style={styles.opcionDir}>{c.direccion}{c.zona ? ` · ${c.zona}` : ''}</Text>
               </TouchableOpacity>
-            ))}
-            {clientesFiltrados.length === 0 && (
-              <Text style={styles.vacioChico}>No se encontraron clientes con ese filtro</Text>
             )}
+            ListEmptyComponent={
+              <Text style={styles.vacioChico}>No se encontraron clientes con ese filtro</Text>
+            }
+          />
+
+          {/* Botón fijo abajo */}
+          <View style={styles.modalFooter}>
             <TouchableOpacity style={styles.btnGuardar} onPress={handleGuardar}>
               <Text style={styles.btnGuardarTexto}>{rutaEditando ? 'Guardar cambios' : 'Crear ruta'}</Text>
             </TouchableOpacity>
-          </ScrollView>
+          </View>
         </View>
       </Modal>
     </View>
@@ -312,7 +327,9 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     backgroundColor: COLORS.card,
   },
-  seleccionadosFila: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  formCabecera: { padding: 16, gap: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  modalFooter: { padding: 16, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.card },
+  seleccionadosFila: { flexDirection: 'row', flexWrap: 'nowrap', gap: 8 },
   seleccionadoChip: {
     backgroundColor: '#EEF4FF',
     borderRadius: 14,

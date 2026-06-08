@@ -116,7 +116,7 @@ export default function InicioPreventsita() {
         </TouchableOpacity>
       )}
 
-      <TouchableOpacity style={styles.btnLogout} onPress={logout}>
+      <TouchableOpacity style={styles.btnLogout} onPress={() => { logout(); router.replace('/(auth)/login'); }}>
         <Text style={styles.btnLogoutTexto}>Cerrar sesión</Text>
       </TouchableOpacity>
     </ScrollView>

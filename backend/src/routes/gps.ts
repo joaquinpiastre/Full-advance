@@ -7,7 +7,7 @@ const router = Router();
 router.post('/update', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { lat, lng, jornada_id, velocidad } = req.body;
   const usuario_id = req.usuario!.id;
-  if (!lat || !lng || !jornada_id) return res.status(400).json({ error: 'lat, lng y jornada_id requeridos' });
+  if (lat == null || lng == null || !jornada_id) return res.status(400).json({ error: 'lat, lng y jornada_id requeridos' });
   try {
     await pool.query(
       'INSERT INTO gps_points (usuario_id, jornada_id, lat, lng, velocidad) VALUES ($1, $2, $3, $4, $5)',

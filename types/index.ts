@@ -33,6 +33,8 @@ export interface Cliente {
   forma_pago?: string;
   dia_visita_preferido?: string;
   cartilla_actualizada_at?: string;
+  zona?: string;
+  departamento?: string;
 }
 
 export interface Ruta {

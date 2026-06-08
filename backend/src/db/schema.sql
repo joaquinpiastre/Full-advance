@@ -34,7 +34,9 @@ CREATE TABLE IF NOT EXISTS clientes (
   frecuencia_compra VARCHAR(30),
   forma_pago VARCHAR(30),
   dia_visita_preferido VARCHAR(20),
-  cartilla_actualizada_at TIMESTAMPTZ
+  cartilla_actualizada_at TIMESTAMPTZ,
+  zona VARCHAR(100),
+  departamento VARCHAR(100)
 );
 
 -- Si la tabla ya existía de antes, sumamos las columnas de la cartilla.
@@ -50,6 +52,8 @@ ALTER TABLE clientes ADD COLUMN IF NOT EXISTS frecuencia_compra VARCHAR(30);
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS forma_pago VARCHAR(30);
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS dia_visita_preferido VARCHAR(20);
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS cartilla_actualizada_at TIMESTAMPTZ;
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS zona VARCHAR(100);
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS departamento VARCHAR(100);
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS horario_preferido VARCHAR(100);
 
 CREATE TABLE IF NOT EXISTS rutas (

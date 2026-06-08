@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Image, Modal, ScrollView } from 'react-native';
 import { obtenerHistorialJornadas, obtenerDetalleJornada } from '../../services/api';
-import { COLORS } from '../../constants';
+import { descargarFoto, descargarReporteJornada } from '../../services/descargas';
+import { COLORS, urlFoto } from '../../constants';
 import { format, differenceInMinutes } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -73,6 +74,11 @@ export default function HistorialRepartidor() {
               <Text style={styles.modalCerrar}>✕</Text>
             </TouchableOpacity>
           </View>
+          {detalle && (
+            <TouchableOpacity style={styles.btnPdf} onPress={() => descargarReporteJornada(detalle)}>
+              <Text style={styles.btnPdfTexto}>📄 Descargar reporte en PDF</Text>
+            </TouchableOpacity>
+          )}
           <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
             {detalle?.paradas?.map((p: any) => (
               <View key={p.id} style={styles.paradaCard}>
@@ -83,8 +89,22 @@ export default function HistorialRepartidor() {
                   {p.timestamp_salida ? ` → ${format(new Date(p.timestamp_salida), 'HH:mm')}` : ''}
                 </Text>
                 <View style={styles.fotosRow}>
-                  {p.foto1_uri && <Image source={{ uri: p.foto1_uri }} style={styles.foto} />}
-                  {p.foto2_uri && <Image source={{ uri: p.foto2_uri }} style={styles.foto} />}
+                  {p.foto1_uri && (
+                    <View>
+                      <Image source={{ uri: urlFoto(p.foto1_uri) }} style={styles.foto} />
+                      <TouchableOpacity style={styles.btnDescargar} onPress={() => descargarFoto(p.foto1_uri)}>
+                        <Text style={styles.btnDescargarTexto}>📥 Guardar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  {p.foto2_uri && (
+                    <View>
+                      <Image source={{ uri: urlFoto(p.foto2_uri) }} style={styles.foto} />
+                      <TouchableOpacity style={styles.btnDescargar} onPress={() => descargarFoto(p.foto2_uri)}>
+                        <Text style={styles.btnDescargarTexto}>📥 Guardar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
                 {p.nota ? <Text style={styles.nota}>📝 {p.nota}</Text> : null}
               </View>
@@ -128,6 +148,25 @@ const styles = StyleSheet.create({
   },
   modalTitulo: { fontSize: 18, fontWeight: '700', color: COLORS.text },
   modalCerrar: { fontSize: 20, color: COLORS.textLight },
+  btnPdf: {
+    margin: 16,
+    marginBottom: 0,
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  btnPdfTexto: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  btnDescargar: {
+    marginTop: 6,
+    backgroundColor: COLORS.background,
+    borderRadius: 8,
+    paddingVertical: 6,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  btnDescargarTexto: { fontSize: 12, fontWeight: '600', color: COLORS.primary },
   paradaCard: {
     backgroundColor: COLORS.card,
     borderRadius: 14,

@@ -19,8 +19,11 @@ export const login = (email: string, password: string) =>
 export const obtenerUsuarios = () =>
   api.get('/auth/usuarios');
 
-export const crearUsuario = (data: { nombre: string; email: string; password: string; rol: string }) =>
+export const crearUsuario = (data: { nombre: string; email: string; password: string; rol: string; horario_preferido?: string }) =>
   api.post('/auth/usuarios', data);
+
+export const actualizarUsuario = (id: number, data: { nombre: string; email: string; rol: string; horario_preferido?: string; password?: string }) =>
+  api.put(`/auth/usuarios/${id}`, data);
 
 // GPS
 export const enviarGps = (data: { lat: number; lng: number; jornada_id: number; velocidad?: number }) =>
@@ -80,6 +83,9 @@ export const obtenerRuta = (id: number) =>
 
 export const crearRuta = (data: any) =>
   api.post('/rutas', data);
+
+export const actualizarRuta = (id: number, data: any) =>
+  api.put(`/rutas/${id}`, data);
 
 // Asignaciones
 export const obtenerAsignacionHoy = () =>

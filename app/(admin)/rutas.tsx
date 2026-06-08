@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, Modal, TextInput, Alert, ScrollView,
 } from 'react-native';
-import { obtenerRutas, crearRuta, obtenerClientes } from '../../services/api';
+import { obtenerRutas, crearRuta, actualizarRuta, obtenerRuta, obtenerClientes } from '../../services/api';
 import { COLORS } from '../../constants';
 import { Cliente, Ruta } from '../../types';
+import Buscador from '../../components/Buscador';
 
 export default function Rutas() {
   const [rutas, setRutas] = useState<Ruta[]>([]);
@@ -16,6 +17,8 @@ export default function Rutas() {
   const [descripcion, setDescripcion] = useState('');
   const [clientesSel, setClientesSel] = useState<number[]>([]);
   const [detalleRuta, setDetalleRuta] = useState<Ruta | null>(null);
+  const [busquedaCliente, setBusquedaCliente] = useState('');
+  const [rutaEditando, setRutaEditando] = useState<Ruta | null>(null);
 
   useEffect(() => {
     cargar();
@@ -37,18 +40,59 @@ export default function Rutas() {
     );
   };
 
-  const handleCrear = async () => {
+  const clientesFiltrados = useMemo(() => {
+    const q = busquedaCliente.trim().toLowerCase();
+    if (!q) return clientes;
+    return clientes.filter((c) =>
+      c.nombre?.toLowerCase().includes(q)
+      || c.direccion?.toLowerCase().includes(q)
+      || c.rubro?.toLowerCase().includes(q)
+    );
+  }, [clientes, busquedaCliente]);
+
+  const cerrarModal = () => {
+    setModalVisible(false);
+    setNombre('');
+    setDescripcion('');
+    setClientesSel([]);
+    setBusquedaCliente('');
+    setRutaEditando(null);
+  };
+
+  const abrirNuevo = () => {
+    setRutaEditando(null);
+    setNombre('');
+    setDescripcion('');
+    setClientesSel([]);
+    setBusquedaCliente('');
+    setModalVisible(true);
+  };
+
+  const abrirEdicion = (ruta: Ruta) => {
+    setRutaEditando(ruta);
+    setNombre(ruta.nombre);
+    setDescripcion(ruta.descripcion ?? '');
+    setClientesSel(ruta.clientes.map((c) => c.cliente_id));
+    setBusquedaCliente('');
+    setModalVisible(true);
+  };
+
+  const handleGuardar = async () => {
     if (!nombre.trim()) { Alert.alert('Error', 'El nombre es obligatorio'); return; }
     if (clientesSel.length === 0) { Alert.alert('Error', 'Seleccioná al menos un cliente'); return; }
     try {
-      await crearRuta({ nombre: nombre.trim(), descripcion: descripcion.trim() || null, clientes: clientesSel });
-      setModalVisible(false);
-      setNombre('');
-      setDescripcion('');
-      setClientesSel([]);
+      const datos = { nombre: nombre.trim(), descripcion: descripcion.trim() || null, clientes: clientesSel };
+      if (rutaEditando) {
+        await actualizarRuta(rutaEditando.id, datos);
+        const res = await obtenerRuta(rutaEditando.id);
+        setDetalleRuta(res.data);
+      } else {
+        await crearRuta(datos);
+      }
+      cerrarModal();
       cargar();
     } catch (e: any) {
-      Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo crear');
+      Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo guardar');
     }
   };
 
@@ -58,10 +102,16 @@ export default function Rutas() {
     return (
       <View style={styles.container}>
         <View style={styles.detalleHeader}>
-          <TouchableOpacity onPress={() => setDetalleRuta(null)}>
-            <Text style={styles.back}>← Volver</Text>
-          </TouchableOpacity>
+          <View style={styles.detalleHeaderTop}>
+            <TouchableOpacity onPress={() => setDetalleRuta(null)}>
+              <Text style={styles.back}>← Volver</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.btnEditar} onPress={() => abrirEdicion(detalleRuta)}>
+              <Text style={styles.btnEditarTexto}>✏️ Editar clientes</Text>
+            </TouchableOpacity>
+          </View>
           <Text style={styles.detalleTitulo}>{detalleRuta.nombre}</Text>
+          {detalleRuta.descripcion ? <Text style={styles.detalleDesc}>{detalleRuta.descripcion}</Text> : null}
         </View>
         <FlatList
           data={detalleRuta.clientes}
@@ -87,7 +137,7 @@ export default function Rutas() {
     <View style={styles.container}>
       <View style={styles.headerBar}>
         <Text style={styles.total}>{rutas.length} rutas</Text>
-        <TouchableOpacity style={styles.btnNuevo} onPress={() => setModalVisible(true)}>
+        <TouchableOpacity style={styles.btnNuevo} onPress={abrirNuevo}>
           <Text style={styles.btnNuevoTexto}>+ Nueva ruta</Text>
         </TouchableOpacity>
       </View>
@@ -109,8 +159,8 @@ export default function Rutas() {
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
         <View style={styles.modal}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitulo}>Nueva ruta</Text>
-            <TouchableOpacity onPress={() => setModalVisible(false)}>
+            <Text style={styles.modalTitulo}>{rutaEditando ? 'Editar ruta' : 'Nueva ruta'}</Text>
+            <TouchableOpacity onPress={cerrarModal}>
               <Text style={styles.modalCerrar}>✕</Text>
             </TouchableOpacity>
           </View>
@@ -135,19 +185,38 @@ export default function Rutas() {
                 onChangeText={setDescripcion}
               />
             </View>
-            <Text style={styles.label}>Clientes ({clientesSel.length} seleccionados)</Text>
-            {clientes.map((c) => (
+            <Text style={styles.label}>Clientes ({clientesSel.length} de {clientes.length} seleccionados)</Text>
+            {clientesSel.length > 0 && (
+              <View style={styles.seleccionadosFila}>
+                {clientesSel.map((id) => {
+                  const c = clientes.find((x) => x.id === id);
+                  if (!c) return null;
+                  return (
+                    <TouchableOpacity key={id} style={styles.seleccionadoChip} onPress={() => toggleCliente(id)}>
+                      <Text style={styles.seleccionadoChipTexto}>{c.nombre} ✕</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+            <Buscador valor={busquedaCliente} onCambiar={setBusquedaCliente} placeholder="Buscar cliente por nombre, dirección, rubro..." />
+            {clientesFiltrados.map((c) => (
               <TouchableOpacity
                 key={c.id}
                 style={[styles.opcion, clientesSel.includes(c.id) && styles.opcionSel]}
                 onPress={() => toggleCliente(c.id)}
               >
-                <Text style={styles.opcionTexto}>{c.nombre}</Text>
+                <Text style={styles.opcionTexto}>
+                  {clientesSel.includes(c.id) ? '✅ ' : ''}{c.nombre}
+                </Text>
                 <Text style={styles.opcionDir}>{c.direccion}</Text>
               </TouchableOpacity>
             ))}
-            <TouchableOpacity style={styles.btnGuardar} onPress={handleCrear}>
-              <Text style={styles.btnGuardarTexto}>Crear ruta</Text>
+            {clientesFiltrados.length === 0 && (
+              <Text style={styles.vacioChico}>No se encontraron clientes con ese filtro</Text>
+            )}
+            <TouchableOpacity style={styles.btnGuardar} onPress={handleGuardar}>
+              <Text style={styles.btnGuardarTexto}>{rutaEditando ? 'Guardar cambios' : 'Crear ruta'}</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -187,6 +256,7 @@ const styles = StyleSheet.create({
   cardDesc: { fontSize: 13, color: COLORS.textLight },
   cardClientes: { fontSize: 13, color: COLORS.primary, fontWeight: '600' },
   vacio: { textAlign: 'center', color: COLORS.textLight, marginTop: 60, fontSize: 14 },
+  vacioChico: { textAlign: 'center', color: COLORS.textLight, fontSize: 13, paddingVertical: 12 },
   detalleHeader: {
     padding: 16,
     backgroundColor: COLORS.card,
@@ -194,8 +264,12 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
     gap: 6,
   },
+  detalleHeaderTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   back: { fontSize: 14, color: COLORS.primary, fontWeight: '600' },
+  btnEditar: { backgroundColor: COLORS.primary, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
+  btnEditarTexto: { color: '#fff', fontWeight: '700', fontSize: 13 },
   detalleTitulo: { fontSize: 20, fontWeight: '800', color: COLORS.text },
+  detalleDesc: { fontSize: 13, color: COLORS.textLight },
   clienteCard: {
     backgroundColor: COLORS.card,
     borderRadius: 12,
@@ -238,6 +312,16 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     backgroundColor: COLORS.card,
   },
+  seleccionadosFila: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  seleccionadoChip: {
+    backgroundColor: '#EEF4FF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  seleccionadoChipTexto: { fontSize: 12, fontWeight: '600', color: COLORS.primary },
   opcion: {
     backgroundColor: COLORS.card,
     borderRadius: 10,

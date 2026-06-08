@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   password_hash VARCHAR(255) NOT NULL,
   rol VARCHAR(20) NOT NULL CHECK (rol IN ('admin', 'repartidor', 'preventista')),
   activo BOOLEAN DEFAULT true,
+  horario_preferido VARCHAR(100),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -49,6 +50,7 @@ ALTER TABLE clientes ADD COLUMN IF NOT EXISTS frecuencia_compra VARCHAR(30);
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS forma_pago VARCHAR(30);
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS dia_visita_preferido VARCHAR(20);
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS cartilla_actualizada_at TIMESTAMPTZ;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS horario_preferido VARCHAR(100);
 
 CREATE TABLE IF NOT EXISTS rutas (
   id SERIAL PRIMARY KEY,

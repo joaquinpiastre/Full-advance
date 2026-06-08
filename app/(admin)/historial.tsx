@@ -1,25 +1,51 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, Modal, ScrollView, Image,
 } from 'react-native';
-import { obtenerHistorialJornadas, obtenerDetalleJornada } from '../../services/api';
-import { COLORS } from '../../constants';
-import { format, differenceInMinutes } from 'date-fns';
+import { obtenerHistorialJornadas, obtenerDetalleJornada, obtenerUsuarios } from '../../services/api';
+import { descargarFoto, descargarReporteJornada } from '../../services/descargas';
+import { COLORS, urlFoto } from '../../constants';
+import SelectorPersonas from '../../components/SelectorPersonas';
+import { format, differenceInMinutes, isToday, isThisWeek, isThisMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
+
+const RANGOS = [
+  { key: 'todo', label: 'Todo' },
+  { key: 'hoy', label: 'Hoy' },
+  { key: 'semana', label: 'Esta semana' },
+  { key: 'mes', label: 'Este mes' },
+] as const;
+type RangoKey = typeof RANGOS[number]['key'];
+
+const enRango = (fecha: string, rango: RangoKey) => {
+  if (rango === 'todo') return true;
+  const d = new Date(fecha);
+  if (rango === 'hoy') return isToday(d);
+  if (rango === 'semana') return isThisWeek(d, { weekStartsOn: 1 });
+  return isThisMonth(d);
+};
 
 export default function HistorialAdmin() {
   const [jornadas, setJornadas] = useState<any[]>([]);
+  const [usuarios, setUsuarios] = useState<any[]>([]);
   const [cargando, setCargando] = useState(true);
   const [detalle, setDetalle] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [usuarioFiltro, setUsuarioFiltro] = useState<number | null>(null);
+  const [rango, setRango] = useState<RangoKey>('todo');
 
   useEffect(() => {
-    obtenerHistorialJornadas()
+    obtenerUsuarios().then((res) => setUsuarios(res.data)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    setCargando(true);
+    obtenerHistorialJornadas(usuarioFiltro ?? undefined)
       .then((res) => setJornadas(res.data))
       .catch(() => {})
       .finally(() => setCargando(false));
-  }, []);
+  }, [usuarioFiltro]);
 
   const verDetalle = async (jornadaId: number) => {
     try {
@@ -29,12 +55,41 @@ export default function HistorialAdmin() {
     } catch {}
   };
 
-  if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
+  const jornadasFiltradas = useMemo(
+    () => jornadas.filter((j) => enRango(j.fecha_inicio, rango)),
+    [jornadas, rango]
+  );
+
+  const personasNoAdmin = usuarios.filter((u) => u.rol !== 'admin');
 
   return (
     <View style={styles.container}>
+      {personasNoAdmin.length > 0 && (
+        <View style={styles.filtroBar}>
+          <SelectorPersonas personas={personasNoAdmin} seleccionado={usuarioFiltro} onSeleccionar={setUsuarioFiltro} />
+        </View>
+      )}
+      <View style={styles.rangoBar}>
+        {RANGOS.map((r) => {
+          const activo = rango === r.key;
+          return (
+            <TouchableOpacity
+              key={r.key}
+              style={[styles.rangoChip, activo && styles.rangoChipActivo]}
+              onPress={() => setRango(r.key)}
+            >
+              <Text style={[styles.rangoTexto, activo && styles.rangoTextoActivo]}>{r.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+        <Text style={styles.total}>{jornadasFiltradas.length} jornada(s)</Text>
+      </View>
+
+      {cargando ? (
+        <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>
+      ) : (
       <FlatList
-        data={jornadas}
+        data={jornadasFiltradas}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={{ padding: 16, gap: 12 }}
         renderItem={({ item }) => {
@@ -69,13 +124,14 @@ export default function HistorialAdmin() {
             </TouchableOpacity>
           );
         }}
-        ListEmptyComponent={<Text style={styles.vacio}>No hay historial registrado</Text>}
+        ListEmptyComponent={<Text style={styles.vacio}>No hay historial para este filtro</Text>}
       />
+      )}
 
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
         <View style={styles.modal}>
           <View style={styles.modalHeader}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.modalTitulo}>{detalle?.usuario?.nombre}</Text>
               <Text style={styles.modalSub}>
                 {detalle?.fecha_inicio && format(new Date(detalle.fecha_inicio), "d 'de' MMMM yyyy", { locale: es })}
@@ -85,6 +141,11 @@ export default function HistorialAdmin() {
               <Text style={styles.modalCerrar}>✕</Text>
             </TouchableOpacity>
           </View>
+          {detalle && (
+            <TouchableOpacity style={styles.btnPdf} onPress={() => descargarReporteJornada(detalle)}>
+              <Text style={styles.btnPdfTexto}>📄 Descargar reporte en PDF</Text>
+            </TouchableOpacity>
+          )}
           <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
             {detalle?.paradas?.map((p: any) => (
               <View key={p.id} style={styles.paradaCard}>
@@ -98,13 +159,19 @@ export default function HistorialAdmin() {
                     {p.foto1_uri && (
                       <View>
                         <Text style={styles.fotoLabel}>Foto 1</Text>
-                        <Image source={{ uri: p.foto1_uri }} style={styles.foto} />
+                        <Image source={{ uri: urlFoto(p.foto1_uri) }} style={styles.foto} />
+                        <TouchableOpacity style={styles.btnDescargar} onPress={() => descargarFoto(p.foto1_uri)}>
+                          <Text style={styles.btnDescargarTexto}>📥 Guardar</Text>
+                        </TouchableOpacity>
                       </View>
                     )}
                     {p.foto2_uri && (
                       <View>
                         <Text style={styles.fotoLabel}>Foto 2</Text>
-                        <Image source={{ uri: p.foto2_uri }} style={styles.foto} />
+                        <Image source={{ uri: urlFoto(p.foto2_uri) }} style={styles.foto} />
+                        <TouchableOpacity style={styles.btnDescargar} onPress={() => descargarFoto(p.foto2_uri)}>
+                          <Text style={styles.btnDescargarTexto}>📥 Guardar</Text>
+                        </TouchableOpacity>
                       </View>
                     )}
                   </View>
@@ -122,6 +189,26 @@ export default function HistorialAdmin() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  filtroBar: { backgroundColor: COLORS.card, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  rangoBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  rangoChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: COLORS.card,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+  },
+  rangoChipActivo: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  rangoTexto: { fontSize: 12, fontWeight: '600', color: COLORS.text },
+  rangoTextoActivo: { color: '#fff' },
+  total: { marginLeft: 'auto', fontSize: 13, color: COLORS.textLight, fontWeight: '600' },
   card: {
     backgroundColor: COLORS.card,
     borderRadius: 14,
@@ -154,6 +241,25 @@ const styles = StyleSheet.create({
   modalTitulo: { fontSize: 18, fontWeight: '700', color: COLORS.text },
   modalSub: { fontSize: 13, color: COLORS.textLight, textTransform: 'capitalize' },
   modalCerrar: { fontSize: 20, color: COLORS.textLight },
+  btnPdf: {
+    margin: 16,
+    marginBottom: 0,
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  btnPdfTexto: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  btnDescargar: {
+    marginTop: 6,
+    backgroundColor: COLORS.background,
+    borderRadius: 8,
+    paddingVertical: 6,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  btnDescargarTexto: { fontSize: 12, fontWeight: '600', color: COLORS.primary },
   paradaCard: {
     backgroundColor: COLORS.card,
     borderRadius: 14,

@@ -17,7 +17,10 @@ router.get('/hoy', authMiddleware, async (req: AuthRequest, res: Response) => {
     if (!rows.length) return res.json(null);
     const asig = rows[0];
     const { rows: rc } = await pool.query(
-      `SELECT rc.*, c.nombre as cliente_nombre, c.direccion, c.lat, c.lng, c.telefono
+      `SELECT rc.*,
+        c.nombre as cliente_nombre, c.direccion, c.lat, c.lng, c.telefono, c.notas,
+        c.categoria, c.razon_social, c.cuit, c.rubro, c.email, c.contacto_nombre, c.horario_atencion,
+        c.monto_compra_promedio, c.frecuencia_compra, c.forma_pago, c.dia_visita_preferido, c.cartilla_actualizada_at
        FROM ruta_clientes rc JOIN clientes c ON c.id=rc.cliente_id
        WHERE rc.ruta_id=$1 ORDER BY rc.orden`,
       [asig.ruta_id]
@@ -32,7 +35,15 @@ router.get('/hoy', authMiddleware, async (req: AuthRequest, res: Response) => {
           id: x.id,
           cliente_id: x.cliente_id,
           orden: x.orden,
-          cliente: { id: x.cliente_id, nombre: x.cliente_nombre, direccion: x.direccion, lat: x.lat, lng: x.lng, telefono: x.telefono },
+          cliente: {
+            id: x.cliente_id, nombre: x.cliente_nombre, direccion: x.direccion, lat: x.lat, lng: x.lng,
+            telefono: x.telefono, notas: x.notas,
+            categoria: x.categoria, razon_social: x.razon_social, cuit: x.cuit, rubro: x.rubro,
+            email: x.email, contacto_nombre: x.contacto_nombre, horario_atencion: x.horario_atencion,
+            monto_compra_promedio: x.monto_compra_promedio, frecuencia_compra: x.frecuencia_compra,
+            forma_pago: x.forma_pago, dia_visita_preferido: x.dia_visita_preferido,
+            cartilla_actualizada_at: x.cartilla_actualizada_at,
+          },
         })),
       },
     });

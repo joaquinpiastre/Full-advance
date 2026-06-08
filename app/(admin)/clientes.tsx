@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, Modal, TextInput, Alert, ScrollView,
@@ -6,6 +6,7 @@ import {
 import { obtenerClientes, crearCliente, actualizarCliente } from '../../services/api';
 import { COLORS, COLOR_CATEGORIA } from '../../constants';
 import { Cliente, CategoriaCliente } from '../../types';
+import Buscador from '../../components/Buscador';
 
 const FORM_VACIO = {
   nombre: '', direccion: '', lat: '', lng: '', telefono: '', notas: '',
@@ -54,6 +55,8 @@ export default function Clientes() {
   const [modalVisible, setModalVisible] = useState(false);
   const [editando, setEditando] = useState<Cliente | null>(null);
   const [form, setForm] = useState(FORM_VACIO);
+  const [busqueda, setBusqueda] = useState('');
+  const [categoriaFiltro, setCategoriaFiltro] = useState<CategoriaCliente | null>(null);
 
   useEffect(() => {
     cargar();
@@ -135,19 +138,54 @@ export default function Clientes() {
     }
   };
 
+  const clientesFiltrados = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    return clientes.filter((c) => {
+      const coincideTexto = !q
+        || c.nombre?.toLowerCase().includes(q)
+        || c.direccion?.toLowerCase().includes(q)
+        || c.rubro?.toLowerCase().includes(q)
+        || c.razon_social?.toLowerCase().includes(q);
+      const coincideCategoria = !categoriaFiltro || c.categoria === categoriaFiltro;
+      return coincideTexto && coincideCategoria;
+    });
+  }, [clientes, busqueda, categoriaFiltro]);
+
   if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
 
   return (
     <View style={styles.container}>
       <View style={styles.headerBar}>
-        <Text style={styles.total}>{clientes.length} clientes</Text>
+        <Text style={styles.total}>{clientesFiltrados.length} de {clientes.length} clientes</Text>
         <TouchableOpacity style={styles.btnNuevo} onPress={abrirNuevo}>
           <Text style={styles.btnNuevoTexto}>+ Nuevo</Text>
         </TouchableOpacity>
       </View>
 
+      <View style={styles.filtros}>
+        <Buscador valor={busqueda} onCambiar={setBusqueda} placeholder="Buscar por nombre, dirección, rubro..." />
+        <View style={styles.categoriasFila}>
+          {(['A', 'B', 'C', 'D', 'E', 'F'] as CategoriaCliente[]).map((cat) => {
+            const activo = categoriaFiltro === cat;
+            return (
+              <TouchableOpacity
+                key={cat}
+                style={[
+                  styles.categoriaChip,
+                  { borderColor: COLOR_CATEGORIA[cat] },
+                  activo && { backgroundColor: COLOR_CATEGORIA[cat] },
+                ]}
+                onPress={() => setCategoriaFiltro(activo ? null : cat)}
+              >
+                <Text style={[styles.categoriaChipTexto, { color: activo ? '#fff' : COLOR_CATEGORIA[cat] }]}>{cat}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
       <FlatList
-        data={clientes}
+        data={clientesFiltrados}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={{ padding: 16, gap: 10 }}
         renderItem={({ item }) => (
@@ -165,7 +203,7 @@ export default function Clientes() {
             {item.rubro && <Text style={styles.cardTel}>🏷️ {item.rubro}</Text>}
           </TouchableOpacity>
         )}
-        ListEmptyComponent={<Text style={styles.vacio}>No hay clientes registrados</Text>}
+        ListEmptyComponent={<Text style={styles.vacio}>No se encontraron clientes con ese filtro</Text>}
       />
 
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
@@ -305,6 +343,18 @@ const styles = StyleSheet.create({
   total: { fontSize: 14, color: COLORS.text, fontWeight: '600' },
   btnNuevo: { backgroundColor: COLORS.primary, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
   btnNuevoTexto: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  filtros: { paddingHorizontal: 16, paddingBottom: 12, gap: 10 },
+  categoriasFila: { flexDirection: 'row', gap: 8 },
+  categoriaChip: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.card,
+  },
+  categoriaChipTexto: { fontWeight: '800', fontSize: 14 },
   card: {
     backgroundColor: COLORS.card,
     borderRadius: 14,

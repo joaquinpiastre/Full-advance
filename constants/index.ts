@@ -1,14 +1,18 @@
 import { Platform } from 'react-native';
 import { CategoriaCliente } from '../types';
 
-// Web e iOS Simulator acceden al backend por localhost.
-// El emulador de Android mapea 10.0.2.2 al localhost de la PC.
-// En un dispositivo físico, cambiá esto por la IP local de tu PC en la red (ej: http://192.168.1.X:3001).
+// Web accede al backend por localhost.
+// Un dispositivo físico (Expo Go en el celular) necesita la IP local de tu PC en la red Wi-Fi.
+// Si en algún momento usás el emulador de Android, cambiá esa entrada por http://10.0.2.2:3001.
 export const API_URL = Platform.select({
   web: 'http://localhost:3001',
-  android: 'http://10.0.2.2:3001',
-  default: 'http://localhost:3001',
+  default: 'http://192.168.100.111:3001',
 });
+
+// El backend devuelve las fotos como rutas relativas (ej: "/uploads/123-foto.jpg").
+// Hay que anteponerles la URL del backend para que <Image> pueda cargarlas.
+export const urlFoto = (uri?: string | null) =>
+  !uri ? undefined : uri.startsWith('http') ? uri : `${API_URL}${uri}`;
 
 export const COLORS = {
   primary: '#1A3A5C',

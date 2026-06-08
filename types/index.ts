@@ -5,6 +5,8 @@ export interface Usuario {
   nombre: string;
   email: string;
   rol: Rol;
+  activo?: boolean;
+  horario_preferido?: string | null;
   token?: string;
 }
 

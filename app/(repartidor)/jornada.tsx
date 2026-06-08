@@ -8,7 +8,7 @@ import * as Location from 'expo-location';
 import { useJornadaStore } from '../../store/jornadaStore';
 import { registrarParada, subirFoto, finalizarParada, obtenerParadas, obtenerAsignacionHoy } from '../../services/api';
 import CartillaModal from '../../components/CartillaModal';
-import { COLORS } from '../../constants';
+import { COLORS, urlFoto } from '../../constants';
 import { Parada, Cliente } from '../../types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -221,8 +221,8 @@ export default function JornadaRepartidor() {
                 </View>
                 <Text style={styles.paradaDireccion}>{item.cliente?.direccion}</Text>
                 <View style={styles.fotosRow}>
-                  {item.foto1_uri && <Image source={{ uri: item.foto1_uri }} style={styles.fotoMini} />}
-                  {item.foto2_uri && <Image source={{ uri: item.foto2_uri }} style={styles.fotoMini} />}
+                  {item.foto1_uri && <Image source={{ uri: urlFoto(item.foto1_uri) }} style={styles.fotoMini} />}
+                  {item.foto2_uri && <Image source={{ uri: urlFoto(item.foto2_uri) }} style={styles.fotoMini} />}
                 </View>
                 {item.nota ? <Text style={styles.paradaNota}>📝 {item.nota}</Text> : null}
               </View>

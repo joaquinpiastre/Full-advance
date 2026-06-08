@@ -3,19 +3,21 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, Modal, TextInput, Alert, ScrollView,
 } from 'react-native';
-import { obtenerUsuarios, crearUsuario } from '../../services/api';
+import { obtenerUsuarios, crearUsuario, actualizarUsuario } from '../../services/api';
 import { COLORS } from '../../constants';
+import { Usuario } from '../../types';
 
-const FORM_VACIO = { nombre: '', email: '', password: '', rol: 'repartidor' };
+const FORM_VACIO = { nombre: '', email: '', password: '', rol: 'repartidor', horario_preferido: '' };
 const ROLES = [
   { key: 'repartidor', label: '🚚 Repartidor', color: COLORS.repartidor },
   { key: 'preventista', label: '👔 Preventista', color: COLORS.preventista },
 ];
 
 export default function Usuarios() {
-  const [usuarios, setUsuarios] = useState<any[]>([]);
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [cargando, setCargando] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
+  const [editando, setEditando] = useState<Usuario | null>(null);
   const [form, setForm] = useState(FORM_VACIO);
   const [guardando, setGuardando] = useState(false);
 
@@ -33,27 +35,54 @@ export default function Usuarios() {
   };
 
   const abrirNuevo = () => {
+    setEditando(null);
     setForm(FORM_VACIO);
     setModalVisible(true);
   };
 
+  const abrirEditar = (usuario: Usuario) => {
+    setEditando(usuario);
+    setForm({
+      nombre: usuario.nombre,
+      email: usuario.email,
+      password: '',
+      rol: usuario.rol,
+      horario_preferido: usuario.horario_preferido ?? '',
+    });
+    setModalVisible(true);
+  };
+
   const handleGuardar = async () => {
-    if (!form.nombre.trim() || !form.email.trim() || !form.password.trim()) {
+    if (!form.nombre.trim() || !form.email.trim() || (!editando && !form.password.trim())) {
       Alert.alert('Error', 'Completá todos los campos');
       return;
     }
     setGuardando(true);
     try {
-      await crearUsuario({
-        nombre: form.nombre.trim(),
-        email: form.email.trim().toLowerCase(),
-        password: form.password,
-        rol: form.rol,
-      });
-      setModalVisible(false);
+      if (editando) {
+        await actualizarUsuario(editando.id, {
+          nombre: form.nombre.trim(),
+          email: form.email.trim().toLowerCase(),
+          rol: form.rol,
+          horario_preferido: form.horario_preferido.trim() || undefined,
+          password: form.password.trim() || undefined,
+        });
+        setModalVisible(false);
+        Alert.alert('Listo', 'El usuario fue actualizado');
+      } else {
+        await crearUsuario({
+          nombre: form.nombre.trim(),
+          email: form.email.trim().toLowerCase(),
+          password: form.password,
+          rol: form.rol,
+          horario_preferido: form.horario_preferido.trim() || undefined,
+        });
+        setModalVisible(false);
+        Alert.alert('Listo', 'El usuario fue creado');
+      }
       cargar();
     } catch (e: any) {
-      Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo crear el usuario');
+      Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo guardar el usuario');
     }
     setGuardando(false);
   };
@@ -76,10 +105,13 @@ export default function Usuarios() {
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={{ padding: 16, gap: 10 }}
         renderItem={({ item }) => (
-          <View style={[
-            styles.card,
-            { borderLeftColor: item.rol === 'repartidor' ? COLORS.repartidor : COLORS.preventista }
-          ]}>
+          <TouchableOpacity
+            style={[
+              styles.card,
+              { borderLeftColor: item.rol === 'repartidor' ? COLORS.repartidor : COLORS.preventista }
+            ]}
+            onPress={() => abrirEditar(item)}
+          >
             <View style={styles.cardHeader}>
               <Text style={styles.cardNombre}>{item.nombre}</Text>
               <Text style={styles.cardRol}>
@@ -87,8 +119,10 @@ export default function Usuarios() {
               </Text>
             </View>
             <Text style={styles.cardEmail}>{item.email}</Text>
+            {!!item.horario_preferido && <Text style={styles.cardHorario}>🕒 {item.horario_preferido}</Text>}
             {!item.activo && <Text style={styles.cardInactivo}>Inactivo</Text>}
-          </View>
+            <Text style={styles.cardEditar}>✏️ Tocá para editar</Text>
+          </TouchableOpacity>
         )}
         ListEmptyComponent={<Text style={styles.vacio}>No hay repartidores ni preventistas registrados</Text>}
       />
@@ -96,7 +130,7 @@ export default function Usuarios() {
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
         <View style={styles.modal}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitulo}>Nuevo usuario</Text>
+            <Text style={styles.modalTitulo}>{editando ? 'Editar usuario' : 'Nuevo usuario'}</Text>
             <TouchableOpacity onPress={() => setModalVisible(false)}>
               <Text style={styles.modalCerrar}>✕</Text>
             </TouchableOpacity>
@@ -125,10 +159,10 @@ export default function Usuarios() {
               />
             </View>
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Contraseña *</Text>
+              <Text style={styles.label}>{editando ? 'Contraseña' : 'Contraseña *'}</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Contraseña inicial"
+                placeholder={editando ? 'Dejar en blanco para no cambiarla' : 'Contraseña inicial'}
                 placeholderTextColor={COLORS.textLight}
                 secureTextEntry
                 value={form.password}
@@ -152,11 +186,21 @@ export default function Usuarios() {
                 ))}
               </View>
             </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Horario preferido</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: Mañana de 8 a 13"
+                placeholderTextColor={COLORS.textLight}
+                value={form.horario_preferido}
+                onChangeText={(v) => setForm((p) => ({ ...p, horario_preferido: v }))}
+              />
+            </View>
 
             <TouchableOpacity style={styles.btnGuardar} onPress={handleGuardar} disabled={guardando}>
               {guardando
                 ? <ActivityIndicator color="#fff" />
-                : <Text style={styles.btnGuardarTexto}>Crear usuario</Text>}
+                : <Text style={styles.btnGuardarTexto}>{editando ? 'Guardar cambios' : 'Crear usuario'}</Text>}
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -195,7 +239,9 @@ const styles = StyleSheet.create({
   cardNombre: { fontSize: 15, fontWeight: '700', color: COLORS.text },
   cardRol: { fontSize: 12, color: COLORS.textLight },
   cardEmail: { fontSize: 13, color: COLORS.textLight },
+  cardHorario: { fontSize: 12, color: COLORS.textLight },
   cardInactivo: { fontSize: 12, color: COLORS.danger, fontWeight: '600' },
+  cardEditar: { fontSize: 11, color: COLORS.primary, fontWeight: '600', marginTop: 4 },
   vacio: { textAlign: 'center', color: COLORS.textLight, marginTop: 60, fontSize: 14 },
   modal: { flex: 1, backgroundColor: COLORS.background },
   modalHeader: {

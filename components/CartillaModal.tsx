@@ -1,0 +1,241 @@
+import { useState, useEffect } from 'react';
+import {
+  View, Text, StyleSheet, TouchableOpacity, Modal, TextInput,
+  ScrollView, Alert, ActivityIndicator,
+} from 'react-native';
+import { actualizarCartillaCliente } from '../services/api';
+import { COLORS } from '../constants';
+import { Cliente, CategoriaCliente } from '../types';
+
+const FRECUENCIAS = ['Semanal', 'Quincenal', 'Mensual', 'Ocasional'];
+const FORMAS_PAGO = ['Efectivo', 'Cuenta corriente', 'Transferencia'];
+const DIAS_VISITA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Sin preferencia'];
+
+const COLOR_CATEGORIA: Record<CategoriaCliente, string> = {
+  A: '#16A34A', B: '#65A30D', C: '#D97706', D: '#F57C00', E: '#DC2626', F: '#6B7280',
+};
+
+const FORM_VACIO = {
+  razon_social: '', cuit: '', rubro: '', email: '', contacto_nombre: '', horario_atencion: '',
+  telefono: '', monto_compra_promedio: '', frecuencia_compra: '', forma_pago: '', dia_visita_preferido: '', notas: '',
+};
+
+function Chips({ opciones, valor, onSeleccionar, color }: {
+  opciones: string[];
+  valor: string;
+  onSeleccionar: (v: string) => void;
+  color: string;
+}) {
+  return (
+    <View style={styles.chipsRow}>
+      {opciones.map((op) => {
+        const activo = valor === op;
+        return (
+          <TouchableOpacity
+            key={op}
+            style={[styles.chip, { borderColor: color }, activo && { backgroundColor: color }]}
+            onPress={() => onSeleccionar(activo ? '' : op)}
+          >
+            <Text style={[styles.chipTexto, { color: activo ? '#fff' : color }]}>{op}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+interface Props {
+  cliente: Cliente | null;
+  visible: boolean;
+  color?: string;
+  onClose: () => void;
+  onGuardado?: (cliente: Cliente) => void;
+}
+
+export default function CartillaModal({ cliente, visible, color = COLORS.primary, onClose, onGuardado }: Props) {
+  const [form, setForm] = useState(FORM_VACIO);
+  const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => {
+    if (!cliente) return;
+    setForm({
+      razon_social: cliente.razon_social ?? '',
+      cuit: cliente.cuit ?? '',
+      rubro: cliente.rubro ?? '',
+      email: cliente.email ?? '',
+      contacto_nombre: cliente.contacto_nombre ?? '',
+      horario_atencion: cliente.horario_atencion ?? '',
+      telefono: cliente.telefono ?? '',
+      monto_compra_promedio: cliente.monto_compra_promedio != null ? String(cliente.monto_compra_promedio) : '',
+      frecuencia_compra: cliente.frecuencia_compra ?? '',
+      forma_pago: cliente.forma_pago ?? '',
+      dia_visita_preferido: cliente.dia_visita_preferido ?? '',
+      notas: cliente.notas ?? '',
+    });
+  }, [cliente]);
+
+  if (!cliente) return null;
+
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      const data = {
+        razon_social: form.razon_social.trim() || null,
+        cuit: form.cuit.trim() || null,
+        rubro: form.rubro.trim() || null,
+        email: form.email.trim() || null,
+        contacto_nombre: form.contacto_nombre.trim() || null,
+        horario_atencion: form.horario_atencion.trim() || null,
+        telefono: form.telefono.trim() || null,
+        monto_compra_promedio: form.monto_compra_promedio.trim() ? parseFloat(form.monto_compra_promedio) : null,
+        frecuencia_compra: form.frecuencia_compra || null,
+        forma_pago: form.forma_pago || null,
+        dia_visita_preferido: form.dia_visita_preferido || null,
+        notas: form.notas.trim() || null,
+      };
+      const res = await actualizarCartillaCliente(cliente.id, data);
+      onGuardado?.(res.data);
+      onClose();
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo guardar la cartilla');
+    }
+    setGuardando(false);
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={styles.modal}>
+        <View style={[styles.header, { backgroundColor: color }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitulo}>{cliente.nombre}</Text>
+            <Text style={styles.headerDireccion}>{cliente.direccion}</Text>
+          </View>
+          {cliente.categoria && (
+            <View style={[styles.badge, { backgroundColor: COLOR_CATEGORIA[cliente.categoria] }]}>
+              <Text style={styles.badgeTexto}>{cliente.categoria}</Text>
+            </View>
+          )}
+          <TouchableOpacity onPress={onClose} style={styles.btnCerrar}>
+            <Text style={styles.cerrar}>✕</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.form}>
+          <Text style={styles.aviso}>
+            📋 Cartilla de cliente — completá o actualizá estos datos para que la empresa conozca mejor a este negocio.
+          </Text>
+
+          <Text style={styles.seccionTitulo}>Datos de la empresa</Text>
+          {([
+            { key: 'razon_social', label: 'Razón social', placeholder: 'Nombre legal / fantasía' },
+            { key: 'cuit', label: 'CUIT / CUIL', placeholder: '20-12345678-9', keyboard: 'numbers-and-punctuation' },
+            { key: 'rubro', label: 'Rubro', placeholder: 'Kiosco, supermercado, restaurante...' },
+            { key: 'contacto_nombre', label: 'Persona de contacto', placeholder: 'Nombre del encargado' },
+            { key: 'telefono', label: 'Teléfono', placeholder: 'Opcional', keyboard: 'phone-pad' },
+            { key: 'email', label: 'Email', placeholder: 'Opcional', keyboard: 'email-address' },
+            { key: 'horario_atencion', label: 'Horario de atención', placeholder: 'Ej: Lun a Vie 9 a 18' },
+          ] as any[]).map((f) => (
+            <View key={f.key} style={styles.formGroup}>
+              <Text style={styles.label}>{f.label}</Text>
+              <TextInput
+                style={styles.input}
+                placeholder={f.placeholder}
+                placeholderTextColor={COLORS.textLight}
+                keyboardType={f.keyboard ?? 'default'}
+                autoCapitalize={f.key === 'email' ? 'none' : 'sentences'}
+                value={(form as any)[f.key]}
+                onChangeText={(v) => setForm((prev) => ({ ...prev, [f.key]: v }))}
+              />
+            </View>
+          ))}
+
+          <Text style={styles.seccionTitulo}>Datos comerciales</Text>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Monto de compra promedio ($)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Ej: 50000"
+              placeholderTextColor={COLORS.textLight}
+              keyboardType="numeric"
+              value={form.monto_compra_promedio}
+              onChangeText={(v) => setForm((prev) => ({ ...prev, monto_compra_promedio: v }))}
+            />
+          </View>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Frecuencia de compra</Text>
+            <Chips opciones={FRECUENCIAS} valor={form.frecuencia_compra} color={color}
+              onSeleccionar={(v) => setForm((prev) => ({ ...prev, frecuencia_compra: v }))} />
+          </View>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Forma de pago habitual</Text>
+            <Chips opciones={FORMAS_PAGO} valor={form.forma_pago} color={color}
+              onSeleccionar={(v) => setForm((prev) => ({ ...prev, forma_pago: v }))} />
+          </View>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Día de visita preferido</Text>
+            <Chips opciones={DIAS_VISITA} valor={form.dia_visita_preferido} color={color}
+              onSeleccionar={(v) => setForm((prev) => ({ ...prev, dia_visita_preferido: v }))} />
+          </View>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Notas</Text>
+            <TextInput
+              style={[styles.input, styles.inputMultiline]}
+              placeholder="Observaciones sobre el cliente..."
+              placeholderTextColor={COLORS.textLight}
+              multiline
+              value={form.notas}
+              onChangeText={(v) => setForm((prev) => ({ ...prev, notas: v }))}
+            />
+          </View>
+
+          <TouchableOpacity style={[styles.btnGuardar, { backgroundColor: color }]} onPress={guardar} disabled={guardando}>
+            {guardando ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnGuardarTexto}>Guardar cartilla</Text>}
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  modal: { flex: 1, backgroundColor: COLORS.background },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    paddingTop: 24,
+    gap: 10,
+  },
+  headerTitulo: { fontSize: 18, fontWeight: '800', color: '#fff' },
+  headerDireccion: { fontSize: 13, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
+  badge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  badgeTexto: { color: '#fff', fontWeight: '800', fontSize: 14 },
+  btnCerrar: { marginLeft: 4, padding: 4 },
+  cerrar: { fontSize: 20, color: '#fff', fontWeight: '700' },
+  form: { padding: 16, gap: 14, paddingBottom: 40 },
+  aviso: {
+    fontSize: 13, color: COLORS.textLight, backgroundColor: COLORS.card,
+    borderRadius: 12, padding: 14, lineHeight: 18,
+  },
+  seccionTitulo: {
+    fontSize: 13, fontWeight: '800', color: COLORS.text, textTransform: 'uppercase',
+    marginTop: 6, letterSpacing: 0.5,
+  },
+  formGroup: { gap: 4 },
+  label: { fontSize: 12, fontWeight: '700', color: COLORS.textLight, textTransform: 'uppercase' },
+  input: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 15,
+    color: COLORS.text,
+    backgroundColor: COLORS.card,
+  },
+  inputMultiline: { minHeight: 80, textAlignVertical: 'top' },
+  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { borderWidth: 1.5, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7 },
+  chipTexto: { fontWeight: '700', fontSize: 13 },
+  btnGuardar: { borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 8 },
+  btnGuardarTexto: { color: '#fff', fontWeight: '700', fontSize: 16 },
+});

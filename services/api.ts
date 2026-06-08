@@ -91,6 +91,10 @@ export const asignarRuta = (data: { usuario_id: number; ruta_id: number; fecha: 
 export const obtenerAsignaciones = () =>
   api.get('/asignaciones');
 
+// Estadísticas
+export const obtenerEstadisticasClientes = () =>
+  api.get('/estadisticas/clientes');
+
 // Historial
 export const obtenerHistorialJornadas = (usuario_id?: number) =>
   api.get('/jornadas/historial', { params: { usuario_id } });

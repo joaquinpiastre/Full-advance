@@ -4,16 +4,12 @@ import {
   ScrollView, Alert, ActivityIndicator,
 } from 'react-native';
 import { actualizarCartillaCliente } from '../services/api';
-import { COLORS } from '../constants';
-import { Cliente, CategoriaCliente } from '../types';
+import { COLORS, COLOR_CATEGORIA } from '../constants';
+import { Cliente } from '../types';
 
 const FRECUENCIAS = ['Semanal', 'Quincenal', 'Mensual', 'Ocasional'];
 const FORMAS_PAGO = ['Efectivo', 'Cuenta corriente', 'Transferencia'];
 const DIAS_VISITA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Sin preferencia'];
-
-const COLOR_CATEGORIA: Record<CategoriaCliente, string> = {
-  A: '#16A34A', B: '#65A30D', C: '#D97706', D: '#F57C00', E: '#DC2626', F: '#6B7280',
-};
 
 const FORM_VACIO = {
   razon_social: '', cuit: '', rubro: '', email: '', contacto_nombre: '', horario_atencion: '',

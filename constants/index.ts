@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { CategoriaCliente } from '../types';
 
 // Web e iOS Simulator acceden al backend por localhost.
 // El emulador de Android mapea 10.0.2.2 al localhost de la PC.
@@ -23,6 +24,11 @@ export const COLORS = {
   warning: '#D97706',
   repartidor: '#2196F3',
   preventista: '#9C27B0',
+};
+
+// Color por categoría de cliente (A = mayor importancia ... F = menor)
+export const COLOR_CATEGORIA: Record<CategoriaCliente, string> = {
+  A: '#16A34A', B: '#65A30D', C: '#D97706', D: '#F57C00', E: '#DC2626', F: '#6B7280',
 };
 
 export const GPS_INTERVAL_MS = 5000;

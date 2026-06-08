@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Modal, TextInput, Alert, ScrollView,
 } from 'react-native';
 import { obtenerClientes, crearCliente, actualizarCliente } from '../../services/api';
-import { COLORS } from '../../constants';
+import { COLORS, COLOR_CATEGORIA } from '../../constants';
 import { Cliente, CategoriaCliente } from '../../types';
 
 const FORM_VACIO = {
@@ -18,10 +18,6 @@ const CATEGORIAS: CategoriaCliente[] = ['A', 'B', 'C', 'D', 'E', 'F'];
 const FRECUENCIAS = ['Semanal', 'Quincenal', 'Mensual', 'Ocasional'];
 const FORMAS_PAGO = ['Efectivo', 'Cuenta corriente', 'Transferencia'];
 const DIAS_VISITA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Sin preferencia'];
-
-const COLOR_CATEGORIA: Record<CategoriaCliente, string> = {
-  A: '#16A34A', B: '#65A30D', C: '#D97706', D: '#F57C00', E: '#DC2626', F: '#6B7280',
-};
 
 function Chips({ opciones, valor, onSeleccionar, colorPorOpcion }: {
   opciones: string[];

@@ -54,6 +54,14 @@ export default function AdminLayout() {
         }}
       />
       <Tabs.Screen
+        name="estadisticas"
+        options={{
+          title: 'Estadísticas',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📈</Text>,
+          headerTitle: 'Estadísticas de Clientes',
+        }}
+      />
+      <Tabs.Screen
         name="historial"
         options={{
           title: 'Historial',

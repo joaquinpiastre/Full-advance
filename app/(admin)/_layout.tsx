@@ -69,6 +69,14 @@ export default function AdminLayout() {
           headerTitle: 'Historial',
         }}
       />
+      <Tabs.Screen
+        name="alertas"
+        options={{
+          title: 'Alertas',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🚨</Text>,
+          headerTitle: 'Alertas — Urgentes y Vencimientos',
+        }}
+      />
     </Tabs>
   );
 }

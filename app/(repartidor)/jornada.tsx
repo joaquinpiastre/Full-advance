@@ -116,7 +116,7 @@ export default function JornadaRepartidor() {
         form2.append('numero', '2');
         await subirFoto(paradaActual.id, form2);
       }
-      await finalizarParada(paradaActual.id, nota.trim() || undefined);
+      await finalizarParada(paradaActual.id, { nota: nota.trim() || undefined });
       setEstadoFotos('esperando');
       setParadaActual(null);
       setFoto1(null);
@@ -288,7 +288,10 @@ export default function JornadaRepartidor() {
                     <Text style={styles.clienteDireccion}>{item.direccion}</Text>
                     {yaVisitado && <Text style={styles.clienteVisitado}>✓ Visitado</Text>}
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.btnCartilla} onPress={() => setClienteCartilla(item)}>
+                  <TouchableOpacity style={styles.btnCartilla} onPress={() => {
+                    setClientesModal(false);
+                    setClienteCartilla(item);
+                  }}>
                     <Text style={styles.btnCartillaIcono}>📋</Text>
                     <Text style={styles.btnCartillaTexto}>Cartilla</Text>
                   </TouchableOpacity>
@@ -306,7 +309,10 @@ export default function JornadaRepartidor() {
         cliente={clienteCartilla}
         visible={!!clienteCartilla}
         color={COLORS.repartidor}
-        onClose={() => setClienteCartilla(null)}
+        onClose={() => {
+          setClienteCartilla(null);
+          setTimeout(() => setClientesModal(true), 350);
+        }}
         onGuardado={cargarDatos}
       />
     </View>

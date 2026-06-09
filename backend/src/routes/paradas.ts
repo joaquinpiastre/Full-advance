@@ -3,7 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { pool } from '../db/client';
-import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { authMiddleware, soloAdmin, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -21,7 +21,7 @@ const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { jornada_id, lat, lng, cliente_id } = req.body;
-  if (!jornada_id || !lat || !lng) return res.status(400).json({ error: 'jornada_id, lat y lng requeridos' });
+  if (!jornada_id || lat == null || lng == null) return res.status(400).json({ error: 'jornada_id, lat y lng requeridos' });
   try {
     const { rows } = await pool.query(
       `INSERT INTO paradas (jornada_id, lat, lng, cliente_id)
@@ -57,11 +57,16 @@ router.post('/:id/foto', authMiddleware, upload.single('foto'), async (req: Auth
 
 router.post('/:id/finalizar', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const { nota } = req.body;
+  const { nota, tiene_vencidos, mercaderia_vencida, fecha_vencimiento, urgente, urgencia_descripcion } = req.body;
   try {
     const { rows } = await pool.query(
-      `UPDATE paradas SET completada=true, timestamp_salida=NOW(), nota=$1 WHERE id=$2 RETURNING *`,
-      [nota ?? null, id]
+      `UPDATE paradas SET
+        completada=true, timestamp_salida=NOW(), nota=$1,
+        tiene_vencidos=$2, mercaderia_vencida=$3, fecha_vencimiento=$4,
+        urgente=$5, urgencia_descripcion=$6
+       WHERE id=$7 RETURNING *`,
+      [nota ?? null, tiene_vencidos ?? false, mercaderia_vencida ?? null,
+       fecha_vencimiento ?? null, urgente ?? false, urgencia_descripcion ?? null, id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Parada no encontrada' });
     res.json(rows[0]);
@@ -86,6 +91,41 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       cliente: p.cliente_id ? { id: p.cliente_id, nombre: p.cliente_nombre, direccion: p.cliente_dir } : null,
     }));
     res.json(paradas);
+  } catch {
+    res.status(500).json({ error: 'Error' });
+  }
+});
+
+// Alertas para el admin: últimos 7 días con urgente o mercadería vencida
+router.get('/alertas', authMiddleware, soloAdmin, async (_req: AuthRequest, res: Response) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT p.id, p.nota, p.urgente, p.urgencia_descripcion,
+        p.tiene_vencidos, p.mercaderia_vencida, p.fecha_vencimiento,
+        p.timestamp_salida, p.cliente_id,
+        c.nombre as cliente_nombre, c.direccion as cliente_dir, c.telefono as cliente_tel,
+        u.nombre as usuario_nombre, u.rol as usuario_rol
+      FROM paradas p
+      JOIN jornadas j ON j.id = p.jornada_id
+      JOIN usuarios u ON u.id = j.usuario_id
+      LEFT JOIN clientes c ON c.id = p.cliente_id
+      WHERE (p.urgente = true OR p.tiene_vencidos = true)
+        AND p.completada = true
+        AND p.timestamp_salida >= NOW() - INTERVAL '7 days'
+      ORDER BY p.urgente DESC, p.timestamp_salida DESC
+    `);
+    res.json(rows.map((r) => ({
+      id: r.id,
+      urgente: r.urgente,
+      urgencia_descripcion: r.urgencia_descripcion,
+      tiene_vencidos: r.tiene_vencidos,
+      mercaderia_vencida: r.mercaderia_vencida,
+      fecha_vencimiento: r.fecha_vencimiento,
+      timestamp_salida: r.timestamp_salida,
+      nota: r.nota,
+      cliente: { id: r.cliente_id, nombre: r.cliente_nombre, direccion: r.cliente_dir, telefono: r.cliente_tel },
+      usuario: { nombre: r.usuario_nombre, rol: r.usuario_rol },
+    })));
   } catch {
     res.status(500).json({ error: 'Error' });
   }

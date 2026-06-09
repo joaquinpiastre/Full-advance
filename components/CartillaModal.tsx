@@ -50,10 +50,16 @@ interface Props {
 
 export default function CartillaModal({ cliente, visible, color = COLORS.primary, onClose, onGuardado }: Props) {
   const [form, setForm] = useState(FORM_VACIO);
+  const [horaVisita, setHoraVisita] = useState('');
   const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
     if (!cliente) return;
+    const raw = cliente.dia_visita_preferido ?? '';
+    const parts = raw.split(' ');
+    const isTime = (s: string) => /^\d{2}:\d{2}$/.test(s);
+    const hasTime = parts.length > 1 && isTime(parts[parts.length - 1]);
+    setHoraVisita(hasTime ? parts[parts.length - 1] : '');
     setForm({
       razon_social: cliente.razon_social ?? '',
       cuit: cliente.cuit ?? '',
@@ -65,7 +71,7 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
       monto_compra_promedio: cliente.monto_compra_promedio != null ? String(cliente.monto_compra_promedio) : '',
       frecuencia_compra: cliente.frecuencia_compra ?? '',
       forma_pago: cliente.forma_pago ?? '',
-      dia_visita_preferido: cliente.dia_visita_preferido ?? '',
+      dia_visita_preferido: hasTime ? parts.slice(0, -1).join(' ') : raw,
       notas: cliente.notas ?? '',
     });
   }, [cliente]);
@@ -75,6 +81,11 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
   const guardar = async () => {
     setGuardando(true);
     try {
+      const dia = form.dia_visita_preferido;
+      const hora = horaVisita.trim();
+      const diaFinal = dia
+        ? (dia !== 'Sin preferencia' && hora ? `${dia} ${hora}` : dia)
+        : null;
       const data = {
         razon_social: form.razon_social.trim() || null,
         cuit: form.cuit.trim() || null,
@@ -86,7 +97,7 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
         monto_compra_promedio: form.monto_compra_promedio.trim() ? parseFloat(form.monto_compra_promedio) : null,
         frecuencia_compra: form.frecuencia_compra || null,
         forma_pago: form.forma_pago || null,
-        dia_visita_preferido: form.dia_visita_preferido || null,
+        dia_visita_preferido: diaFinal,
         notas: form.notas.trim() || null,
       };
       const res = await actualizarCartillaCliente(cliente.id, data);
@@ -171,6 +182,20 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
             <Text style={styles.label}>Día de visita preferido</Text>
             <Chips opciones={DIAS_VISITA} valor={form.dia_visita_preferido} color={color}
               onSeleccionar={(v) => setForm((prev) => ({ ...prev, dia_visita_preferido: v }))} />
+            {form.dia_visita_preferido && form.dia_visita_preferido !== 'Sin preferencia' && (
+              <>
+                <Text style={[styles.label, { marginTop: 8 }]}>Hora de visita</Text>
+                <TextInput
+                  style={[styles.input, styles.inputHora]}
+                  placeholder="Ej: 10:00"
+                  placeholderTextColor={COLORS.textLight}
+                  keyboardType="numbers-and-punctuation"
+                  value={horaVisita}
+                  onChangeText={setHoraVisita}
+                  maxLength={5}
+                />
+              </>
+            )}
           </View>
           <View style={styles.formGroup}>
             <Text style={styles.label}>Notas</Text>
@@ -229,6 +254,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
   },
   inputMultiline: { minHeight: 80, textAlignVertical: 'top' },
+  inputHora: { width: 120 },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { borderWidth: 1.5, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7 },
   chipTexto: { fontWeight: '700', fontSize: 13 },

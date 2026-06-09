@@ -13,6 +13,14 @@ Credenciales del admin por defecto:
 - Email: admin@fulladvance.com
 - Password: password
 
+Credenciales de usuario repartidor:
+- Email: joacopiastre@gmail.com
+- Password: 123456
+
+Credenciales de preventistas:
+- Email: danielmolina@gmail.com
+- Password: 123456 
+
 ## 2. Backend
 
 ```bash

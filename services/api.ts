@@ -55,8 +55,14 @@ export const subirFoto = (parada_id: number, foto: FormData) =>
     headers: { 'Content-Type': 'multipart/form-data' },
   });
 
-export const finalizarParada = (parada_id: number, nota?: string) =>
-  api.post(`/paradas/${parada_id}/finalizar`, { nota });
+export const finalizarParada = (parada_id: number, data?: {
+  nota?: string;
+  tiene_vencidos?: boolean;
+  mercaderia_vencida?: string | null;
+  fecha_vencimiento?: string | null;
+  urgente?: boolean;
+  urgencia_descripcion?: string | null;
+}) => api.post(`/paradas/${parada_id}/finalizar`, data ?? {});
 
 export const obtenerParadas = (jornada_id: number) =>
   api.get(`/paradas?jornada_id=${jornada_id}`);
@@ -99,6 +105,42 @@ export const asignarRuta = (data: { usuario_id: number; ruta_id: number; fecha: 
 
 export const obtenerAsignaciones = () =>
   api.get('/asignaciones');
+
+// Rutas fijas (asignación permanente que se aplica automáticamente cada día)
+export const obtenerAsignacionesFijas = () =>
+  api.get('/asignaciones/fijas');
+
+export const guardarAsignacionFija = (usuario_id: number, ruta_id: number) =>
+  api.put(`/asignaciones/fijas/${usuario_id}`, { ruta_id });
+
+export const eliminarAsignacionFija = (usuario_id: number) =>
+  api.delete(`/asignaciones/fijas/${usuario_id}`);
+
+// Alertas admin (paradas con urgente o vencidos, últimos 7 días)
+export const obtenerAlertas = () =>
+  api.get('/paradas/alertas');
+
+// Ventas Calientes
+export const obtenerVentaCalienteActiva = () =>
+  api.get('/ventas-calientes/activa');
+
+export const crearVentaCaliente = (ruta_id: number) =>
+  api.post('/ventas-calientes', { ruta_id });
+
+export const unirseVentaCaliente = (codigo: string) =>
+  api.post('/ventas-calientes/unirse', { codigo });
+
+export const obtenerVentaCaliente = (id: number) =>
+  api.get(`/ventas-calientes/${id}`);
+
+export const iniciarVisitaVC = (vc_id: number, data: { cliente_id: number; lat: number; lng: number }) =>
+  api.post(`/ventas-calientes/${vc_id}/visitas`, data);
+
+export const finalizarVentaCaliente = (id: number) =>
+  api.patch(`/ventas-calientes/${id}/finalizar`);
+
+export const obtenerVentasCalientesAdmin = (usuario_id?: number) =>
+  api.get('/ventas-calientes', { params: usuario_id ? { usuario_id } : {} });
 
 // Estadísticas
 export const obtenerEstadisticasClientes = () =>

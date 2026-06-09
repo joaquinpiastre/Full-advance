@@ -93,6 +93,25 @@ export interface Parada {
   nota?: string;
   completada: boolean;
   cliente?: Cliente;
+  // Campos preventista
+  tiene_vencidos?: boolean;
+  mercaderia_vencida?: string;
+  fecha_vencimiento?: string;
+  urgente?: boolean;
+  urgencia_descripcion?: string;
+}
+
+export interface Alerta {
+  id: number;
+  urgente: boolean;
+  urgencia_descripcion?: string;
+  tiene_vencidos: boolean;
+  mercaderia_vencida?: string;
+  fecha_vencimiento?: string;
+  timestamp_salida: string;
+  nota?: string;
+  cliente: { id: number; nombre: string; direccion: string; telefono?: string };
+  usuario: { nombre: string; rol: Rol };
 }
 
 export interface UbicacionLive {

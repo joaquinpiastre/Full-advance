@@ -1,10 +1,21 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
+import {
+  View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity,
+  Alert, ScrollView, Image, TextInput,
+} from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { useJornadaStore } from '../../store/jornadaStore';
-import { obtenerAsignacionHoy, obtenerParadas } from '../../services/api';
+import {
+  obtenerAsignacionHoy, obtenerParadas,
+  registrarParada, subirFoto, finalizarParada,
+} from '../../services/api';
 import CartillaModal from '../../components/CartillaModal';
+import FechaVencimientoPicker from '../../components/FechaVencimientoPicker';
 import { COLORS } from '../../constants';
 import { Cliente } from '../../types';
+
+type EstadoVisita = 'esperando' | 'foto1' | 'foto2' | 'formulario';
 
 export default function RutaPreventista() {
   const { jornada } = useJornadaStore();
@@ -13,17 +24,30 @@ export default function RutaPreventista() {
   const [cargando, setCargando] = useState(true);
   const [clienteCartilla, setClienteCartilla] = useState<Cliente | null>(null);
 
-  useEffect(() => {
-    cargar();
-  }, []);
+  // Flujo de visita
+  const [clienteActual, setClienteActual] = useState<Cliente | null>(null);
+  const [paradaActual, setParadaActual] = useState<any>(null);
+  const [estadoVisita, setEstadoVisita] = useState<EstadoVisita>('esperando');
+  const [foto1, setFoto1] = useState<string | null>(null);
+  const [foto2, setFoto2] = useState<string | null>(null);
+  const [procesando, setProcesando] = useState(false);
+
+  // Formulario
+  const [nota, setNota] = useState('');
+  const [tieneVencidos, setTieneVencidos] = useState(false);
+  const [mercaderiaVencida, setMercaderiaVencida] = useState('');
+  const [tipoVenc, setTipoVenc] = useState<'vencida' | 'fecha'>('fecha');
+  const [fechaVencimiento, setFechaVencimiento] = useState<Date | null>(null);
+  const [urgente, setUrgente] = useState(false);
+  const [urgenciaDesc, setUrgenciaDesc] = useState('');
+
+  useEffect(() => { cargar(); }, []);
 
   const cargar = async () => {
     setCargando(true);
     try {
       const asigRes = await obtenerAsignacionHoy();
-      const clientesRuta = asigRes.data?.ruta?.clientes?.map((c: any) => c.cliente) ?? [];
-      setClientes(clientesRuta);
-
+      setClientes(asigRes.data?.ruta?.clientes?.map((c: any) => c.cliente) ?? []);
       if (jornada) {
         const paradasRes = await obtenerParadas(jornada.id);
         setParadas(paradasRes.data);
@@ -32,46 +56,337 @@ export default function RutaPreventista() {
     setCargando(false);
   };
 
+  const iniciarVisita = async (cliente: Cliente) => {
+    if (!jornada) {
+      Alert.alert('Sin jornada', 'Iniciá la jornada desde la pantalla de Inicio primero.');
+      return;
+    }
+    setProcesando(true);
+    try {
+      let lat = 0, lng = 0;
+      try {
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        lat = loc.coords.latitude;
+        lng = loc.coords.longitude;
+      } catch {}
+      const res = await registrarParada({ jornada_id: jornada.id, lat, lng, cliente_id: cliente.id });
+      setParadaActual(res.data);
+      setClienteActual(cliente);
+      setFoto1(null); setFoto2(null);
+      setNota('');
+      setTieneVencidos(false); setMercaderiaVencida(''); setTipoVenc('fecha'); setFechaVencimiento(null);
+      setUrgente(false); setUrgenciaDesc('');
+      setEstadoVisita('foto1');
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo registrar la visita');
+    }
+    setProcesando(false);
+  };
+
+  const tomarFoto = async (numero: 1 | 2) => {
+    try {
+      const permiso = await ImagePicker.requestCameraPermissionsAsync();
+      if (permiso.status !== 'granted') {
+        Alert.alert(
+          'Permiso de cámara',
+          permiso.canAskAgain
+            ? 'Necesitás permitir el acceso a la cámara.'
+            : 'El permiso fue denegado permanentemente. Habilitalo en Ajustes → Aplicaciones → Permisos → Cámara.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({ quality: 0.7, allowsEditing: false });
+      if (result.canceled) return;
+      const uri = result.assets[0].uri;
+      if (numero === 1) { setFoto1(uri); setEstadoVisita('foto2'); }
+      else { setFoto2(uri); setEstadoVisita('formulario'); }
+    } catch {
+      Alert.alert('Error', 'No se pudo abrir la cámara. Verificá que la app tiene permiso.');
+    }
+  };
+
+  const confirmarVisita = async () => {
+    if (!paradaActual) return;
+    setProcesando(true);
+    try {
+      if (foto1) {
+        const f = new FormData();
+        f.append('foto', { uri: foto1, type: 'image/jpeg', name: 'foto1.jpg' } as any);
+        f.append('numero', '1');
+        await subirFoto(paradaActual.id, f);
+      }
+      if (foto2) {
+        const f = new FormData();
+        f.append('foto', { uri: foto2, type: 'image/jpeg', name: 'foto2.jpg' } as any);
+        f.append('numero', '2');
+        await subirFoto(paradaActual.id, f);
+      }
+      await finalizarParada(paradaActual.id, {
+        nota: nota.trim() || undefined,
+        tiene_vencidos: tieneVencidos,
+        mercaderia_vencida: tieneVencidos ? mercaderiaVencida.trim() || null : null,
+        fecha_vencimiento: tieneVencidos
+          ? (tipoVenc === 'vencida' ? 'Vencida' : fechaVencimiento
+              ? `${String(fechaVencimiento.getDate()).padStart(2,'0')}/${String(fechaVencimiento.getMonth()+1).padStart(2,'0')}/${fechaVencimiento.getFullYear()}`
+              : null)
+          : null,
+        urgente,
+        urgencia_descripcion: urgente ? urgenciaDesc.trim() || null : null,
+      });
+      setEstadoVisita('esperando');
+      setClienteActual(null);
+      setParadaActual(null);
+      await cargar();
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo confirmar la visita');
+    }
+    setProcesando(false);
+  };
+
   if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.preventista} size="large" /></View>;
 
   return (
     <View style={styles.container}>
-      <View style={styles.resumen}>
-        <Text style={styles.resumenTexto}>
-          {paradas.length} / {clientes.length} clientes visitados
-        </Text>
-        <View style={styles.barra}>
-          <View style={[styles.barraFill, { width: clientes.length ? `${(paradas.length / clientes.length) * 100}%` : '0%' }]} />
-        </View>
-      </View>
 
-      <FlatList
-        data={clientes}
-        keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={{ padding: 16, gap: 10 }}
-        renderItem={({ item, index }) => {
-          const visitado = paradas.some((p) => p.cliente_id === item.id);
-          return (
-            <View style={[styles.clienteCard, visitado && styles.clienteCardVisitado]}>
-              <View style={styles.clienteOrden}>
-                <Text style={styles.clienteOrdenNum}>{index + 1}</Text>
+      {/* ── Panel de visita activa ── */}
+      {estadoVisita !== 'esperando' && clienteActual && (
+        <View style={styles.panel}>
+          <View style={styles.panelHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.panelCliente}>{clienteActual.nombre}</Text>
+              <Text style={styles.panelDir}>{clienteActual.direccion}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                Alert.alert('Cancelar visita', '¿Cancelar el registro de esta visita?', [
+                  { text: 'No', style: 'cancel' },
+                  { text: 'Sí, cancelar', style: 'destructive', onPress: () => {
+                    setEstadoVisita('esperando');
+                    setClienteActual(null);
+                  }},
+                ]);
+              }}
+            >
+              <Text style={styles.panelCerrar}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Paso: Foto 1 */}
+          {estadoVisita === 'foto1' && (
+            <View style={styles.panelBody}>
+              <Text style={styles.pasoTitulo}>📷 Foto 1 de 2</Text>
+              {foto1 ? (
+                <>
+                  <Image source={{ uri: foto1 }} style={styles.fotoPreview} />
+                  <TouchableOpacity style={styles.btnRetomar} onPress={() => tomarFoto(1)}>
+                    <Text style={styles.btnRetomarTexto}>🔄 Retomar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.btnPrimario} onPress={() => setEstadoVisita('foto2')}>
+                    <Text style={styles.btnTexto}>Siguiente →</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <TouchableOpacity style={styles.btnFoto} onPress={() => tomarFoto(1)}>
+                    <Text style={styles.btnFotoIcono}>📷</Text>
+                    <Text style={styles.btnFotoTexto}>Tomar Foto 1</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.btnSaltear} onPress={() => setEstadoVisita('formulario')}>
+                    <Text style={styles.btnSaltearTexto}>Saltear fotos e ir al formulario</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          )}
+
+          {/* Paso: Foto 2 */}
+          {estadoVisita === 'foto2' && (
+            <View style={styles.panelBody}>
+              <Text style={styles.pasoTitulo}>📷 Foto 2 de 2</Text>
+              <View style={styles.fotosRow}>
+                {foto1 && <Image source={{ uri: foto1 }} style={styles.fotoMini} />}
+                <TouchableOpacity style={styles.btnFoto} onPress={() => tomarFoto(2)}>
+                  <Text style={styles.btnFotoIcono}>📷</Text>
+                  <Text style={styles.btnFotoTexto}>Tomar Foto 2</Text>
+                </TouchableOpacity>
               </View>
-              <View style={styles.clienteInfo}>
-                <Text style={styles.clienteNombre}>{item.nombre}</Text>
-                <Text style={styles.clienteDireccion}>{item.direccion}</Text>
-                {item.telefono && <Text style={styles.clienteTelefono}>📞 {item.telefono}</Text>}
-              </View>
-              {visitado && <Text style={styles.visitadoCheck}>✓</Text>}
-              <TouchableOpacity style={styles.btnCartilla} onPress={() => setClienteCartilla(item)}>
-                <Text style={styles.btnCartillaIcono}>📋</Text>
+              <TouchableOpacity style={styles.btnSaltear} onPress={() => setEstadoVisita('formulario')}>
+                <Text style={styles.btnSaltearTexto}>Saltear foto 2</Text>
               </TouchableOpacity>
             </View>
-          );
-        }}
-        ListEmptyComponent={
-          <Text style={styles.vacio}>No hay clientes en la ruta de hoy</Text>
-        }
-      />
+          )}
+
+          {/* Paso: Formulario */}
+          {estadoVisita === 'formulario' && (
+            <ScrollView style={styles.panelScroll} contentContainerStyle={styles.panelScrollContent} showsVerticalScrollIndicator={false}>
+              {/* Fotos tomadas */}
+              {(foto1 || foto2) && (
+                <View style={styles.fotosRow}>
+                  {foto1 && <Image source={{ uri: foto1 }} style={styles.fotoMini} />}
+                  {foto2 && <Image source={{ uri: foto2 }} style={styles.fotoMini} />}
+                </View>
+              )}
+
+              {/* Toggle: Mercadería vencida */}
+              <TouchableOpacity
+                style={[styles.toggleRow, tieneVencidos && styles.toggleRowVenc]}
+                onPress={() => setTieneVencidos((v) => !v)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.toggleEmoji}>📦</Text>
+                <Text style={styles.toggleLabel}>Mercadería vencida / por vencer</Text>
+                <View style={[styles.toggleBubble, tieneVencidos && styles.toggleBubbleOn]}>
+                  <Text style={styles.toggleBubbleTexto}>{tieneVencidos ? 'SÍ' : 'NO'}</Text>
+                </View>
+              </TouchableOpacity>
+
+              {tieneVencidos && (
+                <View style={styles.subForm}>
+                  <Text style={styles.subLabel}>¿Qué mercadería?</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Ej: yogur marca X, galletitas..."
+                    placeholderTextColor={COLORS.textLight}
+                    value={mercaderiaVencida}
+                    onChangeText={setMercaderiaVencida}
+                  />
+                  <Text style={[styles.subLabel, { marginTop: 10 }]}>Estado</Text>
+                  <View style={styles.chipsRow}>
+                    {(['vencida', 'fecha'] as const).map((op) => (
+                      <TouchableOpacity
+                        key={op}
+                        style={[styles.chip, tipoVenc === op && styles.chipActivo]}
+                        onPress={() => setTipoVenc(op)}
+                      >
+                        <Text style={[styles.chipTexto, tipoVenc === op && styles.chipTextoActivo]}>
+                          {op === 'vencida' ? 'Ya vencida' : 'Próximo vencimiento'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  {tipoVenc === 'fecha' && (
+                    <FechaVencimientoPicker
+                      value={fechaVencimiento}
+                      onChange={setFechaVencimiento}
+                    />
+                  )}
+                </View>
+              )}
+
+              {/* Toggle: Urgente */}
+              <TouchableOpacity
+                style={[styles.toggleRow, urgente && styles.toggleRowUrgente]}
+                onPress={() => setUrgente((v) => !v)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.toggleEmoji}>🚨</Text>
+                <Text style={[styles.toggleLabel, urgente && { color: COLORS.danger, fontWeight: '700' }]}>
+                  Atención urgente requerida
+                </Text>
+                <View style={[styles.toggleBubble, urgente && styles.toggleBubbleUrgente]}>
+                  <Text style={styles.toggleBubbleTexto}>{urgente ? 'SÍ' : 'NO'}</Text>
+                </View>
+              </TouchableOpacity>
+
+              {urgente && (
+                <View style={[styles.subForm, styles.subFormUrgente]}>
+                  <Text style={styles.subLabel}>¿Qué necesita urgente?</Text>
+                  <TextInput
+                    style={[styles.input, styles.inputMultiline]}
+                    placeholder="Ej: falta producto, problema con equipo..."
+                    placeholderTextColor={COLORS.textLight}
+                    value={urgenciaDesc}
+                    onChangeText={setUrgenciaDesc}
+                    multiline
+                  />
+                </View>
+              )}
+
+              {/* Nota */}
+              <View style={styles.formGroup}>
+                <Text style={styles.subLabel}>Nota (opcional)</Text>
+                <TextInput
+                  style={[styles.input, styles.inputMultiline]}
+                  placeholder="Observaciones adicionales..."
+                  placeholderTextColor={COLORS.textLight}
+                  multiline
+                  value={nota}
+                  onChangeText={setNota}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.btnConfirmar, procesando && { opacity: 0.6 }]}
+                onPress={confirmarVisita}
+                disabled={procesando}
+              >
+                {procesando
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={styles.btnConfirmarTexto}>✓ Confirmar visita</Text>}
+              </TouchableOpacity>
+            </ScrollView>
+          )}
+        </View>
+      )}
+
+      {/* ── Lista de clientes ── */}
+      {estadoVisita === 'esperando' && (
+        <>
+          <View style={styles.resumen}>
+            <Text style={styles.resumenTexto}>
+              {paradas.length} / {clientes.length} clientes visitados
+            </Text>
+            <View style={styles.barra}>
+              <View style={[
+                styles.barraFill,
+                { width: clientes.length ? `${(paradas.length / clientes.length) * 100}%` : '0%' }
+              ]} />
+            </View>
+          </View>
+
+          <FlatList
+            data={clientes}
+            keyExtractor={(item) => String(item.id)}
+            contentContainerStyle={{ padding: 16, gap: 10 }}
+            renderItem={({ item, index }) => {
+              const visitado = paradas.some((p) => p.cliente_id === item.id);
+              return (
+                <View style={[styles.clienteCard, visitado && styles.clienteCardVisitado]}>
+                  <View style={styles.clienteOrden}>
+                    <Text style={styles.clienteOrdenNum}>{index + 1}</Text>
+                  </View>
+                  <View style={styles.clienteInfo}>
+                    <Text style={styles.clienteNombre}>{item.nombre}</Text>
+                    <Text style={styles.clienteDireccion}>{item.direccion}</Text>
+                    {item.telefono && <Text style={styles.clienteTelefono}>📞 {item.telefono}</Text>}
+                  </View>
+                  <View style={styles.botonesCard}>
+                    {visitado ? (
+                      <Text style={styles.visitadoCheck}>✓</Text>
+                    ) : (
+                      <TouchableOpacity
+                        style={[styles.btnVisitar, procesando && { opacity: 0.5 }]}
+                        onPress={() => iniciarVisita(item)}
+                        disabled={procesando}
+                      >
+                        <Text style={styles.btnVisitarTexto}>Visitar</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={styles.btnCartilla}
+                      onPress={() => setClienteCartilla(item)}
+                    >
+                      <Text style={styles.btnCartillaIcono}>📋</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            }}
+            ListEmptyComponent={<Text style={styles.vacio}>No hay clientes en la ruta de hoy</Text>}
+          />
+        </>
+      )}
 
       <CartillaModal
         cliente={clienteCartilla}
@@ -87,6 +402,131 @@ export default function RutaPreventista() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  // Panel de visita
+  panel: {
+    flex: 1,
+    backgroundColor: COLORS.card,
+    margin: 12,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  panelHeader: {
+    backgroundColor: COLORS.preventista,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  panelCliente: { fontSize: 16, fontWeight: '800', color: '#fff' },
+  panelDir: { fontSize: 12, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
+  panelCerrar: { fontSize: 22, color: '#fff', fontWeight: '700', padding: 4 },
+  panelBody: { padding: 20, gap: 12 },
+  panelScroll: { flex: 1 },
+  panelScrollContent: { padding: 16, gap: 12 },
+
+  // Paso fotos
+  pasoTitulo: { fontSize: 18, fontWeight: '800', color: COLORS.preventista, marginBottom: 4 },
+  fotoPreview: { width: '100%', height: 200, borderRadius: 10 },
+  fotosRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  fotoMini: { width: 90, height: 90, borderRadius: 8 },
+  btnFoto: {
+    flex: 1,
+    backgroundColor: COLORS.preventista,
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    gap: 6,
+  },
+  btnFotoIcono: { fontSize: 36 },
+  btnFotoTexto: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  btnRetomar: { alignItems: 'center', paddingVertical: 8 },
+  btnRetomarTexto: { color: COLORS.textLight, fontSize: 13 },
+  btnSaltear: { alignItems: 'center', paddingVertical: 10 },
+  btnSaltearTexto: { color: COLORS.textLight, fontSize: 13, textDecorationLine: 'underline' },
+  btnPrimario: {
+    backgroundColor: COLORS.preventista,
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+  },
+  btnTexto: { color: '#fff', fontWeight: '700', fontSize: 15 },
+
+  // Formulario
+  formGroup: { gap: 4 },
+  subLabel: { fontSize: 12, fontWeight: '700', color: COLORS.textLight, textTransform: 'uppercase' },
+  input: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 14,
+    color: COLORS.text,
+    backgroundColor: COLORS.background,
+  },
+  inputMultiline: { minHeight: 70, textAlignVertical: 'top' },
+
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    padding: 14,
+    gap: 10,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+  },
+  toggleRowVenc: { borderColor: '#F59E0B', backgroundColor: '#FFFBEB' },
+  toggleRowUrgente: { borderColor: COLORS.danger, backgroundColor: '#FEF2F2' },
+  toggleEmoji: { fontSize: 22 },
+  toggleLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: COLORS.text },
+  toggleBubble: {
+    backgroundColor: COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  toggleBubbleOn: { backgroundColor: '#F59E0B' },
+  toggleBubbleUrgente: { backgroundColor: COLORS.danger },
+  toggleBubbleTexto: { fontSize: 11, fontWeight: '800', color: '#fff' },
+
+  subForm: {
+    backgroundColor: COLORS.background,
+    borderRadius: 10,
+    padding: 12,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  subFormUrgente: { borderColor: COLORS.danger },
+
+  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    backgroundColor: COLORS.card,
+  },
+  chipActivo: { borderColor: COLORS.preventista, backgroundColor: COLORS.preventista },
+  chipTexto: { fontSize: 13, fontWeight: '600', color: COLORS.textLight },
+  chipTextoActivo: { color: '#fff' },
+
+  btnConfirmar: {
+    backgroundColor: COLORS.success,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  btnConfirmarTexto: { color: '#fff', fontWeight: '700', fontSize: 16 },
+
+  // Lista de clientes
   resumen: {
     backgroundColor: COLORS.card,
     padding: 16,
@@ -97,13 +537,14 @@ const styles = StyleSheet.create({
   resumenTexto: { fontSize: 14, color: COLORS.text, fontWeight: '600' },
   barra: { height: 8, backgroundColor: COLORS.border, borderRadius: 4 },
   barraFill: { height: 8, backgroundColor: COLORS.preventista, borderRadius: 4 },
+
   clienteCard: {
     backgroundColor: COLORS.card,
     borderRadius: 14,
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowRadius: 6,
@@ -111,27 +552,37 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: COLORS.preventista,
   },
-  clienteCardVisitado: { borderLeftColor: COLORS.success, opacity: 0.7 },
+  clienteCardVisitado: { borderLeftColor: COLORS.success, opacity: 0.75 },
   clienteOrden: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: COLORS.preventista,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  clienteOrdenNum: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  clienteOrdenNum: { color: '#fff', fontWeight: '700', fontSize: 13 },
   clienteInfo: { flex: 1 },
-  clienteNombre: { fontSize: 15, fontWeight: '700', color: COLORS.text },
-  clienteDireccion: { fontSize: 13, color: COLORS.textLight, marginTop: 2 },
+  clienteNombre: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  clienteDireccion: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },
   clienteTelefono: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },
+
+  botonesCard: { flexDirection: 'column', alignItems: 'center', gap: 6 },
   visitadoCheck: { fontSize: 22, color: COLORS.success, fontWeight: '700' },
+  btnVisitar: {
+    backgroundColor: COLORS.preventista,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  btnVisitarTexto: { color: '#fff', fontWeight: '700', fontSize: 12 },
   btnCartilla: {
-    width: 40, height: 40, borderRadius: 20,
+    width: 34, height: 34, borderRadius: 17,
     backgroundColor: COLORS.background,
     justifyContent: 'center', alignItems: 'center',
     borderWidth: 1, borderColor: COLORS.border,
   },
-  btnCartillaIcono: { fontSize: 18 },
+  btnCartillaIcono: { fontSize: 16 },
+
   vacio: { textAlign: 'center', color: COLORS.textLight, marginTop: 60, fontSize: 14 },
 });

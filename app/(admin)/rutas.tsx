@@ -98,64 +98,66 @@ export default function Rutas() {
 
   if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
 
-  if (detalleRuta) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.detalleHeader}>
-          <View style={styles.detalleHeaderTop}>
-            <TouchableOpacity onPress={() => setDetalleRuta(null)}>
-              <Text style={styles.back}>← Volver</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.btnEditar} onPress={() => abrirEdicion(detalleRuta)}>
-              <Text style={styles.btnEditarTexto}>✏️ Editar clientes</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.detalleTitulo}>{detalleRuta.nombre}</Text>
-          {detalleRuta.descripcion ? <Text style={styles.detalleDesc}>{detalleRuta.descripcion}</Text> : null}
-        </View>
-        <FlatList
-          data={detalleRuta.clientes}
-          keyExtractor={(item) => String(item.id)}
-          contentContainerStyle={{ padding: 16, gap: 10 }}
-          renderItem={({ item, index }) => (
-            <View style={styles.clienteCard}>
-              <View style={styles.clienteOrden}>
-                <Text style={styles.clienteOrdenNum}>{index + 1}</Text>
-              </View>
-              <View>
-                <Text style={styles.clienteNombre}>{item.cliente?.nombre}</Text>
-                <Text style={styles.clienteDir}>{item.cliente?.direccion}</Text>
-              </View>
-            </View>
-          )}
-        />
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      <View style={styles.headerBar}>
-        <Text style={styles.total}>{rutas.length} rutas</Text>
-        <TouchableOpacity style={styles.btnNuevo} onPress={abrirNuevo}>
-          <Text style={styles.btnNuevoTexto}>+ Nueva ruta</Text>
-        </TouchableOpacity>
-      </View>
+      {detalleRuta ? (
+        // Vista de detalle de una ruta
+        <>
+          <View style={styles.detalleHeader}>
+            <View style={styles.detalleHeaderTop}>
+              <TouchableOpacity onPress={() => setDetalleRuta(null)}>
+                <Text style={styles.back}>← Volver</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.btnEditar} onPress={() => abrirEdicion(detalleRuta)}>
+                <Text style={styles.btnEditarTexto}>✏️ Editar clientes</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.detalleTitulo}>{detalleRuta.nombre}</Text>
+            {detalleRuta.descripcion ? <Text style={styles.detalleDesc}>{detalleRuta.descripcion}</Text> : null}
+          </View>
+          <FlatList
+            data={detalleRuta.clientes}
+            keyExtractor={(item) => String(item.id)}
+            contentContainerStyle={{ padding: 16, gap: 10 }}
+            renderItem={({ item, index }) => (
+              <View style={styles.clienteCard}>
+                <View style={styles.clienteOrden}>
+                  <Text style={styles.clienteOrdenNum}>{index + 1}</Text>
+                </View>
+                <View>
+                  <Text style={styles.clienteNombre}>{item.cliente?.nombre}</Text>
+                  <Text style={styles.clienteDir}>{item.cliente?.direccion}</Text>
+                </View>
+              </View>
+            )}
+          />
+        </>
+      ) : (
+        // Vista de lista de rutas
+        <>
+          <View style={styles.headerBar}>
+            <Text style={styles.total}>{rutas.length} rutas</Text>
+            <TouchableOpacity style={styles.btnNuevo} onPress={abrirNuevo}>
+              <Text style={styles.btnNuevoTexto}>+ Nueva ruta</Text>
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={rutas}
+            keyExtractor={(item) => String(item.id)}
+            contentContainerStyle={{ padding: 16, gap: 12 }}
+            renderItem={({ item }) => (
+              <TouchableOpacity style={styles.card} onPress={() => setDetalleRuta(item)}>
+                <Text style={styles.cardNombre}>{item.nombre}</Text>
+                {item.descripcion && <Text style={styles.cardDesc}>{item.descripcion}</Text>}
+                <Text style={styles.cardClientes}>{item.clientes?.length ?? 0} clientes</Text>
+              </TouchableOpacity>
+            )}
+            ListEmptyComponent={<Text style={styles.vacio}>No hay rutas registradas</Text>}
+          />
+        </>
+      )}
 
-      <FlatList
-        data={rutas}
-        keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={{ padding: 16, gap: 12 }}
-        renderItem={({ item }) => (
-          <TouchableOpacity style={styles.card} onPress={() => setDetalleRuta(item)}>
-            <Text style={styles.cardNombre}>{item.nombre}</Text>
-            {item.descripcion && <Text style={styles.cardDesc}>{item.descripcion}</Text>}
-            <Text style={styles.cardClientes}>{item.clientes?.length ?? 0} clientes</Text>
-          </TouchableOpacity>
-        )}
-        ListEmptyComponent={<Text style={styles.vacio}>No hay rutas registradas</Text>}
-      />
-
+      {/* Modal siempre renderizado — así funciona tanto desde la lista como desde el detalle */}
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
         <View style={styles.modal}>
           <View style={styles.modalHeader}>

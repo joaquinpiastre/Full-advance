@@ -80,6 +80,17 @@ CREATE TABLE IF NOT EXISTS asignaciones (
   UNIQUE(usuario_id, fecha)
 );
 
+-- Ruta permanente de cada repartidor/preventista, se aplica automáticamente cada día
+-- si no hay una asignación manual para esa fecha.
+CREATE TABLE IF NOT EXISTS asignaciones_fijas (
+  id SERIAL PRIMARY KEY,
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+  ruta_id INTEGER NOT NULL REFERENCES rutas(id),
+  activo BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(usuario_id)
+);
+
 CREATE TABLE IF NOT EXISTS jornadas (
   id SERIAL PRIMARY KEY,
   usuario_id INTEGER REFERENCES usuarios(id),

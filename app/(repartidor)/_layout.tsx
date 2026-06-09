@@ -37,6 +37,15 @@ export default function RepartidorLayout() {
           headerTitle: 'Mi Historial',
         }}
       />
+      <Tabs.Screen
+        name="ventas"
+        options={{
+          title: 'Ventas',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🔥</Text>,
+          headerTitle: 'Venta Caliente',
+          tabBarActiveTintColor: '#EA580C',
+        }}
+      />
     </Tabs>
   );
 }

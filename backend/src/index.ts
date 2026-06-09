@@ -4,6 +4,7 @@ import path from 'path';
 import dotenv from 'dotenv';
 dotenv.config();
 
+import { pool } from './db/client';
 import authRouter from './routes/auth';
 import gpsRouter from './routes/gps';
 import jornadasRouter from './routes/jornadas';
@@ -12,6 +13,7 @@ import clientesRouter from './routes/clientes';
 import rutasRouter from './routes/rutas';
 import asignacionesRouter from './routes/asignaciones';
 import estadisticasRouter from './routes/estadisticas';
+import ventasCalientesRouter from './routes/ventas-calientes';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -28,8 +30,49 @@ app.use('/clientes', clientesRouter);
 app.use('/rutas', rutasRouter);
 app.use('/asignaciones', asignacionesRouter);
 app.use('/estadisticas', estadisticasRouter);
+app.use('/ventas-calientes', ventasCalientesRouter);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', app: 'Full Advance' }));
+
+// Crea la tabla de rutas fijas si no existe (migración automática al arrancar)
+pool.query(`
+  CREATE TABLE IF NOT EXISTS asignaciones_fijas (
+    id SERIAL PRIMARY KEY,
+    usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+    ruta_id INTEGER NOT NULL REFERENCES rutas(id),
+    activo BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(usuario_id)
+  )
+`).catch(() => {});
+
+// Columnas del flujo preventista en paradas
+pool.query(`
+  ALTER TABLE paradas
+    ADD COLUMN IF NOT EXISTS tiene_vencidos BOOLEAN DEFAULT false,
+    ADD COLUMN IF NOT EXISTS mercaderia_vencida TEXT,
+    ADD COLUMN IF NOT EXISTS fecha_vencimiento VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS urgente BOOLEAN DEFAULT false,
+    ADD COLUMN IF NOT EXISTS urgencia_descripcion TEXT
+`).catch(() => {});
+
+// Tabla y columna para Ventas Calientes
+pool.query(`
+  CREATE TABLE IF NOT EXISTS ventas_calientes (
+    id SERIAL PRIMARY KEY,
+    codigo CHAR(6) UNIQUE NOT NULL,
+    creador_id INTEGER NOT NULL REFERENCES usuarios(id),
+    socio_id INTEGER REFERENCES usuarios(id),
+    ruta_id INTEGER NOT NULL REFERENCES rutas(id),
+    fecha DATE NOT NULL DEFAULT CURRENT_DATE,
+    activa BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )
+`).catch(() => {});
+
+pool.query(`
+  ALTER TABLE paradas ADD COLUMN IF NOT EXISTS venta_caliente_id INTEGER REFERENCES ventas_calientes(id)
+`).catch(() => {});
 
 app.listen(PORT, () => {
   console.log(`Full Advance backend corriendo en http://localhost:${PORT}`);

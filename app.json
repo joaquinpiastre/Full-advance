@@ -48,7 +48,8 @@
         {
           "cameraPermission": "Full Advance necesita acceso a la cámara para registrar entregas."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

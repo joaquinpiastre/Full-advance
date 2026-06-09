@@ -36,6 +36,7 @@ export interface Cliente {
   zona?: string;
   departamento?: string;
   material_exhibicion?: string;
+  tipo_comercio?: string;
 }
 
 export interface Ruta {

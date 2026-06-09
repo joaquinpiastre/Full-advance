@@ -10,11 +10,15 @@ import { Cliente } from '../types';
 const FRECUENCIAS = ['Semanal', 'Quincenal', 'Mensual', 'Ocasional'];
 const FORMAS_PAGO = ['Efectivo', 'Cuenta corriente', 'Transferencia'];
 const DIAS_VISITA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Sin preferencia'];
+const TIPOS_COMERCIO = [
+  'Almacén/Fiambrería', 'Autoservicio', 'Carnicería/Pollería',
+  'Kiosco/MaxiKiosco', 'Verdulería', 'Dietética', 'Cotillón', 'Otros',
+];
 
 const FORM_VACIO = {
   razon_social: '', cuit: '', rubro: '', email: '', contacto_nombre: '', horario_atencion: '',
   telefono: '', monto_compra_promedio: '', frecuencia_compra: '', forma_pago: '', dia_visita_preferido: '',
-  notas: '', material_exhibicion: '',
+  notas: '', material_exhibicion: '', tipo_comercio: '',
 };
 
 function Chips({ opciones, valor, onSeleccionar, color }: {
@@ -75,6 +79,7 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
       dia_visita_preferido: hasTime ? parts.slice(0, -1).join(' ') : raw,
       notas: cliente.notas ?? '',
       material_exhibicion: cliente.material_exhibicion ?? '',
+      tipo_comercio: cliente.tipo_comercio ?? '',
     });
   }, [cliente]);
 
@@ -102,6 +107,7 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
         dia_visita_preferido: diaFinal,
         notas: form.notas.trim() || null,
         material_exhibicion: form.material_exhibicion.trim() || null,
+        tipo_comercio: form.tipo_comercio || null,
       };
       const res = await actualizarCartillaCliente(cliente.id, data);
       onGuardado?.(res.data);
@@ -134,6 +140,16 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
           <Text style={styles.aviso}>
             📋 Cartilla de cliente — completá o actualizá estos datos para que la empresa conozca mejor a este negocio.
           </Text>
+
+          <Text style={styles.seccionTitulo}>Tipo de comercio</Text>
+          <View style={styles.formGroup}>
+            <Chips
+              opciones={TIPOS_COMERCIO}
+              valor={form.tipo_comercio}
+              color={color}
+              onSeleccionar={(v) => setForm((prev) => ({ ...prev, tipo_comercio: v }))}
+            />
+          </View>
 
           <Text style={styles.seccionTitulo}>Datos de la empresa</Text>
           {([

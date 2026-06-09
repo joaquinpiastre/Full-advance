@@ -74,6 +74,9 @@ export const actualizarCliente = (id: number, data: any) =>
 export const actualizarCartillaCliente = (id: number, data: any) =>
   api.put(`/clientes/${id}/cartilla`, data);
 
+export const actualizarCoordenadas = (id: number, lat: number, lng: number) =>
+  api.patch(`/clientes/${id}/coords`, { lat, lng });
+
 // Rutas
 export const obtenerRutas = () =>
   api.get('/rutas');

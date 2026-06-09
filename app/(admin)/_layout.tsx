@@ -18,7 +18,7 @@ export default function AdminLayout() {
         options={{
           title: 'Mapa',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🗺️</Text>,
-          headerTitle: 'Full Advance — Mapa en vivo',
+          headerTitle: 'Mapa de Clientes',
         }}
       />
       <Tabs.Screen

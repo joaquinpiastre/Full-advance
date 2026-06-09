@@ -84,6 +84,18 @@ router.put('/:id', authMiddleware, soloAdmin, async (req: AuthRequest, res: Resp
   }
 });
 
+router.patch('/:id/coords', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const { lat, lng } = req.body;
+  if (lat == null || lng == null) return res.status(400).json({ error: 'lat y lng requeridos' });
+  try {
+    await pool.query('UPDATE clientes SET lat=$1, lng=$2 WHERE id=$3', [lat, lng, id]);
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: 'Error al actualizar coordenadas' });
+  }
+});
+
 // Cartilla: la pueden completar repartidores y preventistas durante su recorrido,
 // además del admin. Solo el admin puede definir/cambiar la categoría (A-F).
 router.put('/:id/cartilla', authMiddleware, async (req: AuthRequest, res: Response) => {

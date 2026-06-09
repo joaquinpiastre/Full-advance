@@ -24,6 +24,8 @@ export default function JornadaRepartidor() {
   const [foto1, setFoto1] = useState<string | null>(null);
   const [foto2, setFoto2] = useState<string | null>(null);
   const [nota, setNota] = useState('');
+  const [productoInforme, setProductoInforme] = useState('');
+  const [precioInforme, setPrecioInforme] = useState('');
   const [procesando, setProcesando] = useState(false);
   const [clientesModal, setClientesModal] = useState(false);
   const [clienteCartilla, setClienteCartilla] = useState<Cliente | null>(null);
@@ -116,12 +118,18 @@ export default function JornadaRepartidor() {
         form2.append('numero', '2');
         await subirFoto(paradaActual.id, form2);
       }
-      await finalizarParada(paradaActual.id, { nota: nota.trim() || undefined });
+      await finalizarParada(paradaActual.id, {
+        nota: nota.trim() || undefined,
+        producto_informe: productoInforme.trim() || null,
+        precio_informe: precioInforme.trim() || null,
+      });
       setEstadoFotos('esperando');
       setParadaActual(null);
       setFoto1(null);
       setFoto2(null);
       setNota('');
+      setProductoInforme('');
+      setPrecioInforme('');
       await cargarDatos();
     } catch (e: any) {
       Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo completar la parada');
@@ -187,7 +195,7 @@ export default function JornadaRepartidor() {
               <Text style={styles.fotoPanelDesc}>Sacá la segunda foto</Text>
               <View style={styles.fotosRow}>
                 {foto1 && <Image source={{ uri: foto1 }} style={styles.fotoMini} />}
-                <TouchableOpacity style={styles.btnFoto} onPress={() => tomarFoto(2)}>
+                <TouchableOpacity style={[styles.btnFoto, { flex: 1 }]} onPress={() => tomarFoto(2)}>
                   <Text style={styles.btnFotoIcono}>📷</Text>
                   <Text style={styles.btnFotoTexto}>Tomar Foto 2</Text>
                 </TouchableOpacity>
@@ -199,15 +207,36 @@ export default function JornadaRepartidor() {
           )}
 
           {estadoFotos === 'nota' && (
-            <>
-              <View style={styles.fotosRow}>
-                {foto1 && <Image source={{ uri: foto1 }} style={styles.fotoMini} />}
-                {foto2 && <Image source={{ uri: foto2 }} style={styles.fotoMini} />}
+            <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ gap: 10 }}>
+              {(foto1 || foto2) && (
+                <View style={styles.fotosRow}>
+                  {foto1 && <Image source={{ uri: foto1 }} style={styles.fotoMini} />}
+                  {foto2 && <Image source={{ uri: foto2 }} style={styles.fotoMini} />}
+                </View>
+              )}
+              {/* Informe de producto/precio */}
+              <View style={styles.informeBox}>
+                <Text style={styles.informeTitulo}>💰 Informe de precio (opcional)</Text>
+                <Text style={styles.informeDesc}>Registrá qué producto compró y a qué precio</Text>
+                <TextInput
+                  style={styles.notaInput}
+                  placeholder="Nombre del producto"
+                  placeholderTextColor={COLORS.textLight}
+                  value={productoInforme}
+                  onChangeText={setProductoInforme}
+                />
+                <TextInput
+                  style={[styles.notaInput, { marginTop: 8 }]}
+                  placeholder="Precio (ej: $1500)"
+                  placeholderTextColor={COLORS.textLight}
+                  keyboardType="decimal-pad"
+                  value={precioInforme}
+                  onChangeText={setPrecioInforme}
+                />
               </View>
-              <Text style={styles.fotoPanelTitulo}>Nota (opcional)</Text>
               <TextInput
-                style={styles.notaInput}
-                placeholder="Agregar observación..."
+                style={[styles.notaInput, { minHeight: 60 }]}
+                placeholder="Nota adicional (opcional)"
                 placeholderTextColor={COLORS.textLight}
                 multiline
                 value={nota}
@@ -218,7 +247,7 @@ export default function JornadaRepartidor() {
                   ? <ActivityIndicator color="#fff" />
                   : <Text style={styles.btnTexto}>Confirmar parada ✓</Text>}
               </TouchableOpacity>
-            </>
+            </ScrollView>
           )}
         </View>
       )}
@@ -343,7 +372,6 @@ const styles = StyleSheet.create({
   fotosRow: { flexDirection: 'row', gap: 10 },
   fotoMini: { width: 90, height: 90, borderRadius: 8 },
   btnFoto: {
-    flex: 1,
     backgroundColor: COLORS.primary,
     borderRadius: 12,
     padding: 20,
@@ -363,9 +391,18 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 14,
     color: COLORS.text,
-    minHeight: 80,
     backgroundColor: COLORS.background,
   },
+  informeBox: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    padding: 14,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  informeTitulo: { fontSize: 14, fontWeight: '700', color: '#1D4ED8' },
+  informeDesc: { fontSize: 12, color: '#3B82F6', marginBottom: 4 },
   btnConfirmar: {
     backgroundColor: COLORS.success,
     borderRadius: 12,

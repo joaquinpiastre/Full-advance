@@ -53,7 +53,9 @@ pool.query(`
     ADD COLUMN IF NOT EXISTS mercaderia_vencida TEXT,
     ADD COLUMN IF NOT EXISTS fecha_vencimiento VARCHAR(50),
     ADD COLUMN IF NOT EXISTS urgente BOOLEAN DEFAULT false,
-    ADD COLUMN IF NOT EXISTS urgencia_descripcion TEXT
+    ADD COLUMN IF NOT EXISTS urgencia_descripcion TEXT,
+    ADD COLUMN IF NOT EXISTS producto_informe VARCHAR(200),
+    ADD COLUMN IF NOT EXISTS precio_informe VARCHAR(100)
 `).catch(() => {});
 
 // Tabla y columna para Ventas Calientes

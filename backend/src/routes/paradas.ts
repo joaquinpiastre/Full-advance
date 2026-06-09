@@ -57,16 +57,18 @@ router.post('/:id/foto', authMiddleware, upload.single('foto'), async (req: Auth
 
 router.post('/:id/finalizar', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const { nota, tiene_vencidos, mercaderia_vencida, fecha_vencimiento, urgente, urgencia_descripcion } = req.body;
+  const { nota, tiene_vencidos, mercaderia_vencida, fecha_vencimiento, urgente, urgencia_descripcion, producto_informe, precio_informe } = req.body;
   try {
     const { rows } = await pool.query(
       `UPDATE paradas SET
         completada=true, timestamp_salida=NOW(), nota=$1,
         tiene_vencidos=$2, mercaderia_vencida=$3, fecha_vencimiento=$4,
-        urgente=$5, urgencia_descripcion=$6
-       WHERE id=$7 RETURNING *`,
+        urgente=$5, urgencia_descripcion=$6,
+        producto_informe=$7, precio_informe=$8
+       WHERE id=$9 RETURNING *`,
       [nota ?? null, tiene_vencidos ?? false, mercaderia_vencida ?? null,
-       fecha_vencimiento ?? null, urgente ?? false, urgencia_descripcion ?? null, id]
+       fecha_vencimiento ?? null, urgente ?? false, urgencia_descripcion ?? null,
+       producto_informe ?? null, precio_informe ?? null, id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Parada no encontrada' });
     res.json(rows[0]);

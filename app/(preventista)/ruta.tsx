@@ -40,6 +40,8 @@ export default function RutaPreventista() {
   const [fechaVencimiento, setFechaVencimiento] = useState<Date | null>(null);
   const [urgente, setUrgente] = useState(false);
   const [urgenciaDesc, setUrgenciaDesc] = useState('');
+  const [productoInforme, setProductoInforme] = useState('');
+  const [precioInforme, setPrecioInforme] = useState('');
 
   useEffect(() => { cargar(); }, []);
 
@@ -76,6 +78,7 @@ export default function RutaPreventista() {
       setNota('');
       setTieneVencidos(false); setMercaderiaVencida(''); setTipoVenc('fecha'); setFechaVencimiento(null);
       setUrgente(false); setUrgenciaDesc('');
+      setProductoInforme(''); setPrecioInforme('');
       setEstadoVisita('foto1');
     } catch (e: any) {
       Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo registrar la visita');
@@ -133,6 +136,8 @@ export default function RutaPreventista() {
           : null,
         urgente,
         urgencia_descripcion: urgente ? urgenciaDesc.trim() || null : null,
+        producto_informe: productoInforme.trim() || null,
+        precio_informe: precioInforme.trim() || null,
       });
       setEstadoVisita('esperando');
       setClienteActual(null);
@@ -206,7 +211,7 @@ export default function RutaPreventista() {
               <Text style={styles.pasoTitulo}>📷 Foto 2 de 2</Text>
               <View style={styles.fotosRow}>
                 {foto1 && <Image source={{ uri: foto1 }} style={styles.fotoMini} />}
-                <TouchableOpacity style={styles.btnFoto} onPress={() => tomarFoto(2)}>
+                <TouchableOpacity style={[styles.btnFoto, { flex: 1 }]} onPress={() => tomarFoto(2)}>
                   <Text style={styles.btnFotoIcono}>📷</Text>
                   <Text style={styles.btnFotoTexto}>Tomar Foto 2</Text>
                 </TouchableOpacity>
@@ -302,6 +307,27 @@ export default function RutaPreventista() {
                   />
                 </View>
               )}
+
+              {/* Informe de producto/precio */}
+              <View style={styles.informeBox}>
+                <Text style={styles.informeTitulo}>💰 Informe de precio (opcional)</Text>
+                <Text style={styles.informeDesc}>Registrá qué producto compró y a qué precio</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nombre del producto"
+                  placeholderTextColor={COLORS.textLight}
+                  value={productoInforme}
+                  onChangeText={setProductoInforme}
+                />
+                <TextInput
+                  style={[styles.input, { marginTop: 6 }]}
+                  placeholder="Precio (ej: $1500)"
+                  placeholderTextColor={COLORS.textLight}
+                  keyboardType="decimal-pad"
+                  value={precioInforme}
+                  onChangeText={setPrecioInforme}
+                />
+              </View>
 
               {/* Nota */}
               <View style={styles.formGroup}>
@@ -435,7 +461,6 @@ const styles = StyleSheet.create({
   fotosRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   fotoMini: { width: 90, height: 90, borderRadius: 8 },
   btnFoto: {
-    flex: 1,
     backgroundColor: COLORS.preventista,
     borderRadius: 12,
     padding: 20,
@@ -516,6 +541,17 @@ const styles = StyleSheet.create({
   chipActivo: { borderColor: COLORS.preventista, backgroundColor: COLORS.preventista },
   chipTexto: { fontSize: 13, fontWeight: '600', color: COLORS.textLight },
   chipTextoActivo: { color: '#fff' },
+
+  informeBox: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    padding: 14,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  informeTitulo: { fontSize: 14, fontWeight: '700', color: '#1D4ED8' },
+  informeDesc: { fontSize: 12, color: '#3B82F6', marginBottom: 4 },
 
   btnConfirmar: {
     backgroundColor: COLORS.success,

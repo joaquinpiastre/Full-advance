@@ -41,6 +41,8 @@ export default function VentaCalienteScreen() {
   const [fechaVencimiento, setFechaVencimiento] = useState<Date | null>(null);
   const [urgente, setUrgente] = useState(false);
   const [urgenciaDesc, setUrgenciaDesc] = useState('');
+  const [productoInforme, setProductoInforme] = useState('');
+  const [precioInforme, setPrecioInforme] = useState('');
 
   const cargarSesion = useCallback(async (silent = false) => {
     try {
@@ -150,6 +152,7 @@ export default function VentaCalienteScreen() {
     setTieneVencidos(false); setMercaderiaVencida('');
     setTipoVenc('fecha'); setFechaVencimiento(null);
     setUrgente(false); setUrgenciaDesc('');
+    setProductoInforme(''); setPrecioInforme('');
   };
 
   // ── Fotos ──
@@ -204,6 +207,8 @@ export default function VentaCalienteScreen() {
           : null,
         urgente,
         urgencia_descripcion: urgente ? urgenciaDesc.trim() || null : null,
+        producto_informe: productoInforme.trim() || null,
+        precio_informe: precioInforme.trim() || null,
       });
       setClienteActual(null);
       setParadaActual(null);
@@ -590,6 +595,27 @@ export default function VentaCalienteScreen() {
             </View>
           )}
 
+          {/* Informe de producto/precio */}
+          <View style={s.informeBox}>
+            <Text style={s.informeTitulo}>💰 Informe de precio (opcional)</Text>
+            <Text style={s.informeDesc}>Registrá qué producto compró y a qué precio</Text>
+            <TextInput
+              style={s.input}
+              placeholder="Nombre del producto"
+              placeholderTextColor={COLORS.textLight}
+              value={productoInforme}
+              onChangeText={setProductoInforme}
+            />
+            <TextInput
+              style={[s.input, { marginTop: 6 }]}
+              placeholder="Precio (ej: $1500)"
+              placeholderTextColor={COLORS.textLight}
+              keyboardType="decimal-pad"
+              value={precioInforme}
+              onChangeText={setPrecioInforme}
+            />
+          </View>
+
           {/* Nota */}
           <View>
             <Text style={s.subLabel}>Nota (opcional)</Text>
@@ -838,6 +864,12 @@ const s = StyleSheet.create({
     padding: 12, fontSize: 14, color: COLORS.text, backgroundColor: COLORS.card,
   },
   inputMulti: { minHeight: 70, textAlignVertical: 'top' },
+  informeBox: {
+    backgroundColor: '#EFF6FF', borderRadius: 12,
+    padding: 14, gap: 6, borderWidth: 1, borderColor: '#BFDBFE',
+  },
+  informeTitulo: { fontSize: 14, fontWeight: '700', color: '#1D4ED8' },
+  informeDesc: { fontSize: 12, color: '#3B82F6', marginBottom: 4 },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 20,

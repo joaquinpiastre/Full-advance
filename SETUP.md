@@ -16,10 +16,29 @@ Credenciales del admin por defecto:
 Credenciales de usuario repartidor:
 - Email: joacopiastre@gmail.com
 - Password: 123456
+- Email: ricardo@gmail.com
+- Password: 123456
+- Email: federico@gmail.com
+- Password: 123456
+- Email: nelson@gmail.com
+- Password: 123456
+
 
 Credenciales de preventistas:
 - Email: danielmolina@gmail.com
 - Password: 123456 
+- Email: alejandro@gmail.com
+- Password: 123456
+- Email: andrea@gmail.com
+- Password: 123456
+- Email: brian@gmail.com
+- Password: 123456
+- Email: noelia@gmail.com
+- Password: 123456
+- Email: fabricio@gmail.com
+- Password: 123456
+
+
 
 ## 2. Backend
 

@@ -25,7 +25,7 @@ export default function AdminLayout() {
         name="usuarios"
         options={{
           title: 'Usuarios',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🪪</Text>,
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🧑‍🤝‍🧑</Text>,
           headerTitle: 'Repartidores y Preventistas',
         }}
       />

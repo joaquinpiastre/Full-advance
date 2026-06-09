@@ -6,8 +6,7 @@ import { CategoriaCliente } from '../types';
 // Si en algún momento usás el emulador de Android, cambiá esa entrada por http://10.0.2.2:3001.
 export const API_URL = Platform.select({
   web: 'http://localhost:3001',
-  default: 'http://192.168.18.80:3001',
-});
+  default: 'http://192.168.1.157:3001',});
 
 // El backend devuelve las fotos como rutas relativas (ej: "/uploads/123-foto.jpg").
 // Hay que anteponerles la URL del backend para que <Image> pueda cargarlas.

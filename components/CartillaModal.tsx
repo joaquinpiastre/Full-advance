@@ -13,7 +13,8 @@ const DIAS_VISITA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sáb
 
 const FORM_VACIO = {
   razon_social: '', cuit: '', rubro: '', email: '', contacto_nombre: '', horario_atencion: '',
-  telefono: '', monto_compra_promedio: '', frecuencia_compra: '', forma_pago: '', dia_visita_preferido: '', notas: '',
+  telefono: '', monto_compra_promedio: '', frecuencia_compra: '', forma_pago: '', dia_visita_preferido: '',
+  notas: '', material_exhibicion: '',
 };
 
 function Chips({ opciones, valor, onSeleccionar, color }: {
@@ -73,6 +74,7 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
       forma_pago: cliente.forma_pago ?? '',
       dia_visita_preferido: hasTime ? parts.slice(0, -1).join(' ') : raw,
       notas: cliente.notas ?? '',
+      material_exhibicion: cliente.material_exhibicion ?? '',
     });
   }, [cliente]);
 
@@ -99,6 +101,7 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
         forma_pago: form.forma_pago || null,
         dia_visita_preferido: diaFinal,
         notas: form.notas.trim() || null,
+        material_exhibicion: form.material_exhibicion.trim() || null,
       };
       const res = await actualizarCartillaCliente(cliente.id, data);
       onGuardado?.(res.data);
@@ -197,6 +200,19 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
               </>
             )}
           </View>
+          <Text style={styles.seccionTitulo}>Material de exhibición</Text>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Material presente en el local</Text>
+            <TextInput
+              style={[styles.input, styles.inputMultiline]}
+              placeholder="Ej: 1 heladera exhibidora, 2 carteles, 1 display de mostrador..."
+              placeholderTextColor={COLORS.textLight}
+              multiline
+              value={form.material_exhibicion}
+              onChangeText={(v) => setForm((prev) => ({ ...prev, material_exhibicion: v }))}
+            />
+          </View>
+
           <View style={styles.formGroup}>
             <Text style={styles.label}>Notas</Text>
             <TextInput

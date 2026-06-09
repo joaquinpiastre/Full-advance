@@ -48,6 +48,10 @@ pool.query(`
 
 // Columnas del flujo preventista en paradas
 pool.query(`
+  ALTER TABLE clientes ADD COLUMN IF NOT EXISTS material_exhibicion TEXT
+`).catch(() => {});
+
+pool.query(`
   ALTER TABLE paradas
     ADD COLUMN IF NOT EXISTS tiene_vencidos BOOLEAN DEFAULT false,
     ADD COLUMN IF NOT EXISTS mercaderia_vencida TEXT,

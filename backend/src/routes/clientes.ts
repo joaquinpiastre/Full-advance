@@ -9,7 +9,7 @@ const router = Router();
 const CAMPOS_CARTILLA = [
   'razon_social', 'cuit', 'rubro', 'email', 'contacto_nombre', 'horario_atencion',
   'monto_compra_promedio', 'frecuencia_compra', 'forma_pago', 'dia_visita_preferido',
-  'telefono', 'notas', 'zona', 'departamento',
+  'telefono', 'notas', 'zona', 'departamento', 'material_exhibicion',
 ] as const;
 
 router.get('/', authMiddleware, async (_req: Request, res: Response) => {

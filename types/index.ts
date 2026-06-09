@@ -35,6 +35,7 @@ export interface Cliente {
   cartilla_actualizada_at?: string;
   zona?: string;
   departamento?: string;
+  material_exhibicion?: string;
 }
 
 export interface Ruta {

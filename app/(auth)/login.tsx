@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform,
+  StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, Image,
 } from 'react-native';
 import { router } from 'expo-router';
 import { login } from '../../services/api';
@@ -40,9 +40,22 @@ export default function Login() {
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* Franja azul superior */}
+      <View style={styles.topBar} />
+
+      {/* Logo */}
+      <View style={styles.logoContainer}>
+        <Image
+          source={require('../../assets/bimbo-logo.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+      </View>
+
+      {/* Card de login */}
       <View style={styles.card}>
-        <Text style={styles.titulo}>Full Advance</Text>
-        <Text style={styles.subtitulo}>Ingresá a tu cuenta</Text>
+        <Text style={styles.titulo}>Bienvenido</Text>
+        <Text style={styles.subtitulo}>Ingresá a tu cuenta para continuar</Text>
 
         <TextInput
           style={styles.input}
@@ -70,6 +83,9 @@ export default function Login() {
             : <Text style={styles.btnText}>Ingresar</Text>}
         </TouchableOpacity>
       </View>
+
+      {/* Franja azul inferior */}
+      <View style={styles.bottomBar} />
     </KeyboardAvoidingView>
   );
 }
@@ -77,56 +93,82 @@ export default function Login() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+  },
+  topBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 8,
+    backgroundColor: COLORS.secondary,
+  },
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 8,
+    backgroundColor: COLORS.secondary,
+  },
+  logoContainer: {
+    marginBottom: 24,
+    alignItems: 'center',
+  },
+  logo: {
+    width: 200,
+    height: 120,
   },
   card: {
-    width: '100%',
+    width: '88%',
     maxWidth: 400,
     backgroundColor: COLORS.card,
-    borderRadius: 16,
-    padding: 32,
+    borderRadius: 20,
+    padding: 28,
     shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
+    borderTopWidth: 4,
+    borderTopColor: COLORS.primary,
   },
   titulo: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: '800',
-    color: COLORS.primary,
+    color: COLORS.secondary,
     textAlign: 'center',
     marginBottom: 4,
   },
   subtitulo: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.textLight,
     textAlign: 'center',
-    marginBottom: 28,
+    marginBottom: 24,
   },
   input: {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: COLORS.border,
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 14,
     fontSize: 15,
     color: COLORS.text,
-    marginBottom: 14,
+    marginBottom: 12,
     backgroundColor: COLORS.background,
   },
   btn: {
     backgroundColor: COLORS.primary,
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 16,
     alignItems: 'center',
     marginTop: 8,
   },
   btnText: {
     color: '#fff',
-    fontWeight: '700',
+    fontWeight: '800',
     fontSize: 16,
+    letterSpacing: 0.3,
   },
   error: {
     color: COLORS.danger,

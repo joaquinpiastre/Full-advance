@@ -6,7 +6,7 @@ import { CategoriaCliente } from '../types';
 // Si en algún momento usás el emulador de Android, cambiá esa entrada por http://10.0.2.2:3001.
 export const API_URL = Platform.select({
   web: 'http://localhost:3001',
-  default: 'http://192.168.1.157:3001',});
+  default: 'http://10.136.100.193:3001',});
 
 // El backend devuelve las fotos como rutas relativas (ej: "/uploads/123-foto.jpg").
 // Hay que anteponerles la URL del backend para que <Image> pueda cargarlas.
@@ -14,8 +14,8 @@ export const urlFoto = (uri?: string | null) =>
   !uri ? undefined : uri.startsWith('http') ? uri : `${API_URL}${uri}`;
 
 export const COLORS = {
-  primary: '#1A3A5C',
-  secondary: '#2E7D32',
+  primary: '#E31E24',       // Rojo Bimbo
+  secondary: '#003087',     // Azul Bimbo
   accent: '#F57C00',
   background: '#F5F7FA',
   card: '#FFFFFF',
@@ -25,7 +25,7 @@ export const COLORS = {
   danger: '#DC2626',
   success: '#16A34A',
   warning: '#D97706',
-  repartidor: '#2196F3',
+  repartidor: '#003087',    // Azul Bimbo para repartidor
   preventista: '#9C27B0',
   ventaCaliente: '#EA580C',
 };

@@ -1,12 +1,16 @@
 import { Platform } from 'react-native';
 import { CategoriaCliente } from '../types';
 
-// Web accede al backend por localhost.
-// Un dispositivo físico (Expo Go en el celular) necesita la IP local de tu PC en la red Wi-Fi.
+// En producción (Vercel/EAS) se define EXPO_PUBLIC_API_URL apuntando al backend de Railway.
+// En desarrollo: web accede al backend por localhost, y un dispositivo físico (Expo Go)
+// necesita la IP local de tu PC en la red Wi-Fi.
 // Si en algún momento usás el emulador de Android, cambiá esa entrada por http://10.0.2.2:3001.
-export const API_URL = Platform.select({
-  web: 'http://localhost:3001',
-  default: 'http://10.136.100.193:3001',});
+export const API_URL =
+  process.env.EXPO_PUBLIC_API_URL ??
+  Platform.select({
+    web: 'http://localhost:3001',
+    default: 'http://10.136.100.193:3001',
+  });
 
 // El backend devuelve las fotos como rutas relativas (ej: "/uploads/123-foto.jpg").
 // Hay que anteponerles la URL del backend para que <Image> pueda cargarlas.

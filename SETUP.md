@@ -11,7 +11,7 @@ psql -U postgres -d fulladvance -f backend/src/db/schema.sql
 
 Credenciales del admin por defecto:
 - Email: admin@fulladvance.com
-- Password: password
+- Password: admin1234
 
 Credenciales de usuario repartidor:
 - Email: joacopiastre@gmail.com

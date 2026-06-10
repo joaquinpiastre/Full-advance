@@ -1,8 +1,11 @@
-import { Tabs } from 'expo-router';
+import { Tabs, router } from 'expo-router';
 import { COLORS } from '../../constants';
-import { Text } from 'react-native';
+import { Text, TouchableOpacity } from 'react-native';
+import { useAuthStore } from '../../store/authStore';
 
 export default function AdminLayout() {
+  const { logout } = useAuthStore();
+
   return (
     <Tabs
       screenOptions={{
@@ -11,6 +14,14 @@ export default function AdminLayout() {
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.textLight,
         tabBarStyle: { backgroundColor: '#fff', borderTopColor: COLORS.border },
+        headerRight: () => (
+          <TouchableOpacity
+            onPress={() => { logout(); router.replace('/(auth)/login'); }}
+            style={{ marginRight: 16 }}
+          >
+            <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>Salir</Text>
+          </TouchableOpacity>
+        ),
       }}
     >
       <Tabs.Screen

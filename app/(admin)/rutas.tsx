@@ -19,6 +19,7 @@ export default function Rutas() {
   const [detalleRuta, setDetalleRuta] = useState<Ruta | null>(null);
   const [busquedaCliente, setBusquedaCliente] = useState('');
   const [rutaEditando, setRutaEditando] = useState<Ruta | null>(null);
+  const [departamentoSel, setDepartamentoSel] = useState<string | null>(null);
 
   useEffect(() => {
     cargar();
@@ -40,15 +41,23 @@ export default function Rutas() {
     );
   };
 
+  const departamentos = useMemo(() => {
+    const set = new Set<string>();
+    clientes.forEach((c) => { if (c.departamento) set.add(c.departamento); });
+    return Array.from(set).sort();
+  }, [clientes]);
+
   const clientesFiltrados = useMemo(() => {
     const q = busquedaCliente.trim().toLowerCase();
-    if (!q) return clientes;
-    return clientes.filter((c) =>
-      c.nombre?.toLowerCase().includes(q)
-      || c.direccion?.toLowerCase().includes(q)
-      || c.rubro?.toLowerCase().includes(q)
-    );
-  }, [clientes, busquedaCliente]);
+    return clientes.filter((c) => {
+      if (departamentoSel && c.departamento !== departamentoSel) return false;
+      if (!q) return true;
+      return c.nombre?.toLowerCase().includes(q)
+        || c.direccion?.toLowerCase().includes(q)
+        || c.rubro?.toLowerCase().includes(q)
+        || c.zona?.toLowerCase().includes(q);
+    });
+  }, [clientes, busquedaCliente, departamentoSel]);
 
   const cerrarModal = () => {
     setModalVisible(false);
@@ -56,6 +65,7 @@ export default function Rutas() {
     setDescripcion('');
     setClientesSel([]);
     setBusquedaCliente('');
+    setDepartamentoSel(null);
     setRutaEditando(null);
   };
 
@@ -65,6 +75,7 @@ export default function Rutas() {
     setDescripcion('');
     setClientesSel([]);
     setBusquedaCliente('');
+    setDepartamentoSel(null);
     setModalVisible(true);
   };
 
@@ -74,6 +85,7 @@ export default function Rutas() {
     setDescripcion(ruta.descripcion ?? '');
     setClientesSel(ruta.clientes.map((c) => c.cliente_id));
     setBusquedaCliente('');
+    setDepartamentoSel(null);
     setModalVisible(true);
   };
 
@@ -206,6 +218,27 @@ export default function Rutas() {
               </ScrollView>
             )}
             <Buscador valor={busquedaCliente} onCambiar={setBusquedaCliente} placeholder="Buscar por nombre, dirección, zona..." />
+            {departamentos.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
+                <View style={styles.departamentosFila}>
+                  <TouchableOpacity
+                    style={[styles.depChip, !departamentoSel && styles.depChipSel]}
+                    onPress={() => setDepartamentoSel(null)}
+                  >
+                    <Text style={[styles.depChipTexto, !departamentoSel && styles.depChipTextoSel]}>Todos</Text>
+                  </TouchableOpacity>
+                  {departamentos.map((dep) => (
+                    <TouchableOpacity
+                      key={dep}
+                      style={[styles.depChip, departamentoSel === dep && styles.depChipSel]}
+                      onPress={() => setDepartamentoSel(departamentoSel === dep ? null : dep)}
+                    >
+                      <Text style={[styles.depChipTexto, departamentoSel === dep && styles.depChipTextoSel]}>{dep}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            )}
           </View>
 
           {/* Lista virtualizada — no freezea con 669 clientes */}
@@ -341,6 +374,18 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   seleccionadoChipTexto: { fontSize: 12, fontWeight: '600', color: COLORS.primary },
+  departamentosFila: { flexDirection: 'row', gap: 8 },
+  depChip: {
+    backgroundColor: COLORS.card,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  depChipSel: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  depChipTexto: { fontSize: 12, fontWeight: '600', color: COLORS.textLight },
+  depChipTextoSel: { color: '#fff' },
   opcion: {
     backgroundColor: COLORS.card,
     borderRadius: 10,

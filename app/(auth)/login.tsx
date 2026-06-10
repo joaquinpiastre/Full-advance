@@ -46,7 +46,7 @@ export default function Login() {
       {/* Logo */}
       <View style={styles.logoContainer}>
         <Image
-          source={require('../../assets/bimbo-logo.png')}
+          source={require('../../assets/bimbo-logo.jpg')}
           style={styles.logo}
           resizeMode="contain"
         />

@@ -78,11 +78,9 @@ pool.query(`
     activa BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW()
   )
-`).catch(() => {});
-
-pool.query(`
+`).then(() => pool.query(`
   ALTER TABLE paradas ADD COLUMN IF NOT EXISTS venta_caliente_id INTEGER REFERENCES ventas_calientes(id)
-`).catch(() => {});
+`)).catch(() => {});
 
 // Nota de acciones que debe revisar el administrador o supervisor
 pool.query(`

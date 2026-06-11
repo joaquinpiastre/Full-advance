@@ -103,7 +103,7 @@ function CardAlerta({ item }: { item: Alerta }) {
   );
 }
 
-export default function AdminAlertas() {
+export default function SupervisorAlertas() {
   const [alertas, setAlertas] = useState<Alerta[]>([]);
   const [cargando, setCargando] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -145,7 +145,7 @@ export default function AdminAlertas() {
     filtro === 'acciones' ? [...acciones].sort(byFecha) :
     todasSinDup;
 
-  if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.danger} size="large" /></View>;
+  if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.supervisor} size="large" /></View>;
 
   return (
     <View style={styles.container}>
@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  btnRefreshTexto: { fontSize: 12, fontWeight: '600', color: COLORS.primary },
+  btnRefreshTexto: { fontSize: 12, fontWeight: '600', color: COLORS.supervisor },
 
   // Tabs
   tabs: {
@@ -297,9 +297,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },
-  tabActivo: { borderBottomColor: COLORS.primary },
+  tabActivo: { borderBottomColor: COLORS.supervisor },
   tabTexto: { fontSize: 13, fontWeight: '600', color: COLORS.textLight },
-  tabTextoActivo: { color: COLORS.primary },
+  tabTextoActivo: { color: COLORS.supervisor },
   tabBadge: {
     backgroundColor: COLORS.textLight,
     borderRadius: 10,

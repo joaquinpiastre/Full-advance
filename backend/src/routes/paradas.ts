@@ -3,7 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { pool } from '../db/client';
-import { authMiddleware, soloAdmin, AuthRequest } from '../middleware/auth';
+import { authMiddleware, adminOSupervisor, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -57,18 +57,19 @@ router.post('/:id/foto', authMiddleware, upload.single('foto'), async (req: Auth
 
 router.post('/:id/finalizar', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const { nota, tiene_vencidos, mercaderia_vencida, fecha_vencimiento, urgente, urgencia_descripcion, producto_informe, precio_informe } = req.body;
+  const { nota, tiene_vencidos, mercaderia_vencida, fecha_vencimiento, urgente, urgencia_descripcion, producto_informe, precio_informe, accion_requerida } = req.body;
   try {
     const { rows } = await pool.query(
       `UPDATE paradas SET
         completada=true, timestamp_salida=NOW(), nota=$1,
         tiene_vencidos=$2, mercaderia_vencida=$3, fecha_vencimiento=$4,
         urgente=$5, urgencia_descripcion=$6,
-        producto_informe=$7, precio_informe=$8
-       WHERE id=$9 RETURNING *`,
+        producto_informe=$7, precio_informe=$8,
+        accion_requerida=$9
+       WHERE id=$10 RETURNING *`,
       [nota ?? null, tiene_vencidos ?? false, mercaderia_vencida ?? null,
        fecha_vencimiento ?? null, urgente ?? false, urgencia_descripcion ?? null,
-       producto_informe ?? null, precio_informe ?? null, id]
+       producto_informe ?? null, precio_informe ?? null, accion_requerida ?? null, id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Parada no encontrada' });
     res.json(rows[0]);
@@ -99,11 +100,12 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 });
 
 // Alertas para el admin: últimos 7 días con urgente o mercadería vencida
-router.get('/alertas', authMiddleware, soloAdmin, async (_req: AuthRequest, res: Response) => {
+router.get('/alertas', authMiddleware, adminOSupervisor, async (_req: AuthRequest, res: Response) => {
   try {
     const { rows } = await pool.query(`
       SELECT p.id, p.nota, p.urgente, p.urgencia_descripcion,
         p.tiene_vencidos, p.mercaderia_vencida, p.fecha_vencimiento,
+        p.accion_requerida,
         p.timestamp_salida, p.cliente_id,
         c.nombre as cliente_nombre, c.direccion as cliente_dir, c.telefono as cliente_tel,
         u.nombre as usuario_nombre, u.rol as usuario_rol
@@ -111,7 +113,7 @@ router.get('/alertas', authMiddleware, soloAdmin, async (_req: AuthRequest, res:
       JOIN jornadas j ON j.id = p.jornada_id
       JOIN usuarios u ON u.id = j.usuario_id
       LEFT JOIN clientes c ON c.id = p.cliente_id
-      WHERE (p.urgente = true OR p.tiene_vencidos = true)
+      WHERE (p.urgente = true OR p.tiene_vencidos = true OR p.accion_requerida IS NOT NULL)
         AND p.completada = true
         AND p.timestamp_salida >= NOW() - INTERVAL '7 days'
       ORDER BY p.urgente DESC, p.timestamp_salida DESC
@@ -123,6 +125,7 @@ router.get('/alertas', authMiddleware, soloAdmin, async (_req: AuthRequest, res:
       tiene_vencidos: r.tiene_vencidos,
       mercaderia_vencida: r.mercaderia_vencida,
       fecha_vencimiento: r.fecha_vencimiento,
+      accion_requerida: r.accion_requerida,
       timestamp_salida: r.timestamp_salida,
       nota: r.nota,
       cliente: { id: r.cliente_id, nombre: r.cliente_nombre, direccion: r.cliente_dir, telefono: r.cliente_tel },

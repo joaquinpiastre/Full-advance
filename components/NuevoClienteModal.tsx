@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal, TextInput,
   ScrollView, Alert, ActivityIndicator,
 } from 'react-native';
-import { crearCliente } from '../services/api';
+import { crearCliente, obtenerDepartamentos, crearDepartamento, obtenerDistritos, crearDistrito } from '../services/api';
 import { COLORS } from '../constants';
 import { Cliente } from '../types';
+import { useAuthStore } from '../store/authStore';
+import SelectorConAgregar from './SelectorConAgregar';
 
 const TIPOS_COMERCIO = [
   'Almacén/Fiambrería', 'Autoservicio', 'Carnicería/Pollería',
@@ -13,7 +15,8 @@ const TIPOS_COMERCIO = [
 ];
 
 const FORM_VACIO = {
-  nombre: '', direccion: '', telefono: '', zona: '', departamento: '', tipo_comercio: '', notas: '',
+  nombre: '', razon_social: '', cuit: '', direccion: '', telefono: '', email: '',
+  zona: '', departamento: '', tipo_comercio: '', notas: '',
 };
 
 interface Props {
@@ -24,8 +27,18 @@ interface Props {
 }
 
 export default function NuevoClienteModal({ visible, color = COLORS.primary, onClose, onCreado }: Props) {
+  const { usuario } = useAuthStore();
+  const puedeAgregarZonas = usuario?.rol === 'admin' || usuario?.rol === 'supervisor';
   const [form, setForm] = useState(FORM_VACIO);
   const [guardando, setGuardando] = useState(false);
+  const [departamentos, setDepartamentos] = useState<string[]>([]);
+  const [distritos, setDistritos] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!visible) return;
+    obtenerDepartamentos().then((res) => setDepartamentos(res.data.map((d: any) => d.nombre))).catch(() => {});
+    obtenerDistritos().then((res) => setDistritos(res.data.map((d: any) => d.nombre))).catch(() => {});
+  }, [visible]);
 
   const guardar = async () => {
     if (!form.nombre.trim() || !form.direccion.trim()) {
@@ -36,8 +49,11 @@ export default function NuevoClienteModal({ visible, color = COLORS.primary, onC
     try {
       const res = await crearCliente({
         nombre: form.nombre.trim(),
+        razon_social: form.razon_social.trim() || null,
+        cuit: form.cuit.trim() || null,
         direccion: form.direccion.trim(),
         telefono: form.telefono.trim() || null,
+        email: form.email.trim() || null,
         zona: form.zona.trim() || null,
         departamento: form.departamento.trim() || null,
         tipo_comercio: form.tipo_comercio || null,
@@ -78,6 +94,27 @@ export default function NuevoClienteModal({ visible, color = COLORS.primary, onC
             />
           </View>
           <View style={styles.formGroup}>
+            <Text style={styles.label}>Razón social</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Nombre legal / fantasía"
+              placeholderTextColor={COLORS.textLight}
+              value={form.razon_social}
+              onChangeText={(v) => setForm((prev) => ({ ...prev, razon_social: v }))}
+            />
+          </View>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>CUIT</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="20-12345678-9"
+              placeholderTextColor={COLORS.textLight}
+              keyboardType="numbers-and-punctuation"
+              value={form.cuit}
+              onChangeText={(v) => setForm((prev) => ({ ...prev, cuit: v }))}
+            />
+          </View>
+          <View style={styles.formGroup}>
             <Text style={styles.label}>Dirección *</Text>
             <TextInput
               style={styles.input}
@@ -99,23 +136,45 @@ export default function NuevoClienteModal({ visible, color = COLORS.primary, onC
             />
           </View>
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Departamento</Text>
+            <Text style={styles.label}>Email</Text>
             <TextInput
               style={styles.input}
-              placeholder="Ej: SAN RAFAEL"
+              placeholder="Opcional"
               placeholderTextColor={COLORS.textLight}
-              value={form.departamento}
-              onChangeText={(v) => setForm((prev) => ({ ...prev, departamento: v }))}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={form.email}
+              onChangeText={(v) => setForm((prev) => ({ ...prev, email: v }))}
             />
           </View>
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Zona</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Ej: CENTRO"
-              placeholderTextColor={COLORS.textLight}
-              value={form.zona}
-              onChangeText={(v) => setForm((prev) => ({ ...prev, zona: v }))}
+            <Text style={styles.label}>Departamento</Text>
+            <SelectorConAgregar
+              opciones={departamentos}
+              valor={form.departamento}
+              onSeleccionar={(v) => setForm((prev) => ({ ...prev, departamento: v }))}
+              color={color}
+              puedeAgregar={puedeAgregarZonas}
+              placeholderNuevo="Ej: SAN RAFAEL"
+              onAgregar={async (nombre) => {
+                await crearDepartamento(nombre);
+                setDepartamentos((prev) => (prev.includes(nombre) ? prev : [...prev, nombre].sort()));
+              }}
+            />
+          </View>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Zona / Distrito</Text>
+            <SelectorConAgregar
+              opciones={distritos}
+              valor={form.zona}
+              onSeleccionar={(v) => setForm((prev) => ({ ...prev, zona: v }))}
+              color={color}
+              puedeAgregar={puedeAgregarZonas}
+              placeholderNuevo="Ej: CENTRO"
+              onAgregar={async (nombre) => {
+                await crearDistrito(nombre);
+                setDistritos((prev) => (prev.includes(nombre) ? prev : [...prev, nombre].sort()));
+              }}
             />
           </View>
 

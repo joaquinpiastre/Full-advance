@@ -26,6 +26,8 @@ export default function JornadaRepartidor() {
   const [fotos, setFotos] = useState<(string | null)[]>([null, null, null, null, null]);
   const [fotoIndex, setFotoIndex] = useState(0);
   const [nota, setNota] = useState('');
+  const [accionRequerida, setAccionRequerida] = useState(false);
+  const [accionDesc, setAccionDesc] = useState('');
   const [productoInforme, setProductoInforme] = useState('');
   const [precioInforme, setPrecioInforme] = useState('');
   const [procesando, setProcesando] = useState(false);
@@ -77,6 +79,8 @@ export default function JornadaRepartidor() {
       setFotos([null, null, null, null, null]);
       setFotoIndex(0);
       setNota('');
+      setAccionRequerida(false);
+      setAccionDesc('');
     } catch (e: any) {
       Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo registrar la parada');
     }
@@ -123,6 +127,7 @@ export default function JornadaRepartidor() {
       }
       await finalizarParada(paradaActual.id, {
         nota: nota.trim() || undefined,
+        accion_requerida: accionRequerida ? accionDesc.trim() || null : null,
         producto_informe: productoInforme.trim() || null,
         precio_informe: precioInforme.trim() || null,
       });
@@ -131,6 +136,8 @@ export default function JornadaRepartidor() {
       setFotos([null, null, null, null, null]);
       setFotoIndex(0);
       setNota('');
+      setAccionRequerida(false);
+      setAccionDesc('');
       setProductoInforme('');
       setPrecioInforme('');
       await cargarDatos();
@@ -252,6 +259,36 @@ export default function JornadaRepartidor() {
                 value={nota}
                 onChangeText={setNota}
               />
+
+              {/* Toggle: Acciones para administración/supervisor */}
+              <TouchableOpacity
+                style={[styles.toggleRow, accionRequerida && styles.toggleRowAccion]}
+                onPress={() => setAccionRequerida((v) => !v)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.toggleEmoji}>📋</Text>
+                <Text style={[styles.toggleLabel, accionRequerida && { color: COLORS.secondary, fontWeight: '700' }]}>
+                  Acción para administración / supervisor
+                </Text>
+                <View style={[styles.toggleBubble, accionRequerida && styles.toggleBubbleAccion]}>
+                  <Text style={styles.toggleBubbleTexto}>{accionRequerida ? 'SÍ' : 'NO'}</Text>
+                </View>
+              </TouchableOpacity>
+
+              {accionRequerida && (
+                <View style={[styles.subFormAccion]}>
+                  <Text style={styles.subLabel}>¿Qué acción tiene que hacer?</Text>
+                  <TextInput
+                    style={[styles.notaInput, { minHeight: 60 }]}
+                    placeholder="Ej: contactar al cliente, revisar precio, gestionar pedido..."
+                    placeholderTextColor={COLORS.textLight}
+                    value={accionDesc}
+                    onChangeText={setAccionDesc}
+                    multiline
+                  />
+                </View>
+              )}
+
               <TouchableOpacity style={styles.btnConfirmar} onPress={confirmarParada} disabled={procesando}>
                 {procesando
                   ? <ActivityIndicator color="#fff" />
@@ -434,6 +471,36 @@ const styles = StyleSheet.create({
   },
   informeTitulo: { fontSize: 14, fontWeight: '700', color: '#1D4ED8' },
   informeDesc: { fontSize: 12, color: '#3B82F6', marginBottom: 4 },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 12,
+    gap: 10,
+  },
+  toggleRowAccion: { borderColor: COLORS.secondary, backgroundColor: '#EFF6FF' },
+  toggleEmoji: { fontSize: 22 },
+  toggleLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: COLORS.text },
+  toggleBubble: {
+    backgroundColor: COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  toggleBubbleAccion: { backgroundColor: COLORS.secondary },
+  toggleBubbleTexto: { fontSize: 11, fontWeight: '800', color: '#fff' },
+  subLabel: { fontSize: 12, fontWeight: '700', color: COLORS.textLight, textTransform: 'uppercase' },
+  subFormAccion: {
+    backgroundColor: COLORS.background,
+    borderRadius: 10,
+    padding: 12,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: COLORS.secondary,
+  },
   btnConfirmar: {
     backgroundColor: COLORS.success,
     borderRadius: 12,

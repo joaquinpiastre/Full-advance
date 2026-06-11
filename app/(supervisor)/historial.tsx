@@ -1,0 +1,208 @@
+import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Image, Modal, ScrollView } from 'react-native';
+import { obtenerHistorialJornadas, obtenerDetalleJornada } from '../../services/api';
+import { descargarFoto, descargarReporteJornada } from '../../services/descargas';
+import { COLORS, urlFoto } from '../../constants';
+import { format, differenceInMinutes } from 'date-fns';
+import { es } from 'date-fns/locale';
+
+const FOTOS_KEYS = ['foto1_uri', 'foto2_uri', 'foto3_uri', 'foto4_uri', 'foto5_uri'] as const;
+
+function FotosGrid({ item }: { item: any }) {
+  const fotos = FOTOS_KEYS.map((k) => item[k]).filter(Boolean) as string[];
+  if (!fotos.length) return null;
+  return (
+    <View style={styles.fotosRow}>
+      {fotos.map((uri) => (
+        <View key={uri}>
+          <Image source={{ uri: urlFoto(uri) }} style={styles.foto} />
+          <TouchableOpacity style={styles.btnDescargar} onPress={() => descargarFoto(uri)}>
+            <Text style={styles.btnDescargarTexto}>📥 Guardar</Text>
+          </TouchableOpacity>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export default function HistorialSupervisor() {
+  const [jornadas, setJornadas] = useState<any[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [detalle, setDetalle] = useState<any>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+
+  useEffect(() => {
+    cargar();
+  }, []);
+
+  const cargar = async () => {
+    setCargando(true);
+    try {
+      const res = await obtenerHistorialJornadas();
+      setJornadas(res.data);
+    } catch {}
+    setCargando(false);
+  };
+
+  const verDetalle = async (jornadaId: number) => {
+    try {
+      const res = await obtenerDetalleJornada(jornadaId);
+      setDetalle(res.data);
+      setModalVisible(true);
+    } catch {}
+  };
+
+  if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.supervisor} size="large" /></View>;
+
+  return (
+    <View style={styles.container}>
+      <FlatList
+        data={jornadas}
+        keyExtractor={(item) => String(item.id)}
+        contentContainerStyle={{ padding: 16, gap: 12 }}
+        renderItem={({ item }) => {
+          const duracion = item.fecha_fin
+            ? differenceInMinutes(new Date(item.fecha_fin), new Date(item.fecha_inicio))
+            : null;
+          return (
+            <TouchableOpacity style={styles.card} onPress={() => verDetalle(item.id)}>
+              <Text style={styles.cardFecha}>
+                {format(new Date(item.fecha_inicio), "EEEE d 'de' MMMM yyyy", { locale: es })}
+              </Text>
+              <View style={styles.cardRow}>
+                <Text style={styles.cardDato}>
+                  🕐 {format(new Date(item.fecha_inicio), 'HH:mm')}
+                  {item.fecha_fin ? ` → ${format(new Date(item.fecha_fin), 'HH:mm')}` : ' (en curso)'}
+                </Text>
+                {duracion !== null && (
+                  <Text style={styles.cardDato}>⏱ {duracion} min</Text>
+                )}
+              </View>
+              <Text style={styles.cardParadas}>{item.total_paradas ?? 0} visitas</Text>
+            </TouchableOpacity>
+          );
+        }}
+        ListEmptyComponent={<Text style={styles.vacio}>No hay jornadas registradas</Text>}
+      />
+
+      <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
+        <View style={styles.modal}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitulo}>Detalle de jornada</Text>
+            <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <Text style={styles.modalCerrar}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          {detalle && (
+            <TouchableOpacity style={styles.btnPdf} onPress={() => descargarReporteJornada(detalle)}>
+              <Text style={styles.btnPdfTexto}>📄 Descargar reporte en PDF</Text>
+            </TouchableOpacity>
+          )}
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
+            {detalle?.paradas?.map((p: any) => (
+              <View key={p.id} style={styles.paradaCard}>
+                <Text style={styles.paradaNombre}>{p.cliente?.nombre ?? 'Sin cliente'}</Text>
+                <Text style={styles.paradaDireccion}>{p.cliente?.direccion}</Text>
+                <Text style={styles.paradaHora}>
+                  {format(new Date(p.timestamp_llegada), 'HH:mm')}
+                  {p.timestamp_salida ? ` → ${format(new Date(p.timestamp_salida), 'HH:mm')}` : ''}
+                </Text>
+                <FotosGrid item={p} />
+                {p.urgente && (
+                  <View style={styles.urgenteCaja}>
+                    <Text style={styles.urgenteTexto}>🚨 {p.urgencia_descripcion ?? 'Problema reportado'}</Text>
+                  </View>
+                )}
+                {p.tiene_vencidos && p.mercaderia_vencida && (
+                  <Text style={styles.vencText}>
+                    📦 {p.mercaderia_vencida}
+                    {p.fecha_vencimiento ? ` · ${p.fecha_vencimiento === 'Vencida' ? 'Ya vencida' : p.fecha_vencimiento}` : ''}
+                  </Text>
+                )}
+                {p.producto_informe && (
+                  <Text style={styles.informeText}>
+                    💰 {p.producto_informe}{p.precio_informe ? ` — ${p.precio_informe}` : ''}
+                  </Text>
+                )}
+                {p.nota ? <Text style={styles.nota}>📝 {p.nota}</Text> : null}
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: COLORS.background },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  card: {
+    backgroundColor: COLORS.card,
+    borderRadius: 14,
+    padding: 16,
+    gap: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.supervisor,
+  },
+  cardFecha: { fontSize: 15, fontWeight: '700', color: COLORS.text, textTransform: 'capitalize' },
+  cardRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  cardDato: { fontSize: 13, color: COLORS.textLight },
+  cardParadas: { fontSize: 13, color: COLORS.supervisor, fontWeight: '600' },
+  vacio: { textAlign: 'center', color: COLORS.textLight, marginTop: 60, fontSize: 14 },
+  modal: { flex: 1, backgroundColor: COLORS.background },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: COLORS.card,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  modalTitulo: { fontSize: 18, fontWeight: '700', color: COLORS.text },
+  modalCerrar: { fontSize: 20, color: COLORS.textLight },
+  btnPdf: {
+    margin: 16,
+    marginBottom: 0,
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  btnPdfTexto: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  btnDescargar: {
+    marginTop: 6,
+    backgroundColor: COLORS.background,
+    borderRadius: 8,
+    paddingVertical: 6,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  btnDescargarTexto: { fontSize: 12, fontWeight: '600', color: COLORS.primary },
+  paradaCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 14,
+    padding: 16,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  paradaNombre: { fontSize: 15, fontWeight: '700', color: COLORS.text },
+  paradaDireccion: { fontSize: 13, color: COLORS.textLight },
+  paradaHora: { fontSize: 13, color: COLORS.primary, fontWeight: '600' },
+  fotosRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  foto: { width: 120, height: 120, borderRadius: 8 },
+  urgenteCaja: { backgroundColor: '#FEF2F2', borderRadius: 8, padding: 8 },
+  urgenteTexto: { fontSize: 13, color: COLORS.danger, fontWeight: '600' },
+  vencText: { fontSize: 13, color: COLORS.warning, fontWeight: '600' },
+  informeText: { fontSize: 13, color: '#1D4ED8', fontWeight: '600' },
+  nota: { fontSize: 13, color: COLORS.text, fontStyle: 'italic' },
+});

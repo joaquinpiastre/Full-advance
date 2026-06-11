@@ -20,13 +20,13 @@ export default function MapaLive({ ubicaciones }: { ubicaciones: UbicacionLive[]
         <Marker
           key={u.usuario_id}
           coordinate={{ latitude: u.lat, longitude: u.lng }}
-          pinColor={u.rol === 'repartidor' ? COLORS.repartidor : COLORS.preventista}
+          pinColor={u.rol === 'repartidor' ? COLORS.repartidor : u.rol === 'supervisor' ? COLORS.supervisor : COLORS.preventista}
         >
           <Callout>
             <View style={{ padding: 8 }}>
               <Text style={{ fontWeight: '700' }}>{u.nombre}</Text>
               <Text style={{ fontSize: 12, color: COLORS.textLight }}>
-                {u.rol === 'repartidor' ? '🚚 Repartidor' : '👔 Preventista'}
+                {u.rol === 'repartidor' ? '🚚 Repartidor' : u.rol === 'supervisor' ? '🛡️ Supervisor' : '👔 Preventista'}
               </Text>
               <Text style={{ fontSize: 11 }}>{format(new Date(u.timestamp), 'HH:mm:ss')}</Text>
             </View>

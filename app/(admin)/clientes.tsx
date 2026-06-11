@@ -3,10 +3,14 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, Modal, TextInput, Alert, ScrollView,
 } from 'react-native';
-import { obtenerClientes, crearCliente, actualizarCliente, obtenerRutas } from '../../services/api';
+import {
+  obtenerClientes, crearCliente, actualizarCliente, obtenerRutas,
+  obtenerDepartamentos, crearDepartamento, obtenerDistritos, crearDistrito,
+} from '../../services/api';
 import { COLORS, COLOR_CATEGORIA } from '../../constants';
 import { Cliente, CategoriaCliente, Ruta } from '../../types';
 import Buscador from '../../components/Buscador';
+import SelectorConAgregar from '../../components/SelectorConAgregar';
 
 const FORM_VACIO = {
   nombre: '', direccion: '', telefono: '', notas: '',
@@ -59,6 +63,8 @@ export default function Clientes() {
   const [form, setForm] = useState(FORM_VACIO);
   const [busqueda, setBusqueda] = useState('');
   const [categoriaFiltro, setCategoriaFiltro] = useState<CategoriaCliente | null>(null);
+  const [departamentos, setDepartamentos] = useState<string[]>([]);
+  const [distritos, setDistritos] = useState<string[]>([]);
 
   useEffect(() => {
     cargar();
@@ -67,9 +73,13 @@ export default function Clientes() {
   const cargar = async () => {
     setCargando(true);
     try {
-      const [resClientes, resRutas] = await Promise.all([obtenerClientes(), obtenerRutas()]);
+      const [resClientes, resRutas, resDeptos, resDistritos] = await Promise.all([
+        obtenerClientes(), obtenerRutas(), obtenerDepartamentos(), obtenerDistritos(),
+      ]);
       setClientes(resClientes.data);
       setRutas(resRutas.data);
+      setDepartamentos(resDeptos.data.map((d: any) => d.nombre));
+      setDistritos(resDistritos.data.map((d: any) => d.nombre));
     } catch {}
     setCargando(false);
   };
@@ -234,8 +244,11 @@ export default function Clientes() {
             <Text style={styles.seccionTitulo}>Datos básicos</Text>
             {([
               { key: 'nombre', label: 'Nombre *', placeholder: 'Nombre del cliente' },
+              { key: 'razon_social', label: 'Razón social', placeholder: 'Nombre legal / fantasía' },
+              { key: 'cuit', label: 'CUIT / CUIL', placeholder: '20-12345678-9', keyboard: 'numbers-and-punctuation' },
               { key: 'direccion', label: 'Dirección *', placeholder: 'Dirección' },
               { key: 'telefono', label: 'Teléfono', placeholder: 'Opcional', keyboard: 'phone-pad' },
+              { key: 'email', label: 'Email', placeholder: 'Opcional', keyboard: 'email-address' },
             ] as any[]).map((f) => (
               <View key={f.key} style={styles.formGroup}>
                 <Text style={styles.label}>{f.label}</Text>
@@ -244,6 +257,7 @@ export default function Clientes() {
                   placeholder={f.placeholder}
                   placeholderTextColor={COLORS.textLight}
                   keyboardType={f.keyboard ?? 'default'}
+                  autoCapitalize={f.key === 'email' ? 'none' : 'sentences'}
                   value={(form as any)[f.key]}
                   onChangeText={(v) => setForm((prev) => ({ ...prev, [f.key]: v }))}
                 />
@@ -287,15 +301,40 @@ export default function Clientes() {
               />
             </View>
 
+            <Text style={styles.seccionTitulo}>Ubicación</Text>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Departamento</Text>
+              <SelectorConAgregar
+                opciones={departamentos}
+                valor={form.departamento}
+                onSeleccionar={(v) => setForm((prev) => ({ ...prev, departamento: v }))}
+                puedeAgregar
+                placeholderNuevo="Ej: SAN RAFAEL"
+                onAgregar={async (nombre) => {
+                  await crearDepartamento(nombre);
+                  setDepartamentos((prev) => (prev.includes(nombre) ? prev : [...prev, nombre].sort()));
+                }}
+              />
+            </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Zona / Distrito</Text>
+              <SelectorConAgregar
+                opciones={distritos}
+                valor={form.zona}
+                onSeleccionar={(v) => setForm((prev) => ({ ...prev, zona: v }))}
+                puedeAgregar
+                placeholderNuevo="Ej: CENTRO"
+                onAgregar={async (nombre) => {
+                  await crearDistrito(nombre);
+                  setDistritos((prev) => (prev.includes(nombre) ? prev : [...prev, nombre].sort()));
+                }}
+              />
+            </View>
+
             <Text style={styles.seccionTitulo}>Datos de la empresa</Text>
             {([
-              { key: 'razon_social', label: 'Razón social', placeholder: 'Nombre legal / fantasía' },
-              { key: 'cuit', label: 'CUIT / CUIL', placeholder: '20-12345678-9', keyboard: 'numbers-and-punctuation' },
               { key: 'rubro', label: 'Rubro', placeholder: 'Kiosco, supermercado, restaurante...' },
-              { key: 'departamento', label: 'Departamento', placeholder: 'Ej: SAN RAFAEL' },
-              { key: 'zona', label: 'Zona', placeholder: 'Ej: CENTRO' },
               { key: 'contacto_nombre', label: 'Persona de contacto', placeholder: 'Nombre del encargado' },
-              { key: 'email', label: 'Email', placeholder: 'Opcional', keyboard: 'email-address' },
               { key: 'horario_atencion', label: 'Horario de atención', placeholder: 'Ej: Lun a Vie 9 a 18' },
             ] as any[]).map((f) => (
               <View key={f.key} style={styles.formGroup}>

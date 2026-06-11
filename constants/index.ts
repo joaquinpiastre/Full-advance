@@ -31,6 +31,7 @@ export const COLORS = {
   warning: '#D97706',
   repartidor: '#003087',    // Azul Bimbo para repartidor
   preventista: '#9C27B0',
+  supervisor: '#0D9488',
   ventaCaliente: '#EA580C',
 };
 

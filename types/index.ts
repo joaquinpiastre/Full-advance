@@ -1,4 +1,4 @@
-export type Rol = 'admin' | 'repartidor' | 'preventista';
+export type Rol = 'admin' | 'repartidor' | 'preventista' | 'supervisor';
 
 export interface Usuario {
   id: number;
@@ -38,6 +38,11 @@ export interface Cliente {
   material_exhibicion?: string;
   tipo_comercio?: string;
   ruta_id?: number;
+}
+
+export interface Zona {
+  id: number;
+  nombre: string;
 }
 
 export interface Ruta {
@@ -105,6 +110,7 @@ export interface Parada {
   fecha_vencimiento?: string;
   urgente?: boolean;
   urgencia_descripcion?: string;
+  accion_requerida?: string;
 }
 
 export interface Alerta {
@@ -114,6 +120,7 @@ export interface Alerta {
   tiene_vencidos: boolean;
   mercaderia_vencida?: string;
   fecha_vencimiento?: string;
+  accion_requerida?: string;
   timestamp_salida: string;
   nota?: string;
   cliente: { id: number; nombre: string; direccion: string; telefono?: string };

@@ -29,6 +29,7 @@ export default function Login() {
       if (rol === 'admin') router.replace('/(admin)');
       else if (rol === 'repartidor') router.replace('/(repartidor)');
       else if (rol === 'preventista') router.replace('/(preventista)');
+      else if (rol === 'supervisor') router.replace('/(supervisor)');
     } catch (e: any) {
       const msg = e?.response?.data?.error
         ?? (e?.code === 'ECONNABORTED' ? 'No se pudo conectar al servidor (timeout)' : 'No se pudo iniciar sesión');

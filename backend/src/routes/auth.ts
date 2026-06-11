@@ -29,7 +29,7 @@ router.post('/login', async (req: Request, res: Response) => {
 router.post('/usuarios', authMiddleware, soloAdmin, async (req: AuthRequest, res: Response) => {
   const { nombre, email, password, rol, horario_preferido } = req.body;
   if (!nombre || !email || !password || !rol) return res.status(400).json({ error: 'Todos los campos son requeridos' });
-  if (!['repartidor', 'preventista', 'admin'].includes(rol)) return res.status(400).json({ error: 'Rol inválido' });
+  if (!['repartidor', 'preventista', 'supervisor', 'admin'].includes(rol)) return res.status(400).json({ error: 'Rol inválido' });
   try {
     const hash = await bcrypt.hash(password, 10);
     const { rows } = await pool.query(
@@ -47,7 +47,7 @@ router.put('/usuarios/:id', authMiddleware, soloAdmin, async (req: AuthRequest, 
   const { id } = req.params;
   const { nombre, email, rol, horario_preferido, password } = req.body;
   if (!nombre || !email || !rol) return res.status(400).json({ error: 'Nombre, email y rol son requeridos' });
-  if (!['repartidor', 'preventista', 'admin'].includes(rol)) return res.status(400).json({ error: 'Rol inválido' });
+  if (!['repartidor', 'preventista', 'supervisor', 'admin'].includes(rol)) return res.status(400).json({ error: 'Rol inválido' });
   try {
     let result;
     if (password && password.trim()) {

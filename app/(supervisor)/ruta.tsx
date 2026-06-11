@@ -19,7 +19,7 @@ import { Cliente } from '../../types';
 type EstadoVisita = 'esperando' | 'fotos' | 'formulario';
 const MAX_FOTOS = 5;
 
-export default function RutaPreventista() {
+export default function RutaSupervisor() {
   const { jornada } = useJornadaStore();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [paradas, setParadas] = useState<any[]>([]);
@@ -163,7 +163,7 @@ export default function RutaPreventista() {
     setProcesando(false);
   };
 
-  if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.preventista} size="large" /></View>;
+  if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.supervisor} size="large" /></View>;
 
   const paradasCompletadas = paradas.filter((p) => p.completada);
 
@@ -301,7 +301,7 @@ export default function RutaPreventista() {
                 </View>
               )}
 
-              {/* Toggle: Urgente */}
+              {/* Toggle: Urgente / problema en el local */}
               <TouchableOpacity
                 style={[styles.toggleRow, urgente && styles.toggleRowUrgente]}
                 onPress={() => setUrgente((v) => !v)}
@@ -309,7 +309,7 @@ export default function RutaPreventista() {
               >
                 <Text style={styles.toggleEmoji}>🚨</Text>
                 <Text style={[styles.toggleLabel, urgente && { color: COLORS.danger, fontWeight: '700' }]}>
-                  Atención urgente requerida
+                  Reportar un problema / atención urgente
                 </Text>
                 <View style={[styles.toggleBubble, urgente && styles.toggleBubbleUrgente]}>
                   <Text style={styles.toggleBubbleTexto}>{urgente ? 'SÍ' : 'NO'}</Text>
@@ -318,10 +318,10 @@ export default function RutaPreventista() {
 
               {urgente && (
                 <View style={[styles.subForm, styles.subFormUrgente]}>
-                  <Text style={styles.subLabel}>¿Qué necesita urgente?</Text>
+                  <Text style={styles.subLabel}>Describí el problema</Text>
                   <TextInput
                     style={[styles.input, styles.inputMultiline]}
-                    placeholder="Ej: falta producto, problema con equipo..."
+                    placeholder="Ej: exhibidor roto, falta de stock, mal estado del local..."
                     placeholderTextColor={COLORS.textLight}
                     value={urgenciaDesc}
                     onChangeText={setUrgenciaDesc}
@@ -362,7 +362,7 @@ export default function RutaPreventista() {
               {/* Informe de producto/precio */}
               <View style={styles.informeBox}>
                 <Text style={styles.informeTitulo}>💰 Informe de precio (opcional)</Text>
-                <Text style={styles.informeDesc}>Registrá qué producto compró y a qué precio</Text>
+                <Text style={styles.informeDesc}>Registrá qué producto y a qué precio se ofrece</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="Nombre del producto"
@@ -473,14 +473,14 @@ export default function RutaPreventista() {
       <CartillaModal
         cliente={clienteCartilla}
         visible={!!clienteCartilla}
-        color={COLORS.preventista}
+        color={COLORS.supervisor}
         onClose={() => setClienteCartilla(null)}
         onGuardado={cargar}
       />
 
       <NuevoClienteModal
         visible={nuevoClienteVisible}
-        color={COLORS.preventista}
+        color={COLORS.supervisor}
         onClose={() => setNuevoClienteVisible(false)}
         onCreado={cargar}
       />
@@ -505,7 +505,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   panelHeader: {
-    backgroundColor: COLORS.preventista,
+    backgroundColor: COLORS.supervisor,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -519,12 +519,12 @@ const styles = StyleSheet.create({
   panelScrollContent: { padding: 16, gap: 12 },
 
   // Paso fotos
-  pasoTitulo: { fontSize: 18, fontWeight: '800', color: COLORS.preventista, marginBottom: 4 },
+  pasoTitulo: { fontSize: 18, fontWeight: '800', color: COLORS.supervisor, marginBottom: 4 },
   fotoPreview: { width: '100%', height: 200, borderRadius: 10 },
   fotosRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
   fotoMini: { width: 70, height: 70, borderRadius: 8 },
   btnFoto: {
-    backgroundColor: COLORS.preventista,
+    backgroundColor: COLORS.supervisor,
     borderRadius: 12,
     padding: 20,
     alignItems: 'center',
@@ -537,7 +537,7 @@ const styles = StyleSheet.create({
   btnSaltear: { alignItems: 'center', paddingVertical: 10 },
   btnSaltearTexto: { color: COLORS.textLight, fontSize: 13, textDecorationLine: 'underline' },
   btnPrimario: {
-    backgroundColor: COLORS.preventista,
+    backgroundColor: COLORS.supervisor,
     borderRadius: 12,
     padding: 14,
     alignItems: 'center',
@@ -604,7 +604,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     backgroundColor: COLORS.card,
   },
-  chipActivo: { borderColor: COLORS.preventista, backgroundColor: COLORS.preventista },
+  chipActivo: { borderColor: COLORS.supervisor, backgroundColor: COLORS.supervisor },
   chipTexto: { fontSize: 13, fontWeight: '600', color: COLORS.textLight },
   chipTextoActivo: { color: '#fff' },
 
@@ -639,14 +639,14 @@ const styles = StyleSheet.create({
   resumenHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   resumenTexto: { fontSize: 14, color: COLORS.text, fontWeight: '600' },
   btnNuevoCliente: {
-    backgroundColor: COLORS.preventista,
+    backgroundColor: COLORS.supervisor,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
   btnNuevoClienteTexto: { color: '#fff', fontWeight: '700', fontSize: 12 },
   barra: { height: 8, backgroundColor: COLORS.border, borderRadius: 4 },
-  barraFill: { height: 8, backgroundColor: COLORS.preventista, borderRadius: 4 },
+  barraFill: { height: 8, backgroundColor: COLORS.supervisor, borderRadius: 4 },
 
   clienteCard: {
     backgroundColor: COLORS.card,
@@ -660,14 +660,14 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
     borderLeftWidth: 4,
-    borderLeftColor: COLORS.preventista,
+    borderLeftColor: COLORS.supervisor,
   },
   clienteCardVisitado: { borderLeftColor: COLORS.success, opacity: 0.75 },
   clienteOrden: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: COLORS.preventista,
+    backgroundColor: COLORS.supervisor,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -680,7 +680,7 @@ const styles = StyleSheet.create({
   botonesCard: { flexDirection: 'column', alignItems: 'center', gap: 6 },
   visitadoCheck: { fontSize: 22, color: COLORS.success, fontWeight: '700' },
   btnVisitar: {
-    backgroundColor: COLORS.preventista,
+    backgroundColor: COLORS.supervisor,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,

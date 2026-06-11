@@ -203,15 +203,18 @@ export default function HistorialAdmin() {
               ? differenceInMinutes(new Date(item.fecha_fin), new Date(item.fecha_inicio))
               : null;
             const esRepartidor = item.usuario?.rol === 'repartidor';
+            const esSupervisor = item.usuario?.rol === 'supervisor';
+            const colorRol = esRepartidor ? COLORS.repartidor : esSupervisor ? COLORS.supervisor : COLORS.preventista;
+            const iconoRol = esRepartidor ? '🚚' : esSupervisor ? '🛡️' : '👔';
             return (
               <TouchableOpacity
-                style={[styles.card, { borderLeftColor: esRepartidor ? COLORS.repartidor : COLORS.preventista }]}
+                style={[styles.card, { borderLeftColor: colorRol }]}
                 onPress={() => verDetalleJornada(item.id)}
               >
                 <View style={styles.cardHeader}>
                   <Text style={styles.cardNombre}>{item.usuario?.nombre}</Text>
                   <Text style={styles.cardRol}>
-                    {esRepartidor ? '🚚' : '👔'} {item.usuario?.rol}
+                    {iconoRol} {item.usuario?.rol}
                   </Text>
                 </View>
                 <Text style={styles.cardFecha}>

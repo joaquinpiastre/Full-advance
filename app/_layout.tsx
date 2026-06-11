@@ -10,6 +10,7 @@ export default function RootLayout() {
       <Stack.Screen name="(admin)" />
       <Stack.Screen name="(repartidor)" />
       <Stack.Screen name="(preventista)" />
+      <Stack.Screen name="(supervisor)" />
     </Stack>
   );
 }

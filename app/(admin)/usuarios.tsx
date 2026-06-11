@@ -11,7 +11,10 @@ const FORM_VACIO = { nombre: '', email: '', password: '', rol: 'repartidor', hor
 const ROLES = [
   { key: 'repartidor', label: '🚚 Repartidor', color: COLORS.repartidor },
   { key: 'preventista', label: '👔 Preventista', color: COLORS.preventista },
+  { key: 'supervisor', label: '🛡️ Supervisor', color: COLORS.supervisor },
 ];
+const ROL_COLOR: Record<string, string> = Object.fromEntries(ROLES.map((r) => [r.key, r.color]));
+const ROL_LABEL: Record<string, string> = Object.fromEntries(ROLES.map((r) => [r.key, r.label]));
 
 export default function Usuarios() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -130,14 +133,14 @@ export default function Usuarios() {
           <TouchableOpacity
             style={[
               styles.card,
-              { borderLeftColor: item.rol === 'repartidor' ? COLORS.repartidor : COLORS.preventista }
+              { borderLeftColor: ROL_COLOR[item.rol] ?? COLORS.preventista }
             ]}
             onPress={() => abrirEditar(item)}
           >
             <View style={styles.cardHeader}>
               <Text style={styles.cardNombre}>{item.nombre}</Text>
               <Text style={styles.cardRol}>
-                {item.rol === 'repartidor' ? '🚚 Repartidor' : '👔 Preventista'}
+                {ROL_LABEL[item.rol] ?? item.rol}
               </Text>
             </View>
             <Text style={styles.cardEmail}>{item.email}</Text>
@@ -150,7 +153,7 @@ export default function Usuarios() {
             </View>
           </TouchableOpacity>
         )}
-        ListEmptyComponent={<Text style={styles.vacio}>No hay repartidores ni preventistas registrados</Text>}
+        ListEmptyComponent={<Text style={styles.vacio}>No hay usuarios registrados</Text>}
       />
 
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">

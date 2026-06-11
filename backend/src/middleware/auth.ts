@@ -21,3 +21,10 @@ export const soloAdmin = (req: AuthRequest, res: Response, next: NextFunction) =
   if (req.usuario?.rol !== 'admin') return res.status(403).json({ error: 'Solo administradores' });
   next();
 };
+
+export const adminOSupervisor = (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (req.usuario?.rol !== 'admin' && req.usuario?.rol !== 'supervisor') {
+    return res.status(403).json({ error: 'Solo administradores o supervisores' });
+  }
+  next();
+};

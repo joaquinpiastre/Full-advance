@@ -3,7 +3,7 @@ import { COLORS } from '../constants';
 
 type Persona = { id: number; nombre: string; rol?: string };
 
-const ICONO_ROL: Record<string, string> = { repartidor: '🚚', preventista: '👔', admin: '⭐' };
+const ICONO_ROL: Record<string, string> = { repartidor: '🚚', preventista: '👔', supervisor: '🛡️', admin: '⭐' };
 
 // Tira horizontal de chips para elegir un repartidor/preventista sin scrollear
 // una lista vertical larga. Incluye un chip "Todos" para limpiar el filtro.

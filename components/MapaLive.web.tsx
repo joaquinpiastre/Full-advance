@@ -11,7 +11,7 @@ function dibujarMarcadores(state: MapState, ubicaciones: UbicacionLive[]) {
   const { map, L } = state;
   state.markers.forEach((m) => m.remove());
   state.markers = ubicaciones.map((u) => {
-    const color = u.rol === 'repartidor' ? COLORS.repartidor : COLORS.preventista;
+    const color = u.rol === 'repartidor' ? COLORS.repartidor : u.rol === 'supervisor' ? COLORS.supervisor : COLORS.preventista;
     const icono = L.divIcon({
       className: '',
       html: `<div style="background:${color};width:18px;height:18px;border-radius:50%;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`,
@@ -19,7 +19,7 @@ function dibujarMarcadores(state: MapState, ubicaciones: UbicacionLive[]) {
       iconAnchor: [9, 9],
       popupAnchor: [0, -9],
     });
-    const emoji = u.rol === 'repartidor' ? '🚚 Repartidor' : '👔 Preventista';
+    const emoji = u.rol === 'repartidor' ? '🚚 Repartidor' : u.rol === 'supervisor' ? '🛡️ Supervisor' : '👔 Preventista';
     return L.marker([u.lat, u.lng], { icon: icono })
       .addTo(map)
       .bindPopup(`<strong>${u.nombre}</strong><br>${emoji}<br>${format(new Date(u.timestamp), 'HH:mm:ss')}`);

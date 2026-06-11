@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   nombre VARCHAR(100) NOT NULL,
   email VARCHAR(150) UNIQUE NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
-  rol VARCHAR(20) NOT NULL CHECK (rol IN ('admin', 'repartidor', 'preventista')),
+  rol VARCHAR(20) NOT NULL CHECK (rol IN ('admin', 'repartidor', 'preventista', 'supervisor')),
   activo BOOLEAN DEFAULT true,
   horario_preferido VARCHAR(100),
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -55,6 +55,18 @@ ALTER TABLE clientes ADD COLUMN IF NOT EXISTS cartilla_actualizada_at TIMESTAMPT
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS zona VARCHAR(100);
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS departamento VARCHAR(100);
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS horario_preferido VARCHAR(100);
+
+-- Listas de departamentos y distritos seleccionables para clasificar clientes.
+-- Admin y supervisor pueden agregar nuevos valores desde la app.
+CREATE TABLE IF NOT EXISTS departamentos (
+  id SERIAL PRIMARY KEY,
+  nombre VARCHAR(100) UNIQUE NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS distritos (
+  id SERIAL PRIMARY KEY,
+  nombre VARCHAR(100) UNIQUE NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS rutas (
   id SERIAL PRIMARY KEY,

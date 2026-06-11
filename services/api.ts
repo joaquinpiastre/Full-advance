@@ -67,6 +67,7 @@ export const finalizarParada = (parada_id: number, data?: {
   urgencia_descripcion?: string | null;
   producto_informe?: string | null;
   precio_informe?: string | null;
+  accion_requerida?: string | null;
 }) => api.post(`/paradas/${parada_id}/finalizar`, data ?? {});
 
 export const obtenerParadas = (jornada_id: number) =>
@@ -84,6 +85,19 @@ export const actualizarCliente = (id: number, data: any) =>
 
 export const actualizarCoordenadas = (id: number, lat: number, lng: number) =>
   api.patch(`/clientes/${id}/coords`, { lat, lng });
+
+// Zonas (departamentos y distritos seleccionables)
+export const obtenerDepartamentos = () =>
+  api.get('/zonas/departamentos');
+
+export const crearDepartamento = (nombre: string) =>
+  api.post('/zonas/departamentos', { nombre });
+
+export const obtenerDistritos = () =>
+  api.get('/zonas/distritos');
+
+export const crearDistrito = (nombre: string) =>
+  api.post('/zonas/distritos', { nombre });
 
 // Rutas
 export const obtenerRutas = () =>

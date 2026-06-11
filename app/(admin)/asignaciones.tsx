@@ -161,7 +161,7 @@ export default function Asignaciones() {
                 <View key={usuario.id} style={styles.fijaRow}>
                   <View style={styles.fijaInfo}>
                     <Text style={styles.fijaNombre}>
-                      {usuario.rol === 'repartidor' ? '🚚' : '👔'} {usuario.nombre}
+                      {usuario.rol === 'repartidor' ? '🚚' : usuario.rol === 'supervisor' ? '🛡️' : '👔'} {usuario.nombre}
                     </Text>
                     <Text style={[styles.fijaRuta, !fija && styles.fijaRutaVacia]}>
                       {fija ? `📍 ${fija.ruta.nombre}` : 'Sin ruta fija'}
@@ -181,7 +181,7 @@ export default function Asignaciones() {
               );
             })}
             {personasNoAdmin.length === 0 && (
-              <Text style={styles.vacioChico}>No hay repartidores ni preventistas registrados</Text>
+              <Text style={styles.vacioChico}>No hay usuarios registrados</Text>
             )}
           </View>
         )}
@@ -205,12 +205,12 @@ export default function Asignaciones() {
         {asignacionesFiltradas.map((item) => (
           <View key={item.id} style={[
             styles.card,
-            { borderLeftColor: item.usuario?.rol === 'repartidor' ? COLORS.repartidor : COLORS.preventista }
+            { borderLeftColor: item.usuario?.rol === 'repartidor' ? COLORS.repartidor : item.usuario?.rol === 'supervisor' ? COLORS.supervisor : COLORS.preventista }
           ]}>
             <View style={styles.cardHeader}>
               <Text style={styles.cardNombre}>{item.usuario?.nombre}</Text>
               <Text style={styles.cardRol}>
-                {item.usuario?.rol === 'repartidor' ? '🚚' : '👔'} {item.usuario?.rol}
+                {item.usuario?.rol === 'repartidor' ? '🚚' : item.usuario?.rol === 'supervisor' ? '🛡️' : '👔'} {item.usuario?.rol}
               </Text>
             </View>
             <Text style={styles.cardRuta}>📍 {item.ruta?.nombre}</Text>

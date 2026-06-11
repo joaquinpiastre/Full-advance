@@ -29,6 +29,7 @@ export default function Index() {
   if (usuario.rol === 'admin') return <Redirect href="/(admin)" />;
   if (usuario.rol === 'repartidor') return <Redirect href="/(repartidor)" />;
   if (usuario.rol === 'preventista') return <Redirect href="/(preventista)" />;
+  if (usuario.rol === 'supervisor') return <Redirect href="/(supervisor)" />;
 
   return <Redirect href="/(auth)/login" />;
 }

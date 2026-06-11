@@ -3,9 +3,11 @@ import {
   View, Text, StyleSheet, TouchableOpacity, Modal, TextInput,
   ScrollView, Alert, ActivityIndicator,
 } from 'react-native';
-import { actualizarCliente } from '../services/api';
+import { actualizarCliente, obtenerDepartamentos, crearDepartamento, obtenerDistritos, crearDistrito } from '../services/api';
 import { COLORS, COLOR_CATEGORIA } from '../constants';
 import { Cliente } from '../types';
+import { useAuthStore } from '../store/authStore';
+import SelectorConAgregar from './SelectorConAgregar';
 
 const FRECUENCIAS = ['Semanal', 'Quincenal', 'Mensual', 'Ocasional'];
 const FORMAS_PAGO = ['Efectivo', 'Cuenta corriente', 'Transferencia'];
@@ -19,7 +21,7 @@ const FORM_VACIO = {
   nombre: '', direccion: '',
   razon_social: '', cuit: '', rubro: '', email: '', contacto_nombre: '', horario_atencion: '',
   telefono: '', monto_compra_promedio: '', frecuencia_compra: '', forma_pago: '', dia_visita_preferido: '',
-  notas: '', material_exhibicion: '', tipo_comercio: '',
+  notas: '', material_exhibicion: '', tipo_comercio: '', zona: '', departamento: '',
 };
 
 function Chips({ opciones, valor, onSeleccionar, color }: {
@@ -55,9 +57,19 @@ interface Props {
 }
 
 export default function CartillaModal({ cliente, visible, color = COLORS.primary, onClose, onGuardado }: Props) {
+  const { usuario } = useAuthStore();
+  const puedeAgregarZonas = usuario?.rol === 'admin' || usuario?.rol === 'supervisor';
   const [form, setForm] = useState(FORM_VACIO);
   const [horaVisita, setHoraVisita] = useState('');
   const [guardando, setGuardando] = useState(false);
+  const [departamentos, setDepartamentos] = useState<string[]>([]);
+  const [distritos, setDistritos] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!visible) return;
+    obtenerDepartamentos().then((res) => setDepartamentos(res.data.map((d: any) => d.nombre))).catch(() => {});
+    obtenerDistritos().then((res) => setDistritos(res.data.map((d: any) => d.nombre))).catch(() => {});
+  }, [visible]);
 
   useEffect(() => {
     if (!cliente) return;
@@ -83,6 +95,8 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
       notas: cliente.notas ?? '',
       material_exhibicion: cliente.material_exhibicion ?? '',
       tipo_comercio: cliente.tipo_comercio ?? '',
+      zona: cliente.zona ?? '',
+      departamento: cliente.departamento ?? '',
     });
   }, [cliente]);
 
@@ -119,8 +133,8 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
         notas: form.notas.trim() || null,
         material_exhibicion: form.material_exhibicion.trim() || null,
         tipo_comercio: form.tipo_comercio || null,
-        zona: cliente.zona ?? null,
-        departamento: cliente.departamento ?? null,
+        zona: form.zona || null,
+        departamento: form.departamento || null,
       };
       const res = await actualizarCliente(cliente.id, data);
       onGuardado?.(res.data);
@@ -166,6 +180,27 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
             />
           </View>
           <View style={styles.formGroup}>
+            <Text style={styles.label}>Razón social</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Nombre legal / fantasía"
+              placeholderTextColor={COLORS.textLight}
+              value={form.razon_social}
+              onChangeText={(v) => setForm((prev) => ({ ...prev, razon_social: v }))}
+            />
+          </View>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>CUIT / CUIL</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="20-12345678-9"
+              placeholderTextColor={COLORS.textLight}
+              keyboardType="numbers-and-punctuation"
+              value={form.cuit}
+              onChangeText={(v) => setForm((prev) => ({ ...prev, cuit: v }))}
+            />
+          </View>
+          <View style={styles.formGroup}>
             <Text style={styles.label}>Dirección *</Text>
             <TextInput
               style={styles.input}
@@ -173,6 +208,29 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
               placeholderTextColor={COLORS.textLight}
               value={form.direccion}
               onChangeText={(v) => setForm((prev) => ({ ...prev, direccion: v }))}
+            />
+          </View>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Teléfono</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Opcional"
+              placeholderTextColor={COLORS.textLight}
+              keyboardType="phone-pad"
+              value={form.telefono}
+              onChangeText={(v) => setForm((prev) => ({ ...prev, telefono: v }))}
+            />
+          </View>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Opcional"
+              placeholderTextColor={COLORS.textLight}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={form.email}
+              onChangeText={(v) => setForm((prev) => ({ ...prev, email: v }))}
             />
           </View>
 
@@ -186,14 +244,42 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
             />
           </View>
 
+          <Text style={styles.seccionTitulo}>Ubicación</Text>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Departamento</Text>
+            <SelectorConAgregar
+              opciones={departamentos}
+              valor={form.departamento}
+              onSeleccionar={(v) => setForm((prev) => ({ ...prev, departamento: v }))}
+              color={color}
+              puedeAgregar={puedeAgregarZonas}
+              placeholderNuevo="Ej: SAN RAFAEL"
+              onAgregar={async (nombre) => {
+                await crearDepartamento(nombre);
+                setDepartamentos((prev) => (prev.includes(nombre) ? prev : [...prev, nombre].sort()));
+              }}
+            />
+          </View>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Zona / Distrito</Text>
+            <SelectorConAgregar
+              opciones={distritos}
+              valor={form.zona}
+              onSeleccionar={(v) => setForm((prev) => ({ ...prev, zona: v }))}
+              color={color}
+              puedeAgregar={puedeAgregarZonas}
+              placeholderNuevo="Ej: CENTRO"
+              onAgregar={async (nombre) => {
+                await crearDistrito(nombre);
+                setDistritos((prev) => (prev.includes(nombre) ? prev : [...prev, nombre].sort()));
+              }}
+            />
+          </View>
+
           <Text style={styles.seccionTitulo}>Datos de la empresa</Text>
           {([
-            { key: 'razon_social', label: 'Razón social', placeholder: 'Nombre legal / fantasía' },
-            { key: 'cuit', label: 'CUIT / CUIL', placeholder: '20-12345678-9', keyboard: 'numbers-and-punctuation' },
             { key: 'rubro', label: 'Rubro', placeholder: 'Kiosco, supermercado, restaurante...' },
             { key: 'contacto_nombre', label: 'Persona de contacto', placeholder: 'Nombre del encargado' },
-            { key: 'telefono', label: 'Teléfono', placeholder: 'Opcional', keyboard: 'phone-pad' },
-            { key: 'email', label: 'Email', placeholder: 'Opcional', keyboard: 'email-address' },
             { key: 'horario_atencion', label: 'Horario de atención', placeholder: 'Ej: Lun a Vie 9 a 18' },
           ] as any[]).map((f) => (
             <View key={f.key} style={styles.formGroup}>

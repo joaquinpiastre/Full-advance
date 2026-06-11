@@ -77,4 +77,19 @@ router.get('/usuarios', authMiddleware, soloAdmin, async (_req: Request, res: Re
   res.json(rows);
 });
 
+router.delete('/usuarios/:id', authMiddleware, soloAdmin, async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  if (req.usuario?.id === Number(id)) return res.status(400).json({ error: 'No podés eliminar tu propio usuario' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE usuarios SET activo=false WHERE id=$1 AND rol != 'admin' RETURNING id`,
+      [id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Usuario no encontrado' });
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
 export default router;

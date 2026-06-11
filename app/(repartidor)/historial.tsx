@@ -6,6 +6,25 @@ import { COLORS, urlFoto } from '../../constants';
 import { format, differenceInMinutes } from 'date-fns';
 import { es } from 'date-fns/locale';
 
+const FOTOS_KEYS = ['foto1_uri', 'foto2_uri', 'foto3_uri', 'foto4_uri', 'foto5_uri'] as const;
+
+function FotosGrid({ item }: { item: any }) {
+  const fotos = FOTOS_KEYS.map((k) => item[k]).filter(Boolean) as string[];
+  if (!fotos.length) return null;
+  return (
+    <View style={styles.fotosRow}>
+      {fotos.map((uri) => (
+        <View key={uri}>
+          <Image source={{ uri: urlFoto(uri) }} style={styles.foto} />
+          <TouchableOpacity style={styles.btnDescargar} onPress={() => descargarFoto(uri)}>
+            <Text style={styles.btnDescargarTexto}>📥 Guardar</Text>
+          </TouchableOpacity>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export default function HistorialRepartidor() {
   const [jornadas, setJornadas] = useState<any[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -88,24 +107,7 @@ export default function HistorialRepartidor() {
                   {format(new Date(p.timestamp_llegada), 'HH:mm')}
                   {p.timestamp_salida ? ` → ${format(new Date(p.timestamp_salida), 'HH:mm')}` : ''}
                 </Text>
-                <View style={styles.fotosRow}>
-                  {p.foto1_uri && (
-                    <View>
-                      <Image source={{ uri: urlFoto(p.foto1_uri) }} style={styles.foto} />
-                      <TouchableOpacity style={styles.btnDescargar} onPress={() => descargarFoto(p.foto1_uri)}>
-                        <Text style={styles.btnDescargarTexto}>📥 Guardar</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                  {p.foto2_uri && (
-                    <View>
-                      <Image source={{ uri: urlFoto(p.foto2_uri) }} style={styles.foto} />
-                      <TouchableOpacity style={styles.btnDescargar} onPress={() => descargarFoto(p.foto2_uri)}>
-                        <Text style={styles.btnDescargarTexto}>📥 Guardar</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
+                <FotosGrid item={p} />
                 {p.nota ? <Text style={styles.nota}>📝 {p.nota}</Text> : null}
               </View>
             ))}
@@ -180,7 +182,7 @@ const styles = StyleSheet.create({
   paradaNombre: { fontSize: 15, fontWeight: '700', color: COLORS.text },
   paradaDireccion: { fontSize: 13, color: COLORS.textLight },
   paradaHora: { fontSize: 13, color: COLORS.primary, fontWeight: '600' },
-  fotosRow: { flexDirection: 'row', gap: 10 },
+  fotosRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   foto: { width: 120, height: 120, borderRadius: 8 },
   nota: { fontSize: 13, color: COLORS.text, fontStyle: 'italic' },
 });

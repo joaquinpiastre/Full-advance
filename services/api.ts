@@ -25,6 +25,9 @@ export const crearUsuario = (data: { nombre: string; email: string; password: st
 export const actualizarUsuario = (id: number, data: { nombre: string; email: string; rol: string; horario_preferido?: string; password?: string }) =>
   api.put(`/auth/usuarios/${id}`, data);
 
+export const eliminarUsuario = (id: number) =>
+  api.delete(`/auth/usuarios/${id}`);
+
 // GPS
 export const enviarGps = (data: { lat: number; lng: number; jornada_id: number; velocidad?: number }) =>
   api.post('/gps/update', data);
@@ -78,9 +81,6 @@ export const crearCliente = (data: any) =>
 
 export const actualizarCliente = (id: number, data: any) =>
   api.put(`/clientes/${id}`, data);
-
-export const actualizarCartillaCliente = (id: number, data: any) =>
-  api.put(`/clientes/${id}/cartilla`, data);
 
 export const actualizarCoordenadas = (id: number, lat: number, lng: number) =>
   api.patch(`/clientes/${id}/coords`, { lat, lng });

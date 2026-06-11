@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, Modal, TextInput, Alert, ScrollView,
 } from 'react-native';
-import { obtenerUsuarios, crearUsuario, actualizarUsuario } from '../../services/api';
+import { obtenerUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario } from '../../services/api';
 import { COLORS } from '../../constants';
 import { Usuario } from '../../types';
 
@@ -87,9 +87,31 @@ export default function Usuarios() {
     setGuardando(false);
   };
 
+  const handleEliminar = (usuario: Usuario) => {
+    Alert.alert(
+      'Eliminar usuario',
+      `¿Seguro que querés eliminar a ${usuario.nombre}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await eliminarUsuario(usuario.id);
+              cargar();
+            } catch (e: any) {
+              Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo eliminar el usuario');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
 
-  const noAdmins = usuarios.filter((u) => u.rol !== 'admin');
+  const noAdmins = usuarios.filter((u) => u.rol !== 'admin' && u.activo !== false);
 
   return (
     <View style={styles.container}>
@@ -120,8 +142,12 @@ export default function Usuarios() {
             </View>
             <Text style={styles.cardEmail}>{item.email}</Text>
             {!!item.horario_preferido && <Text style={styles.cardHorario}>🕒 {item.horario_preferido}</Text>}
-            {!item.activo && <Text style={styles.cardInactivo}>Inactivo</Text>}
-            <Text style={styles.cardEditar}>✏️ Tocá para editar</Text>
+            <View style={styles.cardAcciones}>
+              <Text style={styles.cardEditar}>✏️ Tocá para editar</Text>
+              <TouchableOpacity onPress={() => handleEliminar(item)}>
+                <Text style={styles.cardEliminar}>🗑️ Eliminar</Text>
+              </TouchableOpacity>
+            </View>
           </TouchableOpacity>
         )}
         ListEmptyComponent={<Text style={styles.vacio}>No hay repartidores ni preventistas registrados</Text>}
@@ -240,8 +266,9 @@ const styles = StyleSheet.create({
   cardRol: { fontSize: 12, color: COLORS.textLight },
   cardEmail: { fontSize: 13, color: COLORS.textLight },
   cardHorario: { fontSize: 12, color: COLORS.textLight },
-  cardInactivo: { fontSize: 12, color: COLORS.danger, fontWeight: '600' },
-  cardEditar: { fontSize: 11, color: COLORS.primary, fontWeight: '600', marginTop: 4 },
+  cardAcciones: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
+  cardEditar: { fontSize: 11, color: COLORS.primary, fontWeight: '600' },
+  cardEliminar: { fontSize: 11, color: COLORS.danger, fontWeight: '600' },
   vacio: { textAlign: 'center', color: COLORS.textLight, marginTop: 60, fontSize: 14 },
   modal: { flex: 1, backgroundColor: COLORS.background },
   modalHeader: {

@@ -11,11 +11,13 @@ import {
   registrarParada, subirFoto, finalizarParada,
 } from '../../services/api';
 import CartillaModal from '../../components/CartillaModal';
+import NuevoClienteModal from '../../components/NuevoClienteModal';
 import FechaVencimientoPicker from '../../components/FechaVencimientoPicker';
 import { COLORS } from '../../constants';
 import { Cliente } from '../../types';
 
-type EstadoVisita = 'esperando' | 'foto1' | 'foto2' | 'formulario';
+type EstadoVisita = 'esperando' | 'fotos' | 'formulario';
+const MAX_FOTOS = 5;
 
 export default function RutaPreventista() {
   const { jornada } = useJornadaStore();
@@ -23,13 +25,14 @@ export default function RutaPreventista() {
   const [paradas, setParadas] = useState<any[]>([]);
   const [cargando, setCargando] = useState(true);
   const [clienteCartilla, setClienteCartilla] = useState<Cliente | null>(null);
+  const [nuevoClienteVisible, setNuevoClienteVisible] = useState(false);
 
   // Flujo de visita
   const [clienteActual, setClienteActual] = useState<Cliente | null>(null);
   const [paradaActual, setParadaActual] = useState<any>(null);
   const [estadoVisita, setEstadoVisita] = useState<EstadoVisita>('esperando');
-  const [foto1, setFoto1] = useState<string | null>(null);
-  const [foto2, setFoto2] = useState<string | null>(null);
+  const [fotos, setFotos] = useState<(string | null)[]>([null, null, null, null, null]);
+  const [fotoIndex, setFotoIndex] = useState(0);
   const [procesando, setProcesando] = useState(false);
 
   // Formulario
@@ -65,28 +68,36 @@ export default function RutaPreventista() {
     }
     setProcesando(true);
     try {
-      let lat = 0, lng = 0;
-      try {
-        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        lat = loc.coords.latitude;
-        lng = loc.coords.longitude;
-      } catch {}
-      const res = await registrarParada({ jornada_id: jornada.id, lat, lng, cliente_id: cliente.id });
-      setParadaActual(res.data);
+      // Si ya existe una parada sin completar para este cliente (quedó "trabada"
+      // por un corte de conexión), la retomamos en lugar de crear otra.
+      const pendiente = paradas.find((p) => p.cliente_id === cliente.id && !p.completada);
+      let parada = pendiente;
+      if (!parada) {
+        let lat = 0, lng = 0;
+        try {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          lat = loc.coords.latitude;
+          lng = loc.coords.longitude;
+        } catch {}
+        const res = await registrarParada({ jornada_id: jornada.id, lat, lng, cliente_id: cliente.id });
+        parada = res.data;
+      }
+      setParadaActual(parada);
       setClienteActual(cliente);
-      setFoto1(null); setFoto2(null);
+      setFotos([null, null, null, null, null]);
+      setFotoIndex(0);
       setNota('');
       setTieneVencidos(false); setMercaderiaVencida(''); setTipoVenc('fecha'); setFechaVencimiento(null);
       setUrgente(false); setUrgenciaDesc('');
       setProductoInforme(''); setPrecioInforme('');
-      setEstadoVisita('foto1');
+      setEstadoVisita('fotos');
     } catch (e: any) {
       Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo registrar la visita');
     }
     setProcesando(false);
   };
 
-  const tomarFoto = async (numero: 1 | 2) => {
+  const tomarFoto = async () => {
     try {
       const permiso = await ImagePicker.requestCameraPermissionsAsync();
       if (permiso.status !== 'granted') {
@@ -102,8 +113,11 @@ export default function RutaPreventista() {
       const result = await ImagePicker.launchCameraAsync({ quality: 0.7, allowsEditing: false });
       if (result.canceled) return;
       const uri = result.assets[0].uri;
-      if (numero === 1) { setFoto1(uri); setEstadoVisita('foto2'); }
-      else { setFoto2(uri); setEstadoVisita('formulario'); }
+      setFotos((prev) => {
+        const next = [...prev];
+        next[fotoIndex] = uri;
+        return next;
+      });
     } catch {
       Alert.alert('Error', 'No se pudo abrir la cámara. Verificá que la app tiene permiso.');
     }
@@ -113,16 +127,12 @@ export default function RutaPreventista() {
     if (!paradaActual) return;
     setProcesando(true);
     try {
-      if (foto1) {
+      for (let i = 0; i < fotos.length; i++) {
+        const foto = fotos[i];
+        if (!foto) continue;
         const f = new FormData();
-        f.append('foto', { uri: foto1, type: 'image/jpeg', name: 'foto1.jpg' } as any);
-        f.append('numero', '1');
-        await subirFoto(paradaActual.id, f);
-      }
-      if (foto2) {
-        const f = new FormData();
-        f.append('foto', { uri: foto2, type: 'image/jpeg', name: 'foto2.jpg' } as any);
-        f.append('numero', '2');
+        f.append('foto', { uri: foto, type: 'image/jpeg', name: `foto${i + 1}.jpg` } as any);
+        f.append('numero', String(i + 1));
         await subirFoto(paradaActual.id, f);
       }
       await finalizarParada(paradaActual.id, {
@@ -151,6 +161,8 @@ export default function RutaPreventista() {
 
   if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.preventista} size="large" /></View>;
 
+  const paradasCompletadas = paradas.filter((p) => p.completada);
+
   return (
     <View style={styles.container}>
 
@@ -177,48 +189,55 @@ export default function RutaPreventista() {
             </TouchableOpacity>
           </View>
 
-          {/* Paso: Foto 1 */}
-          {estadoVisita === 'foto1' && (
+          {/* Paso: Fotos */}
+          {estadoVisita === 'fotos' && (
             <View style={styles.panelBody}>
-              <Text style={styles.pasoTitulo}>📷 Foto 1 de 2</Text>
-              {foto1 ? (
+              <Text style={styles.pasoTitulo}>📷 Foto {fotoIndex + 1} de {MAX_FOTOS}</Text>
+              {fotos[fotoIndex] ? (
                 <>
-                  <Image source={{ uri: foto1 }} style={styles.fotoPreview} />
-                  <TouchableOpacity style={styles.btnRetomar} onPress={() => tomarFoto(1)}>
+                  <Image source={{ uri: fotos[fotoIndex]! }} style={styles.fotoPreview} />
+                  <TouchableOpacity style={styles.btnRetomar} onPress={tomarFoto}>
                     <Text style={styles.btnRetomarTexto}>🔄 Retomar</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.btnPrimario} onPress={() => setEstadoVisita('foto2')}>
-                    <Text style={styles.btnTexto}>Siguiente →</Text>
+                  <TouchableOpacity
+                    style={styles.btnPrimario}
+                    onPress={() => {
+                      if (fotoIndex < MAX_FOTOS - 1) setFotoIndex(fotoIndex + 1);
+                      else setEstadoVisita('formulario');
+                    }}
+                  >
+                    <Text style={styles.btnTexto}>{fotoIndex < MAX_FOTOS - 1 ? 'Siguiente →' : 'Continuar →'}</Text>
                   </TouchableOpacity>
                 </>
               ) : (
                 <>
-                  <TouchableOpacity style={styles.btnFoto} onPress={() => tomarFoto(1)}>
+                  <TouchableOpacity style={styles.btnFoto} onPress={tomarFoto}>
                     <Text style={styles.btnFotoIcono}>📷</Text>
-                    <Text style={styles.btnFotoTexto}>Tomar Foto 1</Text>
+                    <Text style={styles.btnFotoTexto}>Tomar Foto {fotoIndex + 1}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.btnSaltear} onPress={() => setEstadoVisita('formulario')}>
-                    <Text style={styles.btnSaltearTexto}>Saltear fotos e ir al formulario</Text>
+                  <TouchableOpacity
+                    style={styles.btnSaltear}
+                    onPress={() => {
+                      if (fotoIndex < MAX_FOTOS - 1) setFotoIndex(fotoIndex + 1);
+                      else setEstadoVisita('formulario');
+                    }}
+                  >
+                    <Text style={styles.btnSaltearTexto}>
+                      {fotoIndex < MAX_FOTOS - 1 ? 'Saltear esta foto' : 'Saltear y continuar'}
+                    </Text>
                   </TouchableOpacity>
                 </>
               )}
-            </View>
-          )}
-
-          {/* Paso: Foto 2 */}
-          {estadoVisita === 'foto2' && (
-            <View style={styles.panelBody}>
-              <Text style={styles.pasoTitulo}>📷 Foto 2 de 2</Text>
-              <View style={styles.fotosRow}>
-                {foto1 && <Image source={{ uri: foto1 }} style={styles.fotoMini} />}
-                <TouchableOpacity style={[styles.btnFoto, { flex: 1 }]} onPress={() => tomarFoto(2)}>
-                  <Text style={styles.btnFotoIcono}>📷</Text>
-                  <Text style={styles.btnFotoTexto}>Tomar Foto 2</Text>
+              {fotos.some((f) => f) && (
+                <View style={styles.fotosRow}>
+                  {fotos.map((f, i) => f && <Image key={i} source={{ uri: f }} style={styles.fotoMini} />)}
+                </View>
+              )}
+              {fotos.some((f) => f) && (
+                <TouchableOpacity style={styles.btnSaltear} onPress={() => setEstadoVisita('formulario')}>
+                  <Text style={styles.btnSaltearTexto}>Terminar fotos e ir al formulario</Text>
                 </TouchableOpacity>
-              </View>
-              <TouchableOpacity style={styles.btnSaltear} onPress={() => setEstadoVisita('formulario')}>
-                <Text style={styles.btnSaltearTexto}>Saltear foto 2</Text>
-              </TouchableOpacity>
+              )}
             </View>
           )}
 
@@ -226,10 +245,9 @@ export default function RutaPreventista() {
           {estadoVisita === 'formulario' && (
             <ScrollView style={styles.panelScroll} contentContainerStyle={styles.panelScrollContent} showsVerticalScrollIndicator={false}>
               {/* Fotos tomadas */}
-              {(foto1 || foto2) && (
+              {fotos.some((f) => f) && (
                 <View style={styles.fotosRow}>
-                  {foto1 && <Image source={{ uri: foto1 }} style={styles.fotoMini} />}
-                  {foto2 && <Image source={{ uri: foto2 }} style={styles.fotoMini} />}
+                  {fotos.map((f, i) => f && <Image key={i} source={{ uri: f }} style={styles.fotoMini} />)}
                 </View>
               )}
 
@@ -360,13 +378,18 @@ export default function RutaPreventista() {
       {estadoVisita === 'esperando' && (
         <>
           <View style={styles.resumen}>
-            <Text style={styles.resumenTexto}>
-              {paradas.length} / {clientes.length} clientes visitados
-            </Text>
+            <View style={styles.resumenHeader}>
+              <Text style={styles.resumenTexto}>
+                {paradasCompletadas.length} / {clientes.length} clientes visitados
+              </Text>
+              <TouchableOpacity style={styles.btnNuevoCliente} onPress={() => setNuevoClienteVisible(true)}>
+                <Text style={styles.btnNuevoClienteTexto}>+ Nuevo cliente</Text>
+              </TouchableOpacity>
+            </View>
             <View style={styles.barra}>
               <View style={[
                 styles.barraFill,
-                { width: clientes.length ? `${(paradas.length / clientes.length) * 100}%` : '0%' }
+                { width: clientes.length ? `${(paradasCompletadas.length / clientes.length) * 100}%` : '0%' }
               ]} />
             </View>
           </View>
@@ -376,7 +399,7 @@ export default function RutaPreventista() {
             keyExtractor={(item) => String(item.id)}
             contentContainerStyle={{ padding: 16, gap: 10 }}
             renderItem={({ item, index }) => {
-              const visitado = paradas.some((p) => p.cliente_id === item.id);
+              const visitado = paradas.some((p) => p.cliente_id === item.id && p.completada);
               return (
                 <View style={[styles.clienteCard, visitado && styles.clienteCardVisitado]}>
                   <View style={styles.clienteOrden}>
@@ -421,6 +444,13 @@ export default function RutaPreventista() {
         onClose={() => setClienteCartilla(null)}
         onGuardado={cargar}
       />
+
+      <NuevoClienteModal
+        visible={nuevoClienteVisible}
+        color={COLORS.preventista}
+        onClose={() => setNuevoClienteVisible(false)}
+        onCreado={cargar}
+      />
     </View>
   );
 }
@@ -458,8 +488,8 @@ const styles = StyleSheet.create({
   // Paso fotos
   pasoTitulo: { fontSize: 18, fontWeight: '800', color: COLORS.preventista, marginBottom: 4 },
   fotoPreview: { width: '100%', height: 200, borderRadius: 10 },
-  fotosRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  fotoMini: { width: 90, height: 90, borderRadius: 8 },
+  fotosRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
+  fotoMini: { width: 70, height: 70, borderRadius: 8 },
   btnFoto: {
     backgroundColor: COLORS.preventista,
     borderRadius: 12,
@@ -570,7 +600,15 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
     gap: 8,
   },
+  resumenHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   resumenTexto: { fontSize: 14, color: COLORS.text, fontWeight: '600' },
+  btnNuevoCliente: {
+    backgroundColor: COLORS.preventista,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  btnNuevoClienteTexto: { color: '#fff', fontWeight: '700', fontSize: 12 },
   barra: { height: 8, backgroundColor: COLORS.border, borderRadius: 4 },
   barraFill: { height: 8, backgroundColor: COLORS.preventista, borderRadius: 4 },
 

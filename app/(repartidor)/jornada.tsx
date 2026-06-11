@@ -8,12 +8,14 @@ import * as Location from 'expo-location';
 import { useJornadaStore } from '../../store/jornadaStore';
 import { registrarParada, subirFoto, finalizarParada, obtenerParadas, obtenerAsignacionHoy } from '../../services/api';
 import CartillaModal from '../../components/CartillaModal';
+import NuevoClienteModal from '../../components/NuevoClienteModal';
 import { COLORS, urlFoto } from '../../constants';
 import { Parada, Cliente } from '../../types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-type EstadoFotos = 'esperando' | 'foto1' | 'foto2' | 'nota' | 'completado';
+type EstadoFotos = 'esperando' | 'fotos' | 'nota';
+const MAX_FOTOS = 5;
 
 export default function JornadaRepartidor() {
   const { jornada, paradaActual, setParadaActual } = useJornadaStore();
@@ -21,14 +23,15 @@ export default function JornadaRepartidor() {
   const [asignacion, setAsignacion] = useState<any>(null);
   const [cargando, setCargando] = useState(true);
   const [estadoFotos, setEstadoFotos] = useState<EstadoFotos>('esperando');
-  const [foto1, setFoto1] = useState<string | null>(null);
-  const [foto2, setFoto2] = useState<string | null>(null);
+  const [fotos, setFotos] = useState<(string | null)[]>([null, null, null, null, null]);
+  const [fotoIndex, setFotoIndex] = useState(0);
   const [nota, setNota] = useState('');
   const [productoInforme, setProductoInforme] = useState('');
   const [precioInforme, setPrecioInforme] = useState('');
   const [procesando, setProcesando] = useState(false);
   const [clientesModal, setClientesModal] = useState(false);
   const [clienteCartilla, setClienteCartilla] = useState<Cliente | null>(null);
+  const [nuevoClienteVisible, setNuevoClienteVisible] = useState(false);
 
   useEffect(() => {
     if (jornada) cargarDatos();
@@ -53,20 +56,26 @@ export default function JornadaRepartidor() {
     setClientesModal(false);
     setProcesando(true);
     try {
-      // Intentamos obtener la ubicación; si falla (GPS apagado, permisos, etc.)
-      // continuamos igual con coordenadas 0 para no bloquear el flujo de fotos.
-      let lat = 0, lng = 0;
-      try {
-        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        lat = loc.coords.latitude;
-        lng = loc.coords.longitude;
-      } catch {}
+      // Si ya existe una parada sin completar para este cliente (quedó "trabada"
+      // por un corte de conexión), la retomamos en lugar de crear otra.
+      let parada: Parada | null = paradas.find((p) => p.cliente_id === cliente.id && !p.completada) ?? null;
+      if (!parada) {
+        // Intentamos obtener la ubicación; si falla (GPS apagado, permisos, etc.)
+        // continuamos igual con coordenadas 0 para no bloquear el flujo de fotos.
+        let lat = 0, lng = 0;
+        try {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          lat = loc.coords.latitude;
+          lng = loc.coords.longitude;
+        } catch {}
 
-      const res = await registrarParada({ jornada_id: jornada.id, lat, lng, cliente_id: cliente.id });
-      setParadaActual(res.data);
-      setEstadoFotos('foto1');
-      setFoto1(null);
-      setFoto2(null);
+        const res = await registrarParada({ jornada_id: jornada.id, lat, lng, cliente_id: cliente.id });
+        parada = res.data;
+      }
+      setParadaActual(parada);
+      setEstadoFotos('fotos');
+      setFotos([null, null, null, null, null]);
+      setFotoIndex(0);
       setNota('');
     } catch (e: any) {
       Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo registrar la parada');
@@ -74,7 +83,7 @@ export default function JornadaRepartidor() {
     setProcesando(false);
   };
 
-  const tomarFoto = async (numero: 1 | 2) => {
+  const tomarFoto = async () => {
     try {
       const permiso = await ImagePicker.requestCameraPermissionsAsync();
       if (permiso.status !== 'granted') {
@@ -90,13 +99,11 @@ export default function JornadaRepartidor() {
       const result = await ImagePicker.launchCameraAsync({ quality: 0.7, allowsEditing: false });
       if (result.canceled) return;
       const uri = result.assets[0].uri;
-      if (numero === 1) {
-        setFoto1(uri);
-        setEstadoFotos('foto2');
-      } else {
-        setFoto2(uri);
-        setEstadoFotos('nota');
-      }
+      setFotos((prev) => {
+        const next = [...prev];
+        next[fotoIndex] = uri;
+        return next;
+      });
     } catch {
       Alert.alert('Error', 'No se pudo abrir la cámara. Verificá que la app tiene permiso de cámara en la configuración del teléfono.');
     }
@@ -106,17 +113,13 @@ export default function JornadaRepartidor() {
     if (!paradaActual) return;
     setProcesando(true);
     try {
-      if (foto1) {
-        const form1 = new FormData();
-        form1.append('foto', { uri: foto1, type: 'image/jpeg', name: 'foto1.jpg' } as any);
-        form1.append('numero', '1');
-        await subirFoto(paradaActual.id, form1);
-      }
-      if (foto2) {
-        const form2 = new FormData();
-        form2.append('foto', { uri: foto2, type: 'image/jpeg', name: 'foto2.jpg' } as any);
-        form2.append('numero', '2');
-        await subirFoto(paradaActual.id, form2);
+      for (let i = 0; i < fotos.length; i++) {
+        const foto = fotos[i];
+        if (!foto) continue;
+        const form = new FormData();
+        form.append('foto', { uri: foto, type: 'image/jpeg', name: `foto${i + 1}.jpg` } as any);
+        form.append('numero', String(i + 1));
+        await subirFoto(paradaActual.id, form);
       }
       await finalizarParada(paradaActual.id, {
         nota: nota.trim() || undefined,
@@ -125,8 +128,8 @@ export default function JornadaRepartidor() {
       });
       setEstadoFotos('esperando');
       setParadaActual(null);
-      setFoto1(null);
-      setFoto2(null);
+      setFotos([null, null, null, null, null]);
+      setFotoIndex(0);
       setNota('');
       setProductoInforme('');
       setPrecioInforme('');
@@ -149,6 +152,7 @@ export default function JornadaRepartidor() {
   if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
 
   const clientesRuta: Cliente[] = asignacion?.ruta?.clientes?.map((c: any) => c.cliente) ?? [];
+  const paradasCompletadas = paradas.filter((p) => p.completada);
 
   return (
     <View style={styles.container}>
@@ -159,59 +163,65 @@ export default function JornadaRepartidor() {
             {paradaActual.cliente?.nombre ?? 'Cliente'}
           </Text>
 
-          {estadoFotos === 'foto1' && (
+          {estadoFotos === 'fotos' && (
             <>
-              <Text style={styles.fotoPanelTitulo}>Foto 1 de 2</Text>
-              <Text style={styles.fotoPanelDesc}>Sacá la primera foto del cliente</Text>
-              {foto1
+              <Text style={styles.fotoPanelTitulo}>Foto {fotoIndex + 1} de {MAX_FOTOS}</Text>
+              <Text style={styles.fotoPanelDesc}>Sacá una foto del cliente (opcional)</Text>
+              {fotos[fotoIndex]
                 ? (
                   <>
-                    <Image source={{ uri: foto1 }} style={styles.fotoPreview} />
-                    <TouchableOpacity style={styles.btnFotoRetomar} onPress={() => tomarFoto(1)}>
+                    <Image source={{ uri: fotos[fotoIndex]! }} style={styles.fotoPreview} />
+                    <TouchableOpacity style={styles.btnFotoRetomar} onPress={tomarFoto}>
                       <Text style={styles.btnFotoRetomarTexto}>🔄 Retomar foto</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.btnConfirmar} onPress={() => setEstadoFotos('foto2')}>
-                      <Text style={styles.btnTexto}>Siguiente →</Text>
+                    <TouchableOpacity
+                      style={styles.btnConfirmar}
+                      onPress={() => {
+                        if (fotoIndex < MAX_FOTOS - 1) setFotoIndex(fotoIndex + 1);
+                        else setEstadoFotos('nota');
+                      }}
+                    >
+                      <Text style={styles.btnTexto}>{fotoIndex < MAX_FOTOS - 1 ? 'Siguiente →' : 'Continuar →'}</Text>
                     </TouchableOpacity>
                   </>
                 )
                 : (
                   <>
-                    <TouchableOpacity style={styles.btnFoto} onPress={() => tomarFoto(1)}>
+                    <TouchableOpacity style={styles.btnFoto} onPress={tomarFoto}>
                       <Text style={styles.btnFotoIcono}>📷</Text>
-                      <Text style={styles.btnFotoTexto}>Tomar Foto 1</Text>
+                      <Text style={styles.btnFotoTexto}>Tomar Foto {fotoIndex + 1}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.btnSaltear} onPress={() => setEstadoFotos('nota')}>
-                      <Text style={styles.btnSaltearTexto}>Saltear fotos e ir directo a nota</Text>
+                    <TouchableOpacity
+                      style={styles.btnSaltear}
+                      onPress={() => {
+                        if (fotoIndex < MAX_FOTOS - 1) setFotoIndex(fotoIndex + 1);
+                        else setEstadoFotos('nota');
+                      }}
+                    >
+                      <Text style={styles.btnSaltearTexto}>
+                        {fotoIndex < MAX_FOTOS - 1 ? 'Saltear esta foto' : 'Saltear y continuar'}
+                      </Text>
                     </TouchableOpacity>
                   </>
                 )}
-            </>
-          )}
-
-          {estadoFotos === 'foto2' && (
-            <>
-              <Text style={styles.fotoPanelTitulo}>Foto 2 de 2</Text>
-              <Text style={styles.fotoPanelDesc}>Sacá la segunda foto</Text>
-              <View style={styles.fotosRow}>
-                {foto1 && <Image source={{ uri: foto1 }} style={styles.fotoMini} />}
-                <TouchableOpacity style={[styles.btnFoto, { flex: 1 }]} onPress={() => tomarFoto(2)}>
-                  <Text style={styles.btnFotoIcono}>📷</Text>
-                  <Text style={styles.btnFotoTexto}>Tomar Foto 2</Text>
+              {fotos.some((f) => f) && (
+                <View style={styles.fotosRow}>
+                  {fotos.map((f, i) => f && <Image key={i} source={{ uri: f }} style={styles.fotoMini} />)}
+                </View>
+              )}
+              {fotoIndex > 0 || fotos.some((f) => f) ? (
+                <TouchableOpacity style={styles.btnSaltear} onPress={() => setEstadoFotos('nota')}>
+                  <Text style={styles.btnSaltearTexto}>Terminar fotos e ir a la nota</Text>
                 </TouchableOpacity>
-              </View>
-              <TouchableOpacity style={styles.btnSaltear} onPress={() => setEstadoFotos('nota')}>
-                <Text style={styles.btnSaltearTexto}>Saltear foto 2</Text>
-              </TouchableOpacity>
+              ) : null}
             </>
           )}
 
           {estadoFotos === 'nota' && (
             <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ gap: 10 }}>
-              {(foto1 || foto2) && (
+              {fotos.some((f) => f) && (
                 <View style={styles.fotosRow}>
-                  {foto1 && <Image source={{ uri: foto1 }} style={styles.fotoMini} />}
-                  {foto2 && <Image source={{ uri: foto2 }} style={styles.fotoMini} />}
+                  {fotos.map((f, i) => f && <Image key={i} source={{ uri: f }} style={styles.fotoMini} />)}
                 </View>
               )}
               {/* Informe de producto/precio */}
@@ -257,7 +267,7 @@ export default function JornadaRepartidor() {
         <>
           <View style={styles.header}>
             <Text style={styles.headerTitulo}>Paradas del día</Text>
-            <Text style={styles.headerCount}>{paradas.length} completadas</Text>
+            <Text style={styles.headerCount}>{paradasCompletadas.length} completadas</Text>
           </View>
 
           <TouchableOpacity style={styles.btnNuevaParada} onPress={() => setClientesModal(true)} disabled={procesando}>
@@ -267,7 +277,7 @@ export default function JornadaRepartidor() {
           </TouchableOpacity>
 
           <FlatList
-            data={paradas}
+            data={paradasCompletadas}
             keyExtractor={(item) => String(item.id)}
             contentContainerStyle={{ padding: 16, gap: 12 }}
             renderItem={({ item }) => (
@@ -280,6 +290,9 @@ export default function JornadaRepartidor() {
                 <View style={styles.fotosRow}>
                   {item.foto1_uri && <Image source={{ uri: urlFoto(item.foto1_uri) }} style={styles.fotoMini} />}
                   {item.foto2_uri && <Image source={{ uri: urlFoto(item.foto2_uri) }} style={styles.fotoMini} />}
+                  {item.foto3_uri && <Image source={{ uri: urlFoto(item.foto3_uri) }} style={styles.fotoMini} />}
+                  {item.foto4_uri && <Image source={{ uri: urlFoto(item.foto4_uri) }} style={styles.fotoMini} />}
+                  {item.foto5_uri && <Image source={{ uri: urlFoto(item.foto5_uri) }} style={styles.fotoMini} />}
                 </View>
                 {item.nota ? <Text style={styles.paradaNota}>📝 {item.nota}</Text> : null}
               </View>
@@ -296,16 +309,24 @@ export default function JornadaRepartidor() {
         <View style={styles.modal}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitulo}>Seleccionar cliente</Text>
-            <TouchableOpacity onPress={() => setClientesModal(false)}>
-              <Text style={styles.modalCerrar}>✕</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <TouchableOpacity style={styles.btnNuevoCliente} onPress={() => {
+                setClientesModal(false);
+                setNuevoClienteVisible(true);
+              }}>
+                <Text style={styles.btnNuevoClienteTexto}>+ Nuevo cliente</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setClientesModal(false)}>
+                <Text style={styles.modalCerrar}>✕</Text>
+              </TouchableOpacity>
+            </View>
           </View>
           <FlatList
             data={clientesRuta}
             keyExtractor={(item) => String(item.id)}
             contentContainerStyle={{ padding: 16, gap: 10 }}
             renderItem={({ item }) => {
-              const yaVisitado = paradas.some((p) => p.cliente_id === item.id);
+              const yaVisitado = paradas.some((p) => p.cliente_id === item.id && p.completada);
               return (
                 <View style={styles.clienteRow}>
                   <TouchableOpacity
@@ -344,6 +365,16 @@ export default function JornadaRepartidor() {
         }}
         onGuardado={cargarDatos}
       />
+
+      <NuevoClienteModal
+        visible={nuevoClienteVisible}
+        color={COLORS.repartidor}
+        onClose={() => {
+          setNuevoClienteVisible(false);
+          setTimeout(() => setClientesModal(true), 350);
+        }}
+        onCreado={cargarDatos}
+      />
     </View>
   );
 }
@@ -369,8 +400,8 @@ const styles = StyleSheet.create({
   fotoPanelTitulo: { fontSize: 20, fontWeight: '800', color: COLORS.primary },
   fotoPanelDesc: { fontSize: 14, color: COLORS.textLight },
   fotoPreview: { width: '100%', height: 200, borderRadius: 10 },
-  fotosRow: { flexDirection: 'row', gap: 10 },
-  fotoMini: { width: 90, height: 90, borderRadius: 8 },
+  fotosRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  fotoMini: { width: 70, height: 70, borderRadius: 8 },
   btnFoto: {
     backgroundColor: COLORS.primary,
     borderRadius: 12,
@@ -460,6 +491,13 @@ const styles = StyleSheet.create({
   },
   modalTitulo: { fontSize: 18, fontWeight: '700', color: COLORS.text },
   modalCerrar: { fontSize: 20, color: COLORS.textLight },
+  btnNuevoCliente: {
+    backgroundColor: COLORS.repartidor,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  btnNuevoClienteTexto: { color: '#fff', fontWeight: '700', fontSize: 12 },
   clienteRow: { flexDirection: 'row', gap: 8, alignItems: 'stretch' },
   clienteItem: {
     flex: 1,

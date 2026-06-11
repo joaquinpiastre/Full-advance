@@ -132,6 +132,9 @@ CREATE TABLE IF NOT EXISTS paradas (
   timestamp_salida TIMESTAMPTZ,
   foto1_uri VARCHAR(500),
   foto2_uri VARCHAR(500),
+  foto3_uri VARCHAR(500),
+  foto4_uri VARCHAR(500),
+  foto5_uri VARCHAR(500),
   nota TEXT,
   completada BOOLEAN DEFAULT false
 );

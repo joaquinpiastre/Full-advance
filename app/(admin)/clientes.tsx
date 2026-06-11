@@ -3,9 +3,9 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, Modal, TextInput, Alert, ScrollView,
 } from 'react-native';
-import { obtenerClientes, crearCliente, actualizarCliente } from '../../services/api';
+import { obtenerClientes, crearCliente, actualizarCliente, obtenerRutas } from '../../services/api';
 import { COLORS, COLOR_CATEGORIA } from '../../constants';
-import { Cliente, CategoriaCliente } from '../../types';
+import { Cliente, CategoriaCliente, Ruta } from '../../types';
 import Buscador from '../../components/Buscador';
 
 const FORM_VACIO = {
@@ -13,7 +13,7 @@ const FORM_VACIO = {
   categoria: '' as CategoriaCliente | '',
   razon_social: '', cuit: '', rubro: '', email: '', contacto_nombre: '', horario_atencion: '',
   monto_compra_promedio: '', frecuencia_compra: '', forma_pago: '', dia_visita_preferido: '',
-  zona: '', departamento: '',
+  zona: '', departamento: '', ruta_id: '' as number | string,
 };
 
 const CATEGORIAS: CategoriaCliente[] = ['A', 'B', 'C', 'D', 'E', 'F'];
@@ -52,6 +52,7 @@ function Chips({ opciones, valor, onSeleccionar, colorPorOpcion }: {
 
 export default function Clientes() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [rutas, setRutas] = useState<Ruta[]>([]);
   const [cargando, setCargando] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [editando, setEditando] = useState<Cliente | null>(null);
@@ -66,8 +67,9 @@ export default function Clientes() {
   const cargar = async () => {
     setCargando(true);
     try {
-      const res = await obtenerClientes();
-      setClientes(res.data);
+      const [resClientes, resRutas] = await Promise.all([obtenerClientes(), obtenerRutas()]);
+      setClientes(resClientes.data);
+      setRutas(resRutas.data);
     } catch {}
     setCargando(false);
   };
@@ -98,6 +100,7 @@ export default function Clientes() {
       dia_visita_preferido: c.dia_visita_preferido ?? '',
       zona: c.zona ?? '',
       departamento: c.departamento ?? '',
+      ruta_id: c.ruta_id ?? '',
     });
     setModalVisible(true);
   };
@@ -105,6 +108,10 @@ export default function Clientes() {
   const handleGuardar = async () => {
     if (!form.nombre.trim() || !form.direccion.trim()) {
       Alert.alert('Error', 'Nombre y dirección son obligatorios');
+      return;
+    }
+    if (!form.ruta_id) {
+      Alert.alert('Error', 'Debés asignar una ruta al cliente');
       return;
     }
     const data = {
@@ -127,6 +134,7 @@ export default function Clientes() {
       dia_visita_preferido: form.dia_visita_preferido || null,
       zona: form.zona.trim() || null,
       departamento: form.departamento.trim() || null,
+      ruta_id: form.ruta_id,
     };
     try {
       if (editando) {
@@ -241,6 +249,32 @@ export default function Clientes() {
                 />
               </View>
             ))}
+
+            <Text style={styles.seccionTitulo}>Ruta</Text>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Ruta asignada *</Text>
+              <View style={styles.chipsRow}>
+                {rutas.map((r) => {
+                  const activo = form.ruta_id === r.id;
+                  return (
+                    <TouchableOpacity
+                      key={r.id}
+                      style={[
+                        styles.chip,
+                        { borderColor: COLORS.primary },
+                        activo && { backgroundColor: COLORS.primary },
+                      ]}
+                      onPress={() => setForm((prev) => ({ ...prev, ruta_id: r.id }))}
+                    >
+                      <Text style={[styles.chipTexto, { color: activo ? '#fff' : COLORS.primary }]}>{r.nombre}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {rutas.length === 0 && (
+                <Text style={styles.vacioChico}>No hay rutas creadas. Creá una ruta primero.</Text>
+              )}
+            </View>
 
             <Text style={styles.seccionTitulo}>Clasificación</Text>
             <View style={styles.formGroup}>
@@ -382,6 +416,7 @@ const styles = StyleSheet.create({
   badge: { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 3, marginLeft: 8 },
   badgeTexto: { color: '#fff', fontWeight: '800', fontSize: 13 },
   vacio: { textAlign: 'center', color: COLORS.textLight, marginTop: 60, fontSize: 14 },
+  vacioChico: { fontSize: 12, color: COLORS.textLight, fontStyle: 'italic' },
   modal: { flex: 1, backgroundColor: COLORS.background },
   modalHeader: {
     flexDirection: 'row',

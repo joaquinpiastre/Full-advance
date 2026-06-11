@@ -37,6 +37,7 @@ export interface Cliente {
   departamento?: string;
   material_exhibicion?: string;
   tipo_comercio?: string;
+  ruta_id?: number;
 }
 
 export interface Ruta {
@@ -92,6 +93,9 @@ export interface Parada {
   timestamp_salida?: string;
   foto1_uri?: string;
   foto2_uri?: string;
+  foto3_uri?: string;
+  foto4_uri?: string;
+  foto5_uri?: string;
   nota?: string;
   completada: boolean;
   cliente?: Cliente;

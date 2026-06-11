@@ -82,6 +82,14 @@ pool.query(`
   ALTER TABLE paradas ADD COLUMN IF NOT EXISTS venta_caliente_id INTEGER REFERENCES ventas_calientes(id)
 `).catch(() => {});
 
+// Hasta 5 fotos por parada (antes solo 2)
+pool.query(`
+  ALTER TABLE paradas
+    ADD COLUMN IF NOT EXISTS foto3_uri VARCHAR(500),
+    ADD COLUMN IF NOT EXISTS foto4_uri VARCHAR(500),
+    ADD COLUMN IF NOT EXISTS foto5_uri VARCHAR(500)
+`).catch(() => {});
+
 app.listen(PORT, () => {
   console.log(`Full Advance backend corriendo en http://localhost:${PORT}`);
 });

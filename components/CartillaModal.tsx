@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, Modal, TextInput,
   ScrollView, Alert, ActivityIndicator,
 } from 'react-native';
-import { actualizarCartillaCliente } from '../services/api';
+import { actualizarCliente } from '../services/api';
 import { COLORS, COLOR_CATEGORIA } from '../constants';
 import { Cliente } from '../types';
 
@@ -16,6 +16,7 @@ const TIPOS_COMERCIO = [
 ];
 
 const FORM_VACIO = {
+  nombre: '', direccion: '',
   razon_social: '', cuit: '', rubro: '', email: '', contacto_nombre: '', horario_atencion: '',
   telefono: '', monto_compra_promedio: '', frecuencia_compra: '', forma_pago: '', dia_visita_preferido: '',
   notas: '', material_exhibicion: '', tipo_comercio: '',
@@ -66,6 +67,8 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
     const hasTime = parts.length > 1 && isTime(parts[parts.length - 1]);
     setHoraVisita(hasTime ? parts[parts.length - 1] : '');
     setForm({
+      nombre: cliente.nombre ?? '',
+      direccion: cliente.direccion ?? '',
       razon_social: cliente.razon_social ?? '',
       cuit: cliente.cuit ?? '',
       rubro: cliente.rubro ?? '',
@@ -86,6 +89,10 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
   if (!cliente) return null;
 
   const guardar = async () => {
+    if (!form.nombre.trim() || !form.direccion.trim()) {
+      Alert.alert('Error', 'El nombre y la dirección son obligatorios');
+      return;
+    }
     setGuardando(true);
     try {
       const dia = form.dia_visita_preferido;
@@ -94,6 +101,10 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
         ? (dia !== 'Sin preferencia' && hora ? `${dia} ${hora}` : dia)
         : null;
       const data = {
+        nombre: form.nombre.trim(),
+        direccion: form.direccion.trim(),
+        lat: cliente.lat,
+        lng: cliente.lng,
         razon_social: form.razon_social.trim() || null,
         cuit: form.cuit.trim() || null,
         rubro: form.rubro.trim() || null,
@@ -108,12 +119,14 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
         notas: form.notas.trim() || null,
         material_exhibicion: form.material_exhibicion.trim() || null,
         tipo_comercio: form.tipo_comercio || null,
+        zona: cliente.zona ?? null,
+        departamento: cliente.departamento ?? null,
       };
-      const res = await actualizarCartillaCliente(cliente.id, data);
+      const res = await actualizarCliente(cliente.id, data);
       onGuardado?.(res.data);
       onClose();
     } catch (e: any) {
-      Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo guardar la cartilla');
+      Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo guardar los datos del cliente');
     }
     setGuardando(false);
   };
@@ -140,6 +153,28 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
           <Text style={styles.aviso}>
             📋 Cartilla de cliente — completá o actualizá estos datos para que la empresa conozca mejor a este negocio.
           </Text>
+
+          <Text style={styles.seccionTitulo}>Datos del cliente</Text>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Nombre *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Nombre del cliente"
+              placeholderTextColor={COLORS.textLight}
+              value={form.nombre}
+              onChangeText={(v) => setForm((prev) => ({ ...prev, nombre: v }))}
+            />
+          </View>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Dirección *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Dirección"
+              placeholderTextColor={COLORS.textLight}
+              value={form.direccion}
+              onChangeText={(v) => setForm((prev) => ({ ...prev, direccion: v }))}
+            />
+          </View>
 
           <Text style={styles.seccionTitulo}>Tipo de comercio</Text>
           <View style={styles.formGroup}>

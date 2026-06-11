@@ -43,9 +43,9 @@ router.post('/:id/foto', authMiddleware, upload.single('foto'), async (req: Auth
   const { id } = req.params;
   const { numero } = req.body;
   if (!req.file) return res.status(400).json({ error: 'Foto requerida' });
-  if (!['1', '2'].includes(String(numero))) return res.status(400).json({ error: 'Número de foto inválido' });
+  if (!['1', '2', '3', '4', '5'].includes(String(numero))) return res.status(400).json({ error: 'Número de foto inválido' });
 
-  const campo = numero === '1' ? 'foto1_uri' : 'foto2_uri';
+  const campo = `foto${numero}_uri`;
   const uri = `/uploads/${req.file.filename}`;
   try {
     await pool.query(`UPDATE paradas SET ${campo}=$1 WHERE id=$2`, [uri, id]);

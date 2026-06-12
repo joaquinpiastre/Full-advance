@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList,
   ScrollView, ActivityIndicator, Image, Alert,
@@ -27,6 +27,7 @@ export default function VentaCalienteScreen() {
   const [rutaSel, setRutaSel] = useState<number | null>(null);
   const [codigoInput, setCodigoInput] = useState('');
   const [procesando, setProcesando] = useState(false);
+  const enviandoRef = useRef(false);
 
   // Flujo de visita
   const [clienteActual, setClienteActual] = useState<any>(null);
@@ -169,7 +170,7 @@ export default function VentaCalienteScreen() {
         );
         return;
       }
-      const result = await ImagePicker.launchCameraAsync({ quality: 0.7, allowsEditing: false });
+      const result = await ImagePicker.launchCameraAsync({ quality: 0.3, allowsEditing: false });
       if (result.canceled) return;
       const uri = result.assets[0].uri;
       if (numero === 1) { setFoto1(uri); setPantalla('foto2'); }
@@ -181,7 +182,12 @@ export default function VentaCalienteScreen() {
 
   // ── Confirmar visita ──
   const confirmarVisita = async () => {
-    if (!paradaActual) return;
+    if (enviandoRef.current) return;
+    if (!paradaActual) {
+      Alert.alert('Error', 'No se encontró la visita en curso. Volvé a iniciarla.');
+      return;
+    }
+    enviandoRef.current = true;
     setProcesando(true);
     try {
       if (foto1) {
@@ -215,9 +221,11 @@ export default function VentaCalienteScreen() {
       await cargarSesion(true);
       setPantalla('sesion');
     } catch (e: any) {
-      Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo confirmar la visita');
+      Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo confirmar la visita. Probá de nuevo.');
+    } finally {
+      setProcesando(false);
+      enviandoRef.current = false;
     }
-    setProcesando(false);
   };
 
   // ── Finalizar sesión ──

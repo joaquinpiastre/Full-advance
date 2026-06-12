@@ -34,6 +34,7 @@ export default function JornadaRepartidor() {
   const [clientesModal, setClientesModal] = useState(false);
   const [clienteCartilla, setClienteCartilla] = useState<Cliente | null>(null);
   const [nuevoClienteVisible, setNuevoClienteVisible] = useState(false);
+  const enviandoRef = useRef(false);
 
   useEffect(() => {
     if (jornada) cargarDatos();
@@ -100,7 +101,7 @@ export default function JornadaRepartidor() {
         );
         return;
       }
-      const result = await ImagePicker.launchCameraAsync({ quality: 0.7, allowsEditing: false });
+      const result = await ImagePicker.launchCameraAsync({ quality: 0.3, allowsEditing: false });
       if (result.canceled) return;
       const uri = result.assets[0].uri;
       setFotos((prev) => {
@@ -114,7 +115,12 @@ export default function JornadaRepartidor() {
   };
 
   const confirmarParada = async () => {
-    if (!paradaActual) return;
+    if (enviandoRef.current) return;
+    if (!paradaActual) {
+      Alert.alert('Error', 'No se encontró la parada en curso. Volvé a registrar la llegada al cliente.');
+      return;
+    }
+    enviandoRef.current = true;
     setProcesando(true);
     try {
       for (let i = 0; i < fotos.length; i++) {
@@ -142,9 +148,11 @@ export default function JornadaRepartidor() {
       setPrecioInforme('');
       await cargarDatos();
     } catch (e: any) {
-      Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo completar la parada');
+      Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo completar la parada. Probá de nuevo.');
+    } finally {
+      setProcesando(false);
+      enviandoRef.current = false;
     }
-    setProcesando(false);
   };
 
   if (!jornada) {

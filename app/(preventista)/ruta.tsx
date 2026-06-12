@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity,
   Alert, ScrollView, Image, TextInput,
@@ -47,6 +47,7 @@ export default function RutaPreventista() {
   const [accionDesc, setAccionDesc] = useState('');
   const [productoInforme, setProductoInforme] = useState('');
   const [precioInforme, setPrecioInforme] = useState('');
+  const enviandoRef = useRef(false);
 
   useEffect(() => { cargar(); }, []);
 
@@ -113,7 +114,7 @@ export default function RutaPreventista() {
         );
         return;
       }
-      const result = await ImagePicker.launchCameraAsync({ quality: 0.7, allowsEditing: false });
+      const result = await ImagePicker.launchCameraAsync({ quality: 0.3, allowsEditing: false });
       if (result.canceled) return;
       const uri = result.assets[0].uri;
       setFotos((prev) => {
@@ -127,7 +128,12 @@ export default function RutaPreventista() {
   };
 
   const confirmarVisita = async () => {
-    if (!paradaActual) return;
+    if (enviandoRef.current) return;
+    if (!paradaActual) {
+      Alert.alert('Error', 'No se encontró la visita en curso. Volvé a presionar "Visitar".');
+      return;
+    }
+    enviandoRef.current = true;
     setProcesando(true);
     try {
       for (let i = 0; i < fotos.length; i++) {
@@ -158,9 +164,11 @@ export default function RutaPreventista() {
       setParadaActual(null);
       await cargar();
     } catch (e: any) {
-      Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo confirmar la visita');
+      Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo confirmar la visita. Probá de nuevo.');
+    } finally {
+      setProcesando(false);
+      enviandoRef.current = false;
     }
-    setProcesando(false);
   };
 
   if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.preventista} size="large" /></View>;

@@ -1,19 +1,9 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist } from 'zustand/middleware';
 import { Usuario } from '../types';
+import { sessionStorage } from './sessionStorage';
 
-const DURACION_24H = 24 * 60 * 60 * 1000;
-
-// Web: persiste en localStorage (cierra el navegador y sigue la sesión).
-// Nativo: in-memory (la sesión dura mientras la app está abierta).
-// AsyncStorage se agrega en una etapa posterior cuando se compile la app nativa definitiva.
-const storage = typeof window !== 'undefined' && window.localStorage
-  ? createJSONStorage(() => window.localStorage)
-  : createJSONStorage(() => ({
-      getItem: () => Promise.resolve(null),
-      setItem: () => Promise.resolve(),
-      removeItem: () => Promise.resolve(),
-    }));
+const DURACION_SESION = 8 * 60 * 60 * 1000; // 8 horas
 
 interface AuthState {
   usuario: Usuario | null;
@@ -34,10 +24,10 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth-session',
-      storage,
+      storage: sessionStorage,
       onRehydrateStorage: () => (state) => {
         if (!state) return;
-        if (state.loginAt && Date.now() - state.loginAt > DURACION_24H) {
+        if (state.loginAt && Date.now() - state.loginAt > DURACION_SESION) {
           state.logout();
         }
       },

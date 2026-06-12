@@ -2,7 +2,7 @@ import axios from 'axios';
 import { API_URL } from '../constants';
 import { useAuthStore } from '../store/authStore';
 
-const api = axios.create({ baseURL: API_URL, timeout: 8000 });
+const api = axios.create({ baseURL: API_URL, timeout: 15000 });
 
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token;
@@ -56,6 +56,7 @@ export const registrarParada = (data: {
 export const subirFoto = (parada_id: number, foto: FormData) =>
   api.post(`/paradas/${parada_id}/foto`, foto, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 30000,
   });
 
 export const finalizarParada = (parada_id: number, data?: {

@@ -62,6 +62,11 @@ pool.query(`
     ADD COLUMN IF NOT EXISTS tipo_comercio VARCHAR(100)
 `).catch(() => {});
 
+// Activar/desactivar clientes (soft delete)
+pool.query(`
+  ALTER TABLE clientes ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT true
+`).catch(() => {});
+
 pool.query(`
   ALTER TABLE paradas
     ADD COLUMN IF NOT EXISTS tiene_vencidos BOOLEAN DEFAULT false,

@@ -1,3 +1,4 @@
+import '../utils/alertPolyfill';
 import { Stack } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
 import { Redirect } from 'expo-router';

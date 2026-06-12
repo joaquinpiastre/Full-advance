@@ -116,6 +116,9 @@ export const crearRuta = (data: any) =>
 export const actualizarRuta = (id: number, data: any) =>
   api.put(`/rutas/${id}`, data);
 
+export const actualizarOrdenRuta = (id: number, clientes: number[]) =>
+  api.put(`/rutas/${id}/orden`, { clientes });
+
 // Asignaciones
 export const obtenerAsignacionHoy = () =>
   api.get('/asignaciones/hoy');

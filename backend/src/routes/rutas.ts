@@ -142,4 +142,29 @@ router.put('/:id', authMiddleware, soloAdmin, async (req: AuthRequest, res: Resp
   }
 });
 
+// Reordenar los clientes de una ruta (cualquier usuario autenticado: cada
+// repartidor/preventista/supervisor elige el orden en que visita su ruta).
+router.put('/:id/orden', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const { clientes } = req.body;
+  if (!Array.isArray(clientes) || !clientes.length) return res.status(400).json({ error: 'clientes requerido' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (let i = 0; i < clientes.length; i++) {
+      await client.query(
+        'UPDATE ruta_clientes SET orden=$1 WHERE ruta_id=$2 AND cliente_id=$3',
+        [i + 1, id, clientes[i]]
+      );
+    }
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: 'Error al actualizar el orden' });
+  } finally {
+    client.release();
+  }
+});
+
 export default router;

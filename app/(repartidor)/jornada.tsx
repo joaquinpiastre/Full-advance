@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useJornadaStore } from '../../store/jornadaStore';
-import { registrarParada, obtenerParadas, obtenerAsignacionHoy } from '../../services/api';
+import { registrarParada, obtenerParadas, obtenerAsignacionHoy, actualizarOrdenRuta } from '../../services/api';
 import { obtenerUbicacionRapida } from '../../services/gps';
 import {
   agregarVisitaPendiente, obtenerVisitasPendientes,
@@ -194,6 +194,20 @@ export default function JornadaRepartidor() {
   const clientesRuta: Cliente[] = asignacion?.ruta?.clientes?.map((c: any) => c.cliente) ?? [];
   const paradasCompletadas = paradas.filter((p) => p.completada);
 
+  const moverCliente = (index: number, direccion: -1 | 1) => {
+    const lista = asignacion?.ruta?.clientes;
+    if (!lista) return;
+    const nuevoIndex = index + direccion;
+    if (nuevoIndex < 0 || nuevoIndex >= lista.length) return;
+    const nuevos = [...lista];
+    [nuevos[index], nuevos[nuevoIndex]] = [nuevos[nuevoIndex], nuevos[index]];
+    setAsignacion({ ...asignacion, ruta: { ...asignacion.ruta, clientes: nuevos } });
+    const rutaId = asignacion.ruta.id;
+    if (rutaId) {
+      actualizarOrdenRuta(rutaId, nuevos.map((c: any) => c.cliente.id)).catch(() => {});
+    }
+  };
+
   return (
     <View style={styles.container}>
       {/* Panel de flujo de fotos */}
@@ -363,17 +377,33 @@ export default function JornadaRepartidor() {
             data={clientesRuta}
             keyExtractor={(item) => String(item.id)}
             contentContainerStyle={{ padding: 16, gap: 10 }}
-            renderItem={({ item }) => {
+            renderItem={({ item, index }) => {
               const yaVisitado = paradas.some((p) => p.cliente_id === item.id && p.completada)
                 || pendientes.some((p) => p.cliente_id === item.id);
               return (
                 <View style={styles.clienteRow}>
+                  <View style={styles.flechasOrden}>
+                    <TouchableOpacity
+                      style={[styles.btnFlecha, index === 0 && styles.btnFlechaDisabled]}
+                      onPress={() => moverCliente(index, -1)}
+                      disabled={index === 0}
+                    >
+                      <Text style={styles.btnFlechaTexto}>▲</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.btnFlecha, index === clientesRuta.length - 1 && styles.btnFlechaDisabled]}
+                      onPress={() => moverCliente(index, 1)}
+                      disabled={index === clientesRuta.length - 1}
+                    >
+                      <Text style={styles.btnFlechaTexto}>▼</Text>
+                    </TouchableOpacity>
+                  </View>
                   <TouchableOpacity
                     style={[styles.clienteItem, yaVisitado && styles.clienteItemVisitado]}
                     onPress={() => iniciarParadaEnCliente(item)}
                     disabled={yaVisitado}
                   >
-                    <Text style={styles.clienteNombre}>{item.nombre}</Text>
+                    <Text style={styles.clienteNombre}>{index + 1}. {item.nombre}</Text>
                     <Text style={styles.clienteDireccion}>{item.direccion}</Text>
                     {yaVisitado && <Text style={styles.clienteVisitado}>✓ Visitado</Text>}
                   </TouchableOpacity>
@@ -593,6 +623,15 @@ const styles = StyleSheet.create({
   },
   btnNuevoClienteTexto: { color: '#fff', fontWeight: '700', fontSize: 12 },
   clienteRow: { flexDirection: 'row', gap: 8, alignItems: 'stretch' },
+  flechasOrden: { gap: 2, justifyContent: 'center' },
+  btnFlecha: {
+    width: 26, height: 22, borderRadius: 6,
+    backgroundColor: COLORS.background,
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+  btnFlechaDisabled: { opacity: 0.3 },
+  btnFlechaTexto: { fontSize: 11, color: COLORS.repartidor, fontWeight: '700' },
   clienteItem: {
     flex: 1,
     backgroundColor: COLORS.card,

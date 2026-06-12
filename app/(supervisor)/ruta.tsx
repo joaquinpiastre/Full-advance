@@ -7,7 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useJornadaStore } from '../../store/jornadaStore';
 import {
   obtenerAsignacionHoy, obtenerParadas,
-  registrarParada,
+  registrarParada, actualizarOrdenRuta,
 } from '../../services/api';
 import { obtenerUbicacionRapida } from '../../services/gps';
 import CartillaModal from '../../components/CartillaModal';
@@ -25,6 +25,7 @@ type EstadoVisita = 'esperando' | 'formulario';
 export default function RutaSupervisor() {
   const { jornada } = useJornadaStore();
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [rutaId, setRutaId] = useState<number | null>(null);
   const [paradas, setParadas] = useState<any[]>([]);
   const [cargando, setCargando] = useState(true);
   const [clienteCartilla, setClienteCartilla] = useState<Cliente | null>(null);
@@ -66,6 +67,7 @@ export default function RutaSupervisor() {
     try {
       const asigRes = await obtenerAsignacionHoy();
       setClientes(asigRes.data?.ruta?.clientes?.map((c: any) => c.cliente) ?? []);
+      setRutaId(asigRes.data?.ruta?.id ?? null);
       if (jornada) {
         const paradasRes = await obtenerParadas(jornada.id);
         setParadas(paradasRes.data);
@@ -193,6 +195,17 @@ export default function RutaSupervisor() {
     } finally {
       setProcesando(false);
       enviandoRef.current = false;
+    }
+  };
+
+  const moverCliente = (index: number, direccion: -1 | 1) => {
+    const nuevoIndex = index + direccion;
+    if (nuevoIndex < 0 || nuevoIndex >= clientes.length) return;
+    const nuevos = [...clientes];
+    [nuevos[index], nuevos[nuevoIndex]] = [nuevos[nuevoIndex], nuevos[index]];
+    setClientes(nuevos);
+    if (rutaId) {
+      actualizarOrdenRuta(rutaId, nuevos.map((c) => c.id)).catch(() => {});
     }
   };
 
@@ -439,6 +452,22 @@ export default function RutaSupervisor() {
                 <View style={[styles.clienteCard, visitado && styles.clienteCardVisitado]}>
                   <View style={styles.clienteOrden}>
                     <Text style={styles.clienteOrdenNum}>{index + 1}</Text>
+                  </View>
+                  <View style={styles.flechasOrden}>
+                    <TouchableOpacity
+                      style={[styles.btnFlecha, index === 0 && styles.btnFlechaDisabled]}
+                      onPress={() => moverCliente(index, -1)}
+                      disabled={index === 0}
+                    >
+                      <Text style={styles.btnFlechaTexto}>▲</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.btnFlecha, index === clientes.length - 1 && styles.btnFlechaDisabled]}
+                      onPress={() => moverCliente(index, 1)}
+                      disabled={index === clientes.length - 1}
+                    >
+                      <Text style={styles.btnFlechaTexto}>▼</Text>
+                    </TouchableOpacity>
                   </View>
                   <View style={styles.clienteInfo}>
                     <Text style={styles.clienteNombre}>{item.nombre}</Text>
@@ -710,6 +739,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   clienteOrdenNum: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  flechasOrden: { gap: 2 },
+  btnFlecha: {
+    width: 26, height: 22, borderRadius: 6,
+    backgroundColor: COLORS.background,
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+  btnFlechaDisabled: { opacity: 0.3 },
+  btnFlechaTexto: { fontSize: 11, color: COLORS.supervisor, fontWeight: '700' },
   clienteInfo: { flex: 1 },
   clienteNombre: { fontSize: 14, fontWeight: '700', color: COLORS.text },
   clienteDireccion: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },

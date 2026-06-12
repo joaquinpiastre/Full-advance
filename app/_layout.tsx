@@ -2,6 +2,9 @@ import '../utils/alertPolyfill';
 import { Stack } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
 import { Redirect } from 'expo-router';
+import { iniciarSincronizacionAutomatica } from '../services/offlineVisitas';
+
+iniciarSincronizacionAutomatica();
 
 export default function RootLayout() {
   return (

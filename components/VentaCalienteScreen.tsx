@@ -4,12 +4,12 @@ import {
   ScrollView, ActivityIndicator, Image, Alert,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
 import {
   obtenerVentaCalienteActiva, crearVentaCaliente, unirseVentaCaliente,
   obtenerVentaCaliente, iniciarVisitaVC, subirFoto, finalizarParada,
   finalizarVentaCaliente, obtenerRutas,
 } from '../services/api';
+import { obtenerUbicacionRapida } from '../services/gps';
 import { useAuthStore } from '../store/authStore';
 import FechaVencimientoPicker from './FechaVencimientoPicker';
 import { COLORS } from '../constants';
@@ -130,12 +130,7 @@ export default function VentaCalienteScreen() {
 
     setProcesando(true);
     try {
-      let lat = 0, lng = 0;
-      try {
-        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        lat = loc.coords.latitude;
-        lng = loc.coords.longitude;
-      } catch {}
+      const { lat, lng } = await obtenerUbicacionRapida();
       const res = await iniciarVisitaVC(sesion.id, { cliente_id: cliente.id, lat, lng });
       setParadaActual(res.data);
       setClienteActual(cliente);

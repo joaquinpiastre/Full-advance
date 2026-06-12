@@ -1,0 +1,159 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState } from 'react-native';
+import { registrarParada, subirFoto, finalizarParada } from './api';
+
+const STORAGE_KEY = 'visitas_pendientes_v1';
+const INTERVALO_MS = 20000;
+
+export interface FinalizarDataPendiente {
+  nota?: string;
+  tiene_vencidos?: boolean;
+  mercaderia_vencida?: string | null;
+  fecha_vencimiento?: string | null;
+  urgente?: boolean;
+  urgencia_descripcion?: string | null;
+  accion_requerida?: string | null;
+  producto_informe?: string | null;
+  precio_informe?: string | null;
+}
+
+export interface FotoPendiente {
+  numero: number;
+  uri: string;
+}
+
+export interface VisitaPendiente {
+  localId: string;
+  jornada_id: number;
+  cliente_id: number;
+  cliente_nombre?: string;
+  cliente_direccion?: string;
+  lat: number;
+  lng: number;
+  parada_id?: number;
+  fotos: FotoPendiente[];
+  finalizar: FinalizarDataPendiente;
+  creadoEn: number;
+}
+
+let cola: VisitaPendiente[] = [];
+let cargada = false;
+let procesando = false;
+const listeners = new Set<() => void>();
+
+function notificar() {
+  listeners.forEach((fn) => fn());
+}
+
+async function cargarCola() {
+  if (cargada) return cola;
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    cola = raw ? JSON.parse(raw) : [];
+  } catch {
+    cola = [];
+  }
+  cargada = true;
+  return cola;
+}
+
+async function guardarCola() {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(cola));
+  } catch {}
+  notificar();
+}
+
+export function suscribirVisitasPendientes(fn: () => void) {
+  listeners.add(fn);
+  return () => { listeners.delete(fn); };
+}
+
+export async function obtenerVisitasPendientes(jornada_id?: number): Promise<VisitaPendiente[]> {
+  await cargarCola();
+  return jornada_id ? cola.filter((v) => v.jornada_id === jornada_id) : [...cola];
+}
+
+export async function agregarVisitaPendiente(item: Omit<VisitaPendiente, 'localId' | 'creadoEn'>) {
+  await cargarCola();
+  const pendiente: VisitaPendiente = {
+    ...item,
+    localId: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    creadoEn: Date.now(),
+  };
+  cola.push(pendiente);
+  await guardarCola();
+  return pendiente.localId;
+}
+
+function esErrorDeRed(e: any) {
+  return !e?.response;
+}
+
+// Procesa la cola de visitas pendientes: registra la parada si falta,
+// sube las fotos y finaliza. Si encuentra un error de red, se detiene
+// (se reintentará más tarde); si el error es del servidor, descarta esa
+// visita para no bloquear el resto.
+export async function procesarVisitasPendientes() {
+  if (procesando) return;
+  procesando = true;
+  try {
+    await cargarCola();
+    let i = 0;
+    while (i < cola.length) {
+      const item = cola[i];
+      try {
+        if (!item.parada_id) {
+          const res = await registrarParada({
+            jornada_id: item.jornada_id,
+            lat: item.lat,
+            lng: item.lng,
+            cliente_id: item.cliente_id,
+          });
+          item.parada_id = res.data.id;
+          await guardarCola();
+        }
+        const paradaId: number = item.parada_id!;
+
+        while (item.fotos.length) {
+          const foto = item.fotos[0];
+          const form = new FormData();
+          form.append('foto', { uri: foto.uri, type: 'image/jpeg', name: `foto${foto.numero}.jpg` } as any);
+          form.append('numero', String(foto.numero));
+          await subirFoto(paradaId, form);
+          item.fotos.shift();
+          await guardarCola();
+        }
+
+        await finalizarParada(paradaId, item.finalizar);
+        cola.splice(i, 1);
+        await guardarCola();
+      } catch (e: any) {
+        if (esErrorDeRed(e)) {
+          // Sin conexión: se reintenta en el próximo ciclo.
+          return;
+        }
+        // Error del servidor (ej. datos inválidos): descartamos esta visita
+        // para no bloquear la sincronización de las demás.
+        cola.splice(i, 1);
+        await guardarCola();
+        continue;
+      }
+      i++;
+    }
+  } finally {
+    procesando = false;
+  }
+}
+
+let iniciado = false;
+
+export function iniciarSincronizacionAutomatica() {
+  if (iniciado) return;
+  iniciado = true;
+  procesarVisitasPendientes();
+  setInterval(procesarVisitasPendientes, INTERVALO_MS);
+  AppState.addEventListener('change', (estado) => {
+    if (estado === 'active') procesarVisitasPendientes();
+  });
+}

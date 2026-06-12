@@ -4,20 +4,23 @@ import {
   Alert, ScrollView, Image, TextInput,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
 import { useJornadaStore } from '../../store/jornadaStore';
 import {
   obtenerAsignacionHoy, obtenerParadas,
-  registrarParada, subirFoto, finalizarParada,
+  registrarParada,
 } from '../../services/api';
+import { obtenerUbicacionRapida } from '../../services/gps';
 import CartillaModal from '../../components/CartillaModal';
 import NuevoClienteModal from '../../components/NuevoClienteModal';
 import FechaVencimientoPicker from '../../components/FechaVencimientoPicker';
 import { COLORS } from '../../constants';
 import { Cliente } from '../../types';
+import {
+  agregarVisitaPendiente, obtenerVisitasPendientes,
+  procesarVisitasPendientes, suscribirVisitasPendientes, VisitaPendiente,
+} from '../../services/offlineVisitas';
 
-type EstadoVisita = 'esperando' | 'fotos' | 'formulario';
-const MAX_FOTOS = 5;
+type EstadoVisita = 'esperando' | 'formulario';
 
 export default function RutaSupervisor() {
   const { jornada } = useJornadaStore();
@@ -32,7 +35,6 @@ export default function RutaSupervisor() {
   const [paradaActual, setParadaActual] = useState<any>(null);
   const [estadoVisita, setEstadoVisita] = useState<EstadoVisita>('esperando');
   const [fotos, setFotos] = useState<(string | null)[]>([null, null, null, null, null]);
-  const [fotoIndex, setFotoIndex] = useState(0);
   const [procesando, setProcesando] = useState(false);
   const enviandoRef = useRef(false);
 
@@ -48,8 +50,16 @@ export default function RutaSupervisor() {
   const [accionDesc, setAccionDesc] = useState('');
   const [productoInforme, setProductoInforme] = useState('');
   const [precioInforme, setPrecioInforme] = useState('');
+  const [pendientes, setPendientes] = useState<VisitaPendiente[]>([]);
 
   useEffect(() => { cargar(); }, []);
+
+  useEffect(() => {
+    if (!jornada) return;
+    const cargarPendientes = () => obtenerVisitasPendientes(jornada.id).then(setPendientes);
+    cargarPendientes();
+    return suscribirVisitasPendientes(cargarPendientes);
+  }, [jornada]);
 
   const cargar = async () => {
     setCargando(true);
@@ -76,32 +86,39 @@ export default function RutaSupervisor() {
       const pendiente = paradas.find((p) => p.cliente_id === cliente.id && !p.completada);
       let parada = pendiente;
       if (!parada) {
-        let lat = 0, lng = 0;
+        const { lat, lng } = await obtenerUbicacionRapida();
         try {
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          lat = loc.coords.latitude;
-          lng = loc.coords.longitude;
-        } catch {}
-        const res = await registrarParada({ jornada_id: jornada.id, lat, lng, cliente_id: cliente.id });
-        parada = res.data;
+          const res = await registrarParada({ jornada_id: jornada.id, lat, lng, cliente_id: cliente.id });
+          parada = res.data;
+        } catch (e: any) {
+          if (e?.response) throw e;
+          parada = {
+            id: -Date.now(),
+            jornada_id: jornada.id,
+            cliente_id: cliente.id,
+            lat, lng,
+            timestamp_llegada: new Date().toISOString(),
+            completada: false,
+            cliente,
+          };
+        }
       }
       setParadaActual(parada);
       setClienteActual(cliente);
       setFotos([null, null, null, null, null]);
-      setFotoIndex(0);
       setNota('');
       setTieneVencidos(false); setMercaderiaVencida(''); setTipoVenc('fecha'); setFechaVencimiento(null);
       setUrgente(false); setUrgenciaDesc('');
       setAccionRequerida(false); setAccionDesc('');
       setProductoInforme(''); setPrecioInforme('');
-      setEstadoVisita('fotos');
+      setEstadoVisita('formulario');
     } catch (e: any) {
       Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo registrar la visita');
     }
     setProcesando(false);
   };
 
-  const tomarFoto = async () => {
+  const tomarFoto = async (index: number) => {
     try {
       const permiso = await ImagePicker.requestCameraPermissionsAsync();
       if (permiso.status !== 'granted') {
@@ -119,7 +136,7 @@ export default function RutaSupervisor() {
       const uri = result.assets[0].uri;
       setFotos((prev) => {
         const next = [...prev];
-        next[fotoIndex] = uri;
+        next[index] = uri;
         return next;
       });
     } catch {
@@ -136,35 +153,43 @@ export default function RutaSupervisor() {
     enviandoRef.current = true;
     setProcesando(true);
     try {
-      for (let i = 0; i < fotos.length; i++) {
-        const foto = fotos[i];
-        if (!foto) continue;
-        const f = new FormData();
-        f.append('foto', { uri: foto, type: 'image/jpeg', name: `foto${i + 1}.jpg` } as any);
-        f.append('numero', String(i + 1));
-        await subirFoto(paradaActual.id, f);
-      }
-      await finalizarParada(paradaActual.id, {
-        nota: nota.trim() || undefined,
-        tiene_vencidos: tieneVencidos,
-        mercaderia_vencida: tieneVencidos ? mercaderiaVencida.trim() || null : null,
-        fecha_vencimiento: tieneVencidos
-          ? (tipoVenc === 'vencida' ? 'Vencida' : fechaVencimiento
-              ? `${String(fechaVencimiento.getDate()).padStart(2,'0')}/${String(fechaVencimiento.getMonth()+1).padStart(2,'0')}/${fechaVencimiento.getFullYear()}`
-              : null)
-          : null,
-        urgente,
-        urgencia_descripcion: urgente ? urgenciaDesc.trim() || null : null,
-        accion_requerida: accionRequerida ? accionDesc.trim() || null : null,
-        producto_informe: productoInforme.trim() || null,
-        precio_informe: precioInforme.trim() || null,
+      const fotosPendientes = fotos
+        .map((uri, i) => (uri ? { numero: i + 1, uri } : null))
+        .filter((f): f is { numero: number; uri: string } => f !== null);
+
+      await agregarVisitaPendiente({
+        jornada_id: jornada!.id,
+        cliente_id: paradaActual.cliente_id ?? clienteActual?.id ?? 0,
+        cliente_nombre: clienteActual?.nombre,
+        cliente_direccion: clienteActual?.direccion,
+        lat: paradaActual.lat,
+        lng: paradaActual.lng,
+        parada_id: paradaActual.id > 0 ? paradaActual.id : undefined,
+        fotos: fotosPendientes,
+        finalizar: {
+          nota: nota.trim() || undefined,
+          tiene_vencidos: tieneVencidos,
+          mercaderia_vencida: tieneVencidos ? mercaderiaVencida.trim() || null : null,
+          fecha_vencimiento: tieneVencidos
+            ? (tipoVenc === 'vencida' ? 'Vencida' : fechaVencimiento
+                ? `${String(fechaVencimiento.getDate()).padStart(2,'0')}/${String(fechaVencimiento.getMonth()+1).padStart(2,'0')}/${fechaVencimiento.getFullYear()}`
+                : null)
+            : null,
+          urgente,
+          urgencia_descripcion: urgente ? urgenciaDesc.trim() || null : null,
+          accion_requerida: accionRequerida ? accionDesc.trim() || null : null,
+          producto_informe: productoInforme.trim() || null,
+          precio_informe: precioInforme.trim() || null,
+        },
       });
+
       setEstadoVisita('esperando');
       setClienteActual(null);
       setParadaActual(null);
-      await cargar();
-    } catch (e: any) {
-      Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo confirmar la visita. Probá de nuevo.');
+
+      procesarVisitasPendientes().then(cargar);
+    } catch {
+      Alert.alert('Error', 'No se pudo guardar la visita. Probá de nuevo.');
     } finally {
       setProcesando(false);
       enviandoRef.current = false;
@@ -201,67 +226,28 @@ export default function RutaSupervisor() {
             </TouchableOpacity>
           </View>
 
-          {/* Paso: Fotos */}
-          {estadoVisita === 'fotos' && (
-            <View style={styles.panelBody}>
-              <Text style={styles.pasoTitulo}>📷 Foto {fotoIndex + 1} de {MAX_FOTOS}</Text>
-              {fotos[fotoIndex] ? (
-                <>
-                  <Image source={{ uri: fotos[fotoIndex]! }} style={styles.fotoPreview} />
-                  <TouchableOpacity style={styles.btnRetomar} onPress={tomarFoto}>
-                    <Text style={styles.btnRetomarTexto}>🔄 Retomar</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.btnPrimario}
-                    onPress={() => {
-                      if (fotoIndex < MAX_FOTOS - 1) setFotoIndex(fotoIndex + 1);
-                      else setEstadoVisita('formulario');
-                    }}
-                  >
-                    <Text style={styles.btnTexto}>{fotoIndex < MAX_FOTOS - 1 ? 'Siguiente →' : 'Continuar →'}</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <>
-                  <TouchableOpacity style={styles.btnFoto} onPress={tomarFoto}>
-                    <Text style={styles.btnFotoIcono}>📷</Text>
-                    <Text style={styles.btnFotoTexto}>Tomar Foto {fotoIndex + 1}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.btnSaltear}
-                    onPress={() => {
-                      if (fotoIndex < MAX_FOTOS - 1) setFotoIndex(fotoIndex + 1);
-                      else setEstadoVisita('formulario');
-                    }}
-                  >
-                    <Text style={styles.btnSaltearTexto}>
-                      {fotoIndex < MAX_FOTOS - 1 ? 'Saltear esta foto' : 'Saltear y continuar'}
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              )}
-              {fotos.some((f) => f) && (
-                <View style={styles.fotosRow}>
-                  {fotos.map((f, i) => f && <Image key={i} source={{ uri: f }} style={styles.fotoMini} />)}
-                </View>
-              )}
-              {fotos.some((f) => f) && (
-                <TouchableOpacity style={styles.btnSaltear} onPress={() => setEstadoVisita('formulario')}>
-                  <Text style={styles.btnSaltearTexto}>Terminar fotos e ir al formulario</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-
           {/* Paso: Formulario */}
           {estadoVisita === 'formulario' && (
             <ScrollView style={styles.panelScroll} contentContainerStyle={styles.panelScrollContent} showsVerticalScrollIndicator={false}>
-              {/* Fotos tomadas */}
-              {fotos.some((f) => f) && (
-                <View style={styles.fotosRow}>
-                  {fotos.map((f, i) => f && <Image key={i} source={{ uri: f }} style={styles.fotoMini} />)}
-                </View>
-              )}
+              {/* Fotos */}
+              <Text style={styles.pasoTitulo}>📷 Fotos (opcional)</Text>
+              <Text style={styles.fotoPanelDesc}>
+                Tocá un casillero para sacar esa foto. Podés sacarlas en el orden que quieras, incluso al final.
+              </Text>
+              <View style={styles.fotosGrid}>
+                {fotos.map((f, i) => (
+                  <TouchableOpacity key={i} style={styles.fotoSlot} onPress={() => tomarFoto(i)}>
+                    {f ? (
+                      <Image source={{ uri: f }} style={styles.fotoSlotImg} />
+                    ) : (
+                      <Text style={styles.fotoSlotIcono}>📷</Text>
+                    )}
+                    <View style={styles.fotoSlotBadge}>
+                      <Text style={styles.fotoSlotBadgeTexto}>{i + 1}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
               {/* Toggle: Mercadería vencida */}
               <TouchableOpacity
@@ -419,9 +405,16 @@ export default function RutaSupervisor() {
       {estadoVisita === 'esperando' && (
         <>
           <View style={styles.resumen}>
+            {pendientes.length > 0 && (
+              <View style={styles.pendientesBanner}>
+                <Text style={styles.pendientesTexto}>
+                  ⏳ {pendientes.length} visita{pendientes.length > 1 ? 's' : ''} pendiente{pendientes.length > 1 ? 's' : ''} de enviar — se enviarán solas cuando haya internet
+                </Text>
+              </View>
+            )}
             <View style={styles.resumenHeader}>
               <Text style={styles.resumenTexto}>
-                {paradasCompletadas.length} / {clientes.length} clientes visitados
+                {paradasCompletadas.length + pendientes.length} / {clientes.length} clientes visitados
               </Text>
               <TouchableOpacity style={styles.btnNuevoCliente} onPress={() => setNuevoClienteVisible(true)}>
                 <Text style={styles.btnNuevoClienteTexto}>+ Nuevo cliente</Text>
@@ -440,7 +433,8 @@ export default function RutaSupervisor() {
             keyExtractor={(item) => String(item.id)}
             contentContainerStyle={{ padding: 16, gap: 10 }}
             renderItem={({ item, index }) => {
-              const visitado = paradas.some((p) => p.cliente_id === item.id && p.completada);
+              const visitado = paradas.some((p) => p.cliente_id === item.id && p.completada)
+                || pendientes.some((p) => p.cliente_id === item.id);
               return (
                 <View style={[styles.clienteCard, visitado && styles.clienteCardVisitado]}>
                   <View style={styles.clienteOrden}>
@@ -529,9 +523,36 @@ const styles = StyleSheet.create({
 
   // Paso fotos
   pasoTitulo: { fontSize: 18, fontWeight: '800', color: COLORS.supervisor, marginBottom: 4 },
-  fotoPreview: { width: '100%', height: 200, borderRadius: 10 },
+  fotoPanelDesc: { fontSize: 13, color: COLORS.textLight, marginBottom: 4 },
   fotosRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
   fotoMini: { width: 70, height: 70, borderRadius: 8 },
+  fotosGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  fotoSlot: {
+    width: 70,
+    height: 70,
+    borderRadius: 10,
+    backgroundColor: COLORS.background,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  fotoSlotImg: { width: '100%', height: '100%' },
+  fotoSlotIcono: { fontSize: 24 },
+  fotoSlotBadge: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 8,
+    width: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fotoSlotBadgeTexto: { color: '#fff', fontSize: 10, fontWeight: '700' },
   btnFoto: {
     backgroundColor: COLORS.supervisor,
     borderRadius: 12,
@@ -647,6 +668,14 @@ const styles = StyleSheet.create({
   },
   resumenHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   resumenTexto: { fontSize: 14, color: COLORS.text, fontWeight: '600' },
+  pendientesBanner: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderRadius: 10,
+    padding: 10,
+  },
+  pendientesTexto: { fontSize: 12, color: '#92400E', fontWeight: '600' },
   btnNuevoCliente: {
     backgroundColor: COLORS.supervisor,
     borderRadius: 8,

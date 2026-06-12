@@ -4,9 +4,13 @@ import {
   ScrollView, ActivityIndicator, Image, TextInput, Modal, FlatList,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
 import { useJornadaStore } from '../../store/jornadaStore';
-import { registrarParada, subirFoto, finalizarParada, obtenerParadas, obtenerAsignacionHoy } from '../../services/api';
+import { registrarParada, obtenerParadas, obtenerAsignacionHoy } from '../../services/api';
+import { obtenerUbicacionRapida } from '../../services/gps';
+import {
+  agregarVisitaPendiente, obtenerVisitasPendientes,
+  procesarVisitasPendientes, suscribirVisitasPendientes, VisitaPendiente,
+} from '../../services/offlineVisitas';
 import CartillaModal from '../../components/CartillaModal';
 import NuevoClienteModal from '../../components/NuevoClienteModal';
 import { COLORS, urlFoto } from '../../constants';
@@ -14,8 +18,7 @@ import { Parada, Cliente } from '../../types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-type EstadoFotos = 'esperando' | 'fotos' | 'nota';
-const MAX_FOTOS = 5;
+type EstadoFotos = 'esperando' | 'visita';
 
 export default function JornadaRepartidor() {
   const { jornada, paradaActual, setParadaActual } = useJornadaStore();
@@ -24,7 +27,6 @@ export default function JornadaRepartidor() {
   const [cargando, setCargando] = useState(true);
   const [estadoFotos, setEstadoFotos] = useState<EstadoFotos>('esperando');
   const [fotos, setFotos] = useState<(string | null)[]>([null, null, null, null, null]);
-  const [fotoIndex, setFotoIndex] = useState(0);
   const [nota, setNota] = useState('');
   const [accionRequerida, setAccionRequerida] = useState(false);
   const [accionDesc, setAccionDesc] = useState('');
@@ -34,10 +36,18 @@ export default function JornadaRepartidor() {
   const [clientesModal, setClientesModal] = useState(false);
   const [clienteCartilla, setClienteCartilla] = useState<Cliente | null>(null);
   const [nuevoClienteVisible, setNuevoClienteVisible] = useState(false);
+  const [pendientes, setPendientes] = useState<VisitaPendiente[]>([]);
   const enviandoRef = useRef(false);
 
   useEffect(() => {
     if (jornada) cargarDatos();
+  }, [jornada]);
+
+  useEffect(() => {
+    if (!jornada) return;
+    const cargarPendientes = () => obtenerVisitasPendientes(jornada.id).then(setPendientes);
+    cargarPendientes();
+    return suscribirVisitasPendientes(cargarPendientes);
   }, [jornada]);
 
   const cargarDatos = async () => {
@@ -63,22 +73,30 @@ export default function JornadaRepartidor() {
       // por un corte de conexión), la retomamos en lugar de crear otra.
       let parada: Parada | null = paradas.find((p) => p.cliente_id === cliente.id && !p.completada) ?? null;
       if (!parada) {
-        // Intentamos obtener la ubicación; si falla (GPS apagado, permisos, etc.)
-        // continuamos igual con coordenadas 0 para no bloquear el flujo de fotos.
-        let lat = 0, lng = 0;
-        try {
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          lat = loc.coords.latitude;
-          lng = loc.coords.longitude;
-        } catch {}
+        // Intentamos obtener la ubicación; si falla o tarda (GPS apagado, sin
+        // permisos, web sin geolocalización) seguimos con (0,0) sin trabar.
+        const { lat, lng } = await obtenerUbicacionRapida();
 
-        const res = await registrarParada({ jornada_id: jornada.id, lat, lng, cliente_id: cliente.id });
-        parada = res.data;
+        try {
+          const res = await registrarParada({ jornada_id: jornada.id, lat, lng, cliente_id: cliente.id });
+          parada = res.data;
+        } catch (e: any) {
+          if (e?.response) throw e;
+          // Sin conexión: seguimos offline, la parada se registrará al sincronizar.
+          parada = {
+            id: -Date.now(),
+            jornada_id: jornada.id,
+            cliente_id: cliente.id,
+            lat, lng,
+            timestamp_llegada: new Date().toISOString(),
+            completada: false,
+            cliente,
+          } as Parada;
+        }
       }
       setParadaActual(parada);
-      setEstadoFotos('fotos');
+      setEstadoFotos('visita');
       setFotos([null, null, null, null, null]);
-      setFotoIndex(0);
       setNota('');
       setAccionRequerida(false);
       setAccionDesc('');
@@ -88,7 +106,7 @@ export default function JornadaRepartidor() {
     setProcesando(false);
   };
 
-  const tomarFoto = async () => {
+  const tomarFoto = async (index: number) => {
     try {
       const permiso = await ImagePicker.requestCameraPermissionsAsync();
       if (permiso.status !== 'granted') {
@@ -106,7 +124,7 @@ export default function JornadaRepartidor() {
       const uri = result.assets[0].uri;
       setFotos((prev) => {
         const next = [...prev];
-        next[fotoIndex] = uri;
+        next[index] = uri;
         return next;
       });
     } catch {
@@ -123,32 +141,39 @@ export default function JornadaRepartidor() {
     enviandoRef.current = true;
     setProcesando(true);
     try {
-      for (let i = 0; i < fotos.length; i++) {
-        const foto = fotos[i];
-        if (!foto) continue;
-        const form = new FormData();
-        form.append('foto', { uri: foto, type: 'image/jpeg', name: `foto${i + 1}.jpg` } as any);
-        form.append('numero', String(i + 1));
-        await subirFoto(paradaActual.id, form);
-      }
-      await finalizarParada(paradaActual.id, {
-        nota: nota.trim() || undefined,
-        accion_requerida: accionRequerida ? accionDesc.trim() || null : null,
-        producto_informe: productoInforme.trim() || null,
-        precio_informe: precioInforme.trim() || null,
+      const fotosPendientes = fotos
+        .map((uri, i) => (uri ? { numero: i + 1, uri } : null))
+        .filter((f): f is { numero: number; uri: string } => f !== null);
+
+      await agregarVisitaPendiente({
+        jornada_id: jornada!.id,
+        cliente_id: paradaActual.cliente_id ?? paradaActual.cliente?.id ?? 0,
+        cliente_nombre: paradaActual.cliente?.nombre,
+        cliente_direccion: paradaActual.cliente?.direccion,
+        lat: paradaActual.lat,
+        lng: paradaActual.lng,
+        parada_id: paradaActual.id > 0 ? paradaActual.id : undefined,
+        fotos: fotosPendientes,
+        finalizar: {
+          nota: nota.trim() || undefined,
+          accion_requerida: accionRequerida ? accionDesc.trim() || null : null,
+          producto_informe: productoInforme.trim() || null,
+          precio_informe: precioInforme.trim() || null,
+        },
       });
+
       setEstadoFotos('esperando');
       setParadaActual(null);
       setFotos([null, null, null, null, null]);
-      setFotoIndex(0);
       setNota('');
       setAccionRequerida(false);
       setAccionDesc('');
       setProductoInforme('');
       setPrecioInforme('');
-      await cargarDatos();
-    } catch (e: any) {
-      Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo completar la parada. Probá de nuevo.');
+
+      procesarVisitasPendientes().then(cargarDatos);
+    } catch {
+      Alert.alert('Error', 'No se pudo guardar la visita. Probá de nuevo.');
     } finally {
       setProcesando(false);
       enviandoRef.current = false;
@@ -178,67 +203,27 @@ export default function JornadaRepartidor() {
             {paradaActual.cliente?.nombre ?? 'Cliente'}
           </Text>
 
-          {estadoFotos === 'fotos' && (
-            <>
-              <Text style={styles.fotoPanelTitulo}>Foto {fotoIndex + 1} de {MAX_FOTOS}</Text>
-              <Text style={styles.fotoPanelDesc}>Sacá una foto del cliente (opcional)</Text>
-              {fotos[fotoIndex]
-                ? (
-                  <>
-                    <Image source={{ uri: fotos[fotoIndex]! }} style={styles.fotoPreview} />
-                    <TouchableOpacity style={styles.btnFotoRetomar} onPress={tomarFoto}>
-                      <Text style={styles.btnFotoRetomarTexto}>🔄 Retomar foto</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.btnConfirmar}
-                      onPress={() => {
-                        if (fotoIndex < MAX_FOTOS - 1) setFotoIndex(fotoIndex + 1);
-                        else setEstadoFotos('nota');
-                      }}
-                    >
-                      <Text style={styles.btnTexto}>{fotoIndex < MAX_FOTOS - 1 ? 'Siguiente →' : 'Continuar →'}</Text>
-                    </TouchableOpacity>
-                  </>
-                )
-                : (
-                  <>
-                    <TouchableOpacity style={styles.btnFoto} onPress={tomarFoto}>
-                      <Text style={styles.btnFotoIcono}>📷</Text>
-                      <Text style={styles.btnFotoTexto}>Tomar Foto {fotoIndex + 1}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.btnSaltear}
-                      onPress={() => {
-                        if (fotoIndex < MAX_FOTOS - 1) setFotoIndex(fotoIndex + 1);
-                        else setEstadoFotos('nota');
-                      }}
-                    >
-                      <Text style={styles.btnSaltearTexto}>
-                        {fotoIndex < MAX_FOTOS - 1 ? 'Saltear esta foto' : 'Saltear y continuar'}
-                      </Text>
-                    </TouchableOpacity>
-                  </>
-                )}
-              {fotos.some((f) => f) && (
-                <View style={styles.fotosRow}>
-                  {fotos.map((f, i) => f && <Image key={i} source={{ uri: f }} style={styles.fotoMini} />)}
-                </View>
-              )}
-              {fotoIndex > 0 || fotos.some((f) => f) ? (
-                <TouchableOpacity style={styles.btnSaltear} onPress={() => setEstadoFotos('nota')}>
-                  <Text style={styles.btnSaltearTexto}>Terminar fotos e ir a la nota</Text>
-                </TouchableOpacity>
-              ) : null}
-            </>
-          )}
-
-          {estadoFotos === 'nota' && (
+          {estadoFotos === 'visita' && (
             <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ gap: 10 }}>
-              {fotos.some((f) => f) && (
-                <View style={styles.fotosRow}>
-                  {fotos.map((f, i) => f && <Image key={i} source={{ uri: f }} style={styles.fotoMini} />)}
-                </View>
-              )}
+              <Text style={styles.fotoPanelTitulo}>Fotos (opcional)</Text>
+              <Text style={styles.fotoPanelDesc}>
+                Tocá un casillero para sacar esa foto. Podés sacarlas en el orden que quieras, incluso al final.
+              </Text>
+              <View style={styles.fotosGrid}>
+                {fotos.map((f, i) => (
+                  <TouchableOpacity key={i} style={styles.fotoSlot} onPress={() => tomarFoto(i)}>
+                    {f ? (
+                      <Image source={{ uri: f }} style={styles.fotoSlotImg} />
+                    ) : (
+                      <Text style={styles.fotoSlotIcono}>📷</Text>
+                    )}
+                    <View style={styles.fotoSlotBadge}>
+                      <Text style={styles.fotoSlotBadgeTexto}>{i + 1}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
               {/* Informe de producto/precio */}
               <View style={styles.informeBox}>
                 <Text style={styles.informeTitulo}>💰 Informe de precio (opcional)</Text>
@@ -312,8 +297,16 @@ export default function JornadaRepartidor() {
         <>
           <View style={styles.header}>
             <Text style={styles.headerTitulo}>Paradas del día</Text>
-            <Text style={styles.headerCount}>{paradasCompletadas.length} completadas</Text>
+            <Text style={styles.headerCount}>{paradasCompletadas.length + pendientes.length} completadas</Text>
           </View>
+
+          {pendientes.length > 0 && (
+            <View style={styles.pendientesBanner}>
+              <Text style={styles.pendientesTexto}>
+                ⏳ {pendientes.length} visita{pendientes.length > 1 ? 's' : ''} pendiente{pendientes.length > 1 ? 's' : ''} de enviar — se enviarán solas cuando haya internet
+              </Text>
+            </View>
+          )}
 
           <TouchableOpacity style={styles.btnNuevaParada} onPress={() => setClientesModal(true)} disabled={procesando}>
             {procesando
@@ -371,7 +364,8 @@ export default function JornadaRepartidor() {
             keyExtractor={(item) => String(item.id)}
             contentContainerStyle={{ padding: 16, gap: 10 }}
             renderItem={({ item }) => {
-              const yaVisitado = paradas.some((p) => p.cliente_id === item.id && p.completada);
+              const yaVisitado = paradas.some((p) => p.cliente_id === item.id && p.completada)
+                || pendientes.some((p) => p.cliente_id === item.id);
               return (
                 <View style={styles.clienteRow}>
                   <TouchableOpacity
@@ -432,6 +426,7 @@ const styles = StyleSheet.create({
   sinJornadaDesc: { fontSize: 14, color: COLORS.textLight, textAlign: 'center', marginTop: 8 },
 
   fotoPanel: {
+    flex: 1,
     backgroundColor: COLORS.card,
     margin: 16,
     borderRadius: 16,
@@ -445,22 +440,35 @@ const styles = StyleSheet.create({
   fotoPanelCliente: { fontSize: 13, color: COLORS.textLight, fontWeight: '600' },
   fotoPanelTitulo: { fontSize: 20, fontWeight: '800', color: COLORS.primary },
   fotoPanelDesc: { fontSize: 14, color: COLORS.textLight },
-  fotoPreview: { width: '100%', height: 200, borderRadius: 10 },
   fotosRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   fotoMini: { width: 70, height: 70, borderRadius: 8 },
-  btnFoto: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 12,
-    padding: 20,
+  fotosGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  fotoSlot: {
+    width: 70,
+    height: 70,
+    borderRadius: 10,
+    backgroundColor: COLORS.background,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderStyle: 'dashed',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
+    overflow: 'hidden',
   },
-  btnFotoIcono: { fontSize: 40 },
-  btnFotoTexto: { color: '#fff', fontWeight: '700', fontSize: 16 },
-  btnFotoRetomar: { alignItems: 'center', paddingVertical: 8 },
-  btnFotoRetomarTexto: { color: COLORS.textLight, fontSize: 13 },
-  btnSaltear: { alignItems: 'center', paddingVertical: 10 },
-  btnSaltearTexto: { color: COLORS.textLight, fontSize: 13, textDecorationLine: 'underline' },
+  fotoSlotImg: { width: '100%', height: '100%' },
+  fotoSlotIcono: { fontSize: 24 },
+  fotoSlotBadge: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 8,
+    width: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fotoSlotBadgeTexto: { color: '#fff', fontSize: 10, fontWeight: '700' },
   notaInput: {
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -526,6 +534,16 @@ const styles = StyleSheet.create({
   },
   headerTitulo: { fontSize: 18, fontWeight: '700', color: COLORS.text },
   headerCount: { fontSize: 13, color: COLORS.textLight },
+  pendientesBanner: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderRadius: 10,
+    padding: 10,
+    marginHorizontal: 16,
+    marginBottom: 8,
+  },
+  pendientesTexto: { fontSize: 12, color: '#92400E', fontWeight: '600' },
   btnNuevaParada: {
     backgroundColor: COLORS.repartidor,
     borderRadius: 12,

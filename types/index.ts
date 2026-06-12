@@ -37,6 +37,7 @@ export interface Cliente {
   departamento?: string;
   material_exhibicion?: string;
   tipo_comercio?: string;
+  marcas?: string[];
   ruta_id?: number;
 }
 
@@ -125,6 +126,17 @@ export interface Alerta {
   nota?: string;
   cliente: { id: number; nombre: string; direccion: string; telefono?: string };
   usuario: { nombre: string; rol: Rol };
+}
+
+export interface Anuncio {
+  id: number;
+  titulo?: string;
+  mensaje: string;
+  tipo: 'info' | 'oferta';
+  autor_id: number;
+  autor_nombre: string;
+  autor_rol: Rol;
+  created_at: string;
 }
 
 export interface UbicacionLive {

@@ -17,11 +17,14 @@ const TIPOS_COMERCIO = [
   'Kiosco/MaxiKiosco', 'Verdulería', 'Dietética', 'Cotillón', 'Otros',
 ];
 
+const MARCAS = ['BIMBO', 'CITRIC', 'SANAS', 'ARRABAL'];
+
 const FORM_VACIO = {
   nombre: '', direccion: '',
   razon_social: '', cuit: '', rubro: '', email: '', contacto_nombre: '', horario_atencion: '',
   telefono: '', monto_compra_promedio: '', frecuencia_compra: '', forma_pago: '', dia_visita_preferido: '',
   notas: '', material_exhibicion: '', tipo_comercio: '', zona: '', departamento: '',
+  marcas: [] as string[],
 };
 
 function Chips({ opciones, valor, onSeleccionar, color }: {
@@ -97,6 +100,7 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
       tipo_comercio: cliente.tipo_comercio ?? '',
       zona: cliente.zona ?? '',
       departamento: cliente.departamento ?? '',
+      marcas: cliente.marcas ?? [],
     });
   }, [cliente]);
 
@@ -135,6 +139,7 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
         tipo_comercio: form.tipo_comercio || null,
         zona: form.zona || null,
         departamento: form.departamento || null,
+        marcas: form.marcas.length ? form.marcas : null,
       };
       const res = await actualizarCliente(cliente.id, data);
       onGuardado?.(res.data);
@@ -242,6 +247,27 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
               color={color}
               onSeleccionar={(v) => setForm((prev) => ({ ...prev, tipo_comercio: v }))}
             />
+          </View>
+
+          <Text style={styles.seccionTitulo}>Marcas que compra</Text>
+          <View style={styles.formGroup}>
+            <View style={styles.chipsRow}>
+              {MARCAS.map((op) => {
+                const activo = form.marcas.includes(op);
+                return (
+                  <TouchableOpacity
+                    key={op}
+                    style={[styles.chip, { borderColor: color }, activo && { backgroundColor: color }]}
+                    onPress={() => setForm((prev) => ({
+                      ...prev,
+                      marcas: activo ? prev.marcas.filter((m) => m !== op) : [...prev.marcas, op],
+                    }))}
+                  >
+                    <Text style={[styles.chipTexto, { color: activo ? '#fff' : color }]}>{op}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
 
           <Text style={styles.seccionTitulo}>Ubicación</Text>

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { obtenerClientes, actualizarCoordenadas } from '../../services/api';
 import MapaClientes from '../../components/MapaClientes';
+import CartillaModal from '../../components/CartillaModal';
 import { Cliente } from '../../types';
 import { COLORS } from '../../constants';
 
@@ -33,6 +34,7 @@ export default function AdminMapa() {
   const [cargando, setCargando] = useState(true);
   const [geocodificando, setGeocodificando] = useState(false);
   const [progreso, setProgreso] = useState({ actual: 0, total: 0 });
+  const [clienteFicha, setClienteFicha] = useState<Cliente | null>(null);
   const cancelRef = useRef(false);
 
   const cargar = async () => {
@@ -97,6 +99,16 @@ export default function AdminMapa() {
         onGeocodeAll={geocodeAll}
         geocodificando={geocodificando}
         progreso={progreso}
+        onAbrirFicha={setClienteFicha}
+      />
+      <CartillaModal
+        cliente={clienteFicha}
+        visible={!!clienteFicha}
+        onClose={() => setClienteFicha(null)}
+        onGuardado={(actualizado) => {
+          setClientes((prev) => prev.map((c) => (c.id === actualizado.id ? actualizado : c)));
+          setClienteFicha(null);
+        }}
       />
     </View>
   );

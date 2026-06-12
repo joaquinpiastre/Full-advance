@@ -16,9 +16,10 @@ type Props = {
   onGeocodeAll: () => void;
   geocodificando: boolean;
   progreso: { actual: number; total: number };
+  onAbrirFicha?: (cliente: Cliente) => void;
 };
 
-export default function MapaClientes({ clientes }: Props) {
+export default function MapaClientes({ clientes, onAbrirFicha }: Props) {
   const validos = clientes.filter((c) => c.lat != null && c.lng != null && !(c.lat === 0 && c.lng === 0));
 
   return (
@@ -29,11 +30,12 @@ export default function MapaClientes({ clientes }: Props) {
           coordinate={{ latitude: c.lat, longitude: c.lng }}
           pinColor={c.categoria ? COLOR_CATEGORIA[c.categoria] : COLORS.primary}
         >
-          <Callout style={styles.callout}>
+          <Callout style={styles.callout} onPress={() => onAbrirFicha?.(c)}>
             <Text style={styles.calloutNombre}>{c.nombre}</Text>
             {c.direccion ? <Text style={styles.calloutDato}>📍 {c.direccion}</Text> : null}
             {c.telefono ? <Text style={styles.calloutDato}>📞 {c.telefono}</Text> : null}
             {c.zona ? <Text style={styles.calloutDato}>{c.zona}</Text> : null}
+            <Text style={styles.calloutLink}>Ver ficha completa</Text>
           </Callout>
         </Marker>
       ))}
@@ -46,4 +48,5 @@ const styles = StyleSheet.create({
   callout: { minWidth: 160, padding: 4 },
   calloutNombre: { fontSize: 14, fontWeight: '700', color: COLORS.text, marginBottom: 4 },
   calloutDato: { fontSize: 12, color: COLORS.textLight },
+  calloutLink: { fontSize: 12, color: COLORS.primary, fontWeight: '700', marginTop: 6 },
 });

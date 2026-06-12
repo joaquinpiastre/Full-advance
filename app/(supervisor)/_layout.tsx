@@ -45,6 +45,14 @@ export default function SupervisorLayout() {
           headerTitle: 'Alertas y Acciones',
         }}
       />
+      <Tabs.Screen
+        name="noticias"
+        options={{
+          title: 'Noticias',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📰</Text>,
+          headerTitle: 'Noticias',
+        }}
+      />
     </Tabs>
   );
 }

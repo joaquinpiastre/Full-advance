@@ -155,6 +155,16 @@ export const iniciarVisitaVC = (vc_id: number, data: { cliente_id: number; lat: 
 export const finalizarVentaCaliente = (id: number) =>
   api.patch(`/ventas-calientes/${id}/finalizar`);
 
+// Noticias / anuncios (admin y supervisor publican, todos pueden ver)
+export const obtenerAnuncios = () =>
+  api.get('/anuncios');
+
+export const crearAnuncio = (data: { titulo?: string; mensaje: string; tipo: 'info' | 'oferta' }) =>
+  api.post('/anuncios', data);
+
+export const eliminarAnuncio = (id: number) =>
+  api.delete(`/anuncios/${id}`);
+
 export const obtenerVentasCalientesAdmin = (usuario_id?: number) =>
   api.get('/ventas-calientes', { params: usuario_id ? { usuario_id } : {} });
 

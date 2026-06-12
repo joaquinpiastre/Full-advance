@@ -21,7 +21,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     nombre, direccion, lat, lng, telefono, notas,
     categoria, razon_social, cuit, rubro, email, contacto_nombre, horario_atencion,
     monto_compra_promedio, frecuencia_compra, forma_pago, dia_visita_preferido,
-    zona, departamento,
+    zona, departamento, marcas,
   } = req.body;
   let { ruta_id } = req.body;
   const esAdmin = req.usuario?.rol === 'admin';
@@ -46,14 +46,14 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         nombre, direccion, lat, lng, telefono, notas,
         categoria, razon_social, cuit, rubro, email, contacto_nombre, horario_atencion,
         monto_compra_promedio, frecuencia_compra, forma_pago, dia_visita_preferido,
-        zona, departamento
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
+        zona, departamento, marcas
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING *`,
       [
         nombre, direccion, lat ?? 0, lng ?? 0, telefono ?? null, notas ?? null,
         esAdmin ? (categoria ?? null) : null, razon_social ?? null, cuit ?? null, rubro ?? null, email ?? null,
         contacto_nombre ?? null, horario_atencion ?? null,
         monto_compra_promedio ?? null, frecuencia_compra ?? null, forma_pago ?? null, dia_visita_preferido ?? null,
-        zona ?? null, departamento ?? null,
+        zona ?? null, departamento ?? null, marcas ?? null,
       ]
     );
     const cliente = rows[0];
@@ -82,7 +82,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     nombre, direccion, lat, lng, telefono, notas,
     categoria, razon_social, cuit, rubro, email, contacto_nombre, horario_atencion,
     monto_compra_promedio, frecuencia_compra, forma_pago, dia_visita_preferido,
-    zona, departamento, ruta_id,
+    zona, departamento, marcas, ruta_id,
   } = req.body;
   if (!nombre || !direccion) return res.status(400).json({ error: 'Nombre y dirección requeridos' });
   const client = await pool.connect();
@@ -92,14 +92,14 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
       'nombre=$1', 'direccion=$2', 'lat=$3', 'lng=$4', 'telefono=$5', 'notas=$6',
       'razon_social=$7', 'cuit=$8', 'rubro=$9', 'email=$10', 'contacto_nombre=$11', 'horario_atencion=$12',
       'monto_compra_promedio=$13', 'frecuencia_compra=$14', 'forma_pago=$15', 'dia_visita_preferido=$16',
-      'zona=$17', 'departamento=$18', 'cartilla_actualizada_at=NOW()',
+      'zona=$17', 'departamento=$18', 'marcas=$19', 'cartilla_actualizada_at=NOW()',
     ];
     const valores: any[] = [
       nombre, direccion, lat ?? 0, lng ?? 0, telefono ?? null, notas ?? null,
       razon_social ?? null, cuit ?? null, rubro ?? null, email ?? null,
       contacto_nombre ?? null, horario_atencion ?? null,
       monto_compra_promedio ?? null, frecuencia_compra ?? null, forma_pago ?? null, dia_visita_preferido ?? null,
-      zona ?? null, departamento ?? null,
+      zona ?? null, departamento ?? null, marcas ?? null,
     ];
     let i = valores.length + 1;
     // Solo el admin puede cambiar la categoría (A-F).

@@ -88,6 +88,14 @@ export default function AdminLayout() {
           headerTitle: 'Alertas — Urgentes y Vencimientos',
         }}
       />
+      <Tabs.Screen
+        name="noticias"
+        options={{
+          title: 'Noticias',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📰</Text>,
+          headerTitle: 'Noticias',
+        }}
+      />
     </Tabs>
   );
 }

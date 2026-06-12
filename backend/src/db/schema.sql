@@ -36,7 +36,8 @@ CREATE TABLE IF NOT EXISTS clientes (
   dia_visita_preferido VARCHAR(20),
   cartilla_actualizada_at TIMESTAMPTZ,
   zona VARCHAR(100),
-  departamento VARCHAR(100)
+  departamento VARCHAR(100),
+  marcas TEXT[]
 );
 
 -- Si la tabla ya existía de antes, sumamos las columnas de la cartilla.
@@ -54,6 +55,7 @@ ALTER TABLE clientes ADD COLUMN IF NOT EXISTS dia_visita_preferido VARCHAR(20);
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS cartilla_actualizada_at TIMESTAMPTZ;
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS zona VARCHAR(100);
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS departamento VARCHAR(100);
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS marcas TEXT[];
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS horario_preferido VARCHAR(100);
 
 -- Listas de departamentos y distritos seleccionables para clasificar clientes.
@@ -66,6 +68,16 @@ CREATE TABLE IF NOT EXISTS departamentos (
 CREATE TABLE IF NOT EXISTS distritos (
   id SERIAL PRIMARY KEY,
   nombre VARCHAR(100) UNIQUE NOT NULL
+);
+
+-- Noticias/anuncios que admin y supervisor publican para repartidores y preventistas.
+CREATE TABLE IF NOT EXISTS anuncios (
+  id SERIAL PRIMARY KEY,
+  autor_id INTEGER NOT NULL REFERENCES usuarios(id),
+  titulo VARCHAR(150),
+  mensaje TEXT NOT NULL,
+  tipo VARCHAR(20) NOT NULL DEFAULT 'info' CHECK (tipo IN ('info', 'oferta')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS rutas (

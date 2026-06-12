@@ -15,6 +15,7 @@ import asignacionesRouter from './routes/asignaciones';
 import estadisticasRouter from './routes/estadisticas';
 import ventasCalientesRouter from './routes/ventas-calientes';
 import zonasRouter from './routes/zonas';
+import anunciosRouter from './routes/anuncios';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -33,6 +34,7 @@ app.use('/asignaciones', asignacionesRouter);
 app.use('/estadisticas', estadisticasRouter);
 app.use('/ventas-calientes', ventasCalientesRouter);
 app.use('/zonas', zonasRouter);
+app.use('/anuncios', anunciosRouter);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', app: 'Full Advance' }));
 
@@ -46,6 +48,11 @@ pool.query(`
     created_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(usuario_id)
   )
+`).catch(() => {});
+
+// Marcas que distribuye el cliente (BIMBO, CITRIC, SANAS, ARRABAL)
+pool.query(`
+  ALTER TABLE clientes ADD COLUMN IF NOT EXISTS marcas TEXT[]
 `).catch(() => {});
 
 // Columnas del flujo preventista en paradas
@@ -121,6 +128,18 @@ pool.query(`
     ON CONFLICT (nombre) DO NOTHING
   `))
   .catch(() => {});
+
+// Noticias/anuncios de admin y supervisor para repartidores y preventistas
+pool.query(`
+  CREATE TABLE IF NOT EXISTS anuncios (
+    id SERIAL PRIMARY KEY,
+    autor_id INTEGER NOT NULL REFERENCES usuarios(id),
+    titulo VARCHAR(150),
+    mensaje TEXT NOT NULL,
+    tipo VARCHAR(20) NOT NULL DEFAULT 'info' CHECK (tipo IN ('info', 'oferta')),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )
+`).catch(() => {});
 
 // Nuevo rol "supervisor": permite ese valor en el CHECK de usuarios.rol
 pool.query(`ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_rol_check`)

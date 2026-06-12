@@ -14,9 +14,12 @@ const TIPOS_COMERCIO = [
   'Kiosco/MaxiKiosco', 'Verdulería', 'Dietética', 'Cotillón', 'Otros',
 ];
 
+const MARCAS = ['BIMBO', 'CITRIC', 'SANAS', 'ARRABAL'];
+
 const FORM_VACIO = {
   nombre: '', razon_social: '', cuit: '', direccion: '', telefono: '', email: '',
   zona: '', departamento: '', tipo_comercio: '', notas: '',
+  marcas: [] as string[],
 };
 
 interface Props {
@@ -57,6 +60,7 @@ export default function NuevoClienteModal({ visible, color = COLORS.primary, onC
         zona: form.zona.trim() || null,
         departamento: form.departamento.trim() || null,
         tipo_comercio: form.tipo_comercio || null,
+        marcas: form.marcas.length ? form.marcas : null,
         notas: form.notas.trim() || null,
       });
       setForm(FORM_VACIO);
@@ -188,6 +192,27 @@ export default function NuevoClienteModal({ visible, color = COLORS.primary, onC
                     key={op}
                     style={[styles.chip, { borderColor: color }, activo && { backgroundColor: color }]}
                     onPress={() => setForm((prev) => ({ ...prev, tipo_comercio: activo ? '' : op }))}
+                  >
+                    <Text style={[styles.chipTexto, { color: activo ? '#fff' : color }]}>{op}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          <Text style={styles.seccionTitulo}>Marcas que compra</Text>
+          <View style={styles.formGroup}>
+            <View style={styles.chipsRow}>
+              {MARCAS.map((op) => {
+                const activo = form.marcas.includes(op);
+                return (
+                  <TouchableOpacity
+                    key={op}
+                    style={[styles.chip, { borderColor: color }, activo && { backgroundColor: color }]}
+                    onPress={() => setForm((prev) => ({
+                      ...prev,
+                      marcas: activo ? prev.marcas.filter((m) => m !== op) : [...prev.marcas, op],
+                    }))}
                   >
                     <Text style={[styles.chipTexto, { color: activo ? '#fff' : color }]}>{op}</Text>
                   </TouchableOpacity>

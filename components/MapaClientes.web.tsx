@@ -15,6 +15,7 @@ type Props = {
   onGeocodeAll: () => void;
   geocodificando: boolean;
   progreso: { actual: number; total: number };
+  onAbrirFicha?: (cliente: Cliente) => void;
 };
 
 type MapState = { map: any; markers: any[]; L: any };
@@ -35,11 +36,16 @@ function crearPopup(c: Cliente): string {
       ${c.contacto_nombre ? `<div style="font-size:12px;color:#6B7280">👤 ${c.contacto_nombre}</div>` : ''}
       ${c.forma_pago ? `<div style="font-size:12px;color:#6B7280;margin-top:2px">💳 ${c.forma_pago}</div>` : ''}
       ${catBadge}
+      <div style="margin-top:8px">
+        <button data-cliente-id="${c.id}" class="ver-ficha-btn" style="background:${COLORS.primary};color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer">
+          Ver ficha completa
+        </button>
+      </div>
     </div>
   `;
 }
 
-function actualizarMarcadores(state: MapState, clientes: Cliente[]) {
+function actualizarMarcadores(state: MapState, clientes: Cliente[], onAbrirFicha?: (cliente: Cliente) => void) {
   const { map, L } = state;
   state.markers.forEach((m) => m.remove());
   const validos = clientes.filter((c) => c.lat && c.lng); // 0 y null son falsy
@@ -52,17 +58,24 @@ function actualizarMarcadores(state: MapState, clientes: Cliente[]) {
       iconAnchor: [5, 5],
       popupAnchor: [0, -7],
     });
-    return L.marker([c.lat, c.lng], { icon })
+    const marker = L.marker([c.lat, c.lng], { icon })
       .addTo(map)
       .bindPopup(crearPopup(c), { maxWidth: 290 });
+    marker.on('popupopen', (e: any) => {
+      const btn = e.popup.getElement()?.querySelector('.ver-ficha-btn');
+      if (btn) btn.onclick = () => onAbrirFicha?.(c);
+    });
+    return marker;
   });
 }
 
-export default function MapaClientes({ clientes, onGeocodeAll, geocodificando, progreso }: Props) {
+export default function MapaClientes({ clientes, onGeocodeAll, geocodificando, progreso, onAbrirFicha }: Props) {
   const divRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<MapState | null>(null);
   const clientesRef = useRef(clientes);
   clientesRef.current = clientes;
+  const onAbrirFichaRef = useRef(onAbrirFicha);
+  onAbrirFichaRef.current = onAbrirFicha;
 
   useEffect(() => {
     let cancelled = false;
@@ -94,7 +107,7 @@ export default function MapaClientes({ clientes, onGeocodeAll, geocodificando, p
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       }).addTo(map);
       stateRef.current = { map, markers: [], L };
-      actualizarMarcadores(stateRef.current, clientesRef.current);
+      actualizarMarcadores(stateRef.current, clientesRef.current, (c) => onAbrirFichaRef.current?.(c));
     }
     init().catch(() => {});
     return () => {
@@ -105,7 +118,7 @@ export default function MapaClientes({ clientes, onGeocodeAll, geocodificando, p
 
   useEffect(() => {
     if (!stateRef.current) return;
-    actualizarMarcadores(stateRef.current, clientes);
+    actualizarMarcadores(stateRef.current, clientes, (c) => onAbrirFichaRef.current?.(c));
   }, [clientes]);
 
   const sinCoords = clientes.filter((c) => !c.lat || !c.lng).length;

@@ -18,12 +18,14 @@ const FORM_VACIO = {
   razon_social: '', cuit: '', rubro: '', email: '', contacto_nombre: '', horario_atencion: '',
   monto_compra_promedio: '', frecuencia_compra: '', forma_pago: '', dia_visita_preferido: '',
   zona: '', departamento: '', ruta_id: '' as number | string,
+  marcas: [] as string[],
 };
 
 const CATEGORIAS: CategoriaCliente[] = ['A', 'B', 'C', 'D', 'E', 'F'];
 const FRECUENCIAS = ['Semanal', 'Quincenal', 'Mensual', 'Ocasional'];
 const FORMAS_PAGO = ['Efectivo', 'Cuenta corriente', 'Transferencia'];
 const DIAS_VISITA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Sin preferencia'];
+const MARCAS = ['BIMBO', 'CITRIC', 'SANAS', 'ARRABAL'];
 
 function Chips({ opciones, valor, onSeleccionar, colorPorOpcion }: {
   opciones: string[];
@@ -111,6 +113,7 @@ export default function Clientes() {
       zona: c.zona ?? '',
       departamento: c.departamento ?? '',
       ruta_id: c.ruta_id ?? '',
+      marcas: c.marcas ?? [],
     });
     setModalVisible(true);
   };
@@ -144,6 +147,7 @@ export default function Clientes() {
       dia_visita_preferido: form.dia_visita_preferido || null,
       zona: form.zona.trim() || null,
       departamento: form.departamento.trim() || null,
+      marcas: form.marcas.length ? form.marcas : null,
       ruta_id: form.ruta_id,
     };
     try {
@@ -299,6 +303,27 @@ export default function Clientes() {
                 onSeleccionar={(v) => setForm((prev) => ({ ...prev, categoria: v as CategoriaCliente | '' }))}
                 colorPorOpcion={(op) => COLOR_CATEGORIA[op as CategoriaCliente]}
               />
+            </View>
+
+            <Text style={styles.seccionTitulo}>Marcas que compra</Text>
+            <View style={styles.formGroup}>
+              <View style={styles.chipsRow}>
+                {MARCAS.map((op) => {
+                  const activo = form.marcas.includes(op);
+                  return (
+                    <TouchableOpacity
+                      key={op}
+                      style={[styles.chip, { borderColor: COLORS.primary }, activo && { backgroundColor: COLORS.primary }]}
+                      onPress={() => setForm((prev) => ({
+                        ...prev,
+                        marcas: activo ? prev.marcas.filter((m) => m !== op) : [...prev.marcas, op],
+                      }))}
+                    >
+                      <Text style={[styles.chipTexto, { color: activo ? '#fff' : COLORS.primary }]}>{op}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
 
             <Text style={styles.seccionTitulo}>Ubicación</Text>

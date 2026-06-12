@@ -40,7 +40,7 @@ export default function AdminMapa() {
   const cargar = async () => {
     setCargando(true);
     try {
-      const res = await obtenerClientes();
+      const res = await obtenerClientes('todos');
       setClientes(res.data);
     } catch {}
     setCargando(false);
@@ -110,7 +110,7 @@ export default function AdminMapa() {
           setClienteFicha(null);
         }}
         onEliminado={(id) => {
-          setClientes((prev) => prev.filter((c) => c.id !== id));
+          setClientes((prev) => prev.map((c) => (c.id === id ? { ...c, activo: false } : c)));
           setClienteFicha(null);
         }}
       />

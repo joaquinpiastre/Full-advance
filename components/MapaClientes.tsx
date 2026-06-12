@@ -28,7 +28,7 @@ export default function MapaClientes({ clientes, onAbrirFicha }: Props) {
         <Marker
           key={c.id}
           coordinate={{ latitude: c.lat, longitude: c.lng }}
-          pinColor={c.categoria ? COLOR_CATEGORIA[c.categoria] : COLORS.primary}
+          pinColor={c.activo === false ? '#000000' : c.categoria ? COLOR_CATEGORIA[c.categoria] : COLORS.primary}
         >
           <Callout style={styles.callout} onPress={() => onAbrirFicha?.(c)}>
             <Text style={styles.calloutNombre}>{c.nombre}</Text>

@@ -39,6 +39,7 @@ export interface Cliente {
   tipo_comercio?: string;
   marcas?: string[];
   ruta_id?: number;
+  activo?: boolean;
 }
 
 export interface Zona {

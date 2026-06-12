@@ -6,6 +6,7 @@ import {
 import {
   obtenerClientes, crearCliente, actualizarCliente, obtenerRutas,
   obtenerDepartamentos, crearDepartamento, obtenerDistritos, crearDistrito,
+  cambiarEstadoCliente,
 } from '../../services/api';
 import { COLORS, COLOR_CATEGORIA } from '../../constants';
 import { Cliente, CategoriaCliente, Ruta } from '../../types';
@@ -65,18 +66,19 @@ export default function Clientes() {
   const [form, setForm] = useState(FORM_VACIO);
   const [busqueda, setBusqueda] = useState('');
   const [categoriaFiltro, setCategoriaFiltro] = useState<CategoriaCliente | null>(null);
+  const [estadoFiltro, setEstadoFiltro] = useState<'activos' | 'inactivos'>('activos');
   const [departamentos, setDepartamentos] = useState<string[]>([]);
   const [distritos, setDistritos] = useState<string[]>([]);
 
   useEffect(() => {
     cargar();
-  }, []);
+  }, [estadoFiltro]);
 
   const cargar = async () => {
     setCargando(true);
     try {
       const [resClientes, resRutas, resDeptos, resDistritos] = await Promise.all([
-        obtenerClientes(), obtenerRutas(), obtenerDepartamentos(), obtenerDistritos(),
+        obtenerClientes(estadoFiltro), obtenerRutas(), obtenerDepartamentos(), obtenerDistritos(),
       ]);
       setClientes(resClientes.data);
       setRutas(resRutas.data);
@@ -84,6 +86,31 @@ export default function Clientes() {
       setDistritos(resDistritos.data.map((d: any) => d.nombre));
     } catch {}
     setCargando(false);
+  };
+
+  const handleCambiarEstado = (c: Cliente) => {
+    const activar = !c.activo;
+    Alert.alert(
+      activar ? 'Activar cliente' : 'Desactivar cliente',
+      activar
+        ? `¿Volver a activar a "${c.nombre}"?`
+        : `¿Desactivar a "${c.nombre}"? No aparecerá en las rutas ni en el mapa.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: activar ? 'Activar' : 'Desactivar',
+          style: activar ? 'default' : 'destructive',
+          onPress: async () => {
+            try {
+              await cambiarEstadoCliente(c.id, activar);
+              setClientes((prev) => prev.filter((x) => x.id !== c.id));
+            } catch {
+              Alert.alert('Error', 'No se pudo actualizar el estado del cliente');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const abrirNuevo = () => {
@@ -191,6 +218,23 @@ export default function Clientes() {
 
       <View style={styles.filtros}>
         <Buscador valor={busqueda} onCambiar={setBusqueda} placeholder="Buscar por nombre, dirección, rubro, zona..." />
+        <View style={styles.estadoFila}>
+          {([
+            { key: 'activos', label: 'Activos' },
+            { key: 'inactivos', label: 'Inactivos' },
+          ] as const).map((op) => {
+            const activo = estadoFiltro === op.key;
+            return (
+              <TouchableOpacity
+                key={op.key}
+                style={[styles.estadoChip, activo && styles.estadoChipActivo]}
+                onPress={() => setEstadoFiltro(op.key)}
+              >
+                <Text style={[styles.estadoChipTexto, activo && styles.estadoChipTextoActivo]}>{op.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
         <View style={styles.categoriasFila}>
           {(['A', 'B', 'C', 'D', 'E', 'F'] as CategoriaCliente[]).map((cat) => {
             const activo = categoriaFiltro === cat;
@@ -216,24 +260,38 @@ export default function Clientes() {
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={{ padding: 16, gap: 10 }}
         renderItem={({ item }) => (
-          <TouchableOpacity style={styles.card} onPress={() => abrirEditar(item)}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardNombre}>{item.nombre}</Text>
-              {item.categoria && (
-                <View style={[styles.badge, { backgroundColor: COLOR_CATEGORIA[item.categoria] }]}>
-                  <Text style={styles.badgeTexto}>{item.categoria}</Text>
-                </View>
+          <View style={[styles.card, !item.activo && styles.cardInactivo]}>
+            <TouchableOpacity onPress={() => abrirEditar(item)}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardNombre}>{item.nombre}</Text>
+                {item.categoria && (
+                  <View style={[styles.badge, { backgroundColor: COLOR_CATEGORIA[item.categoria] }]}>
+                    <Text style={styles.badgeTexto}>{item.categoria}</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.cardDir}>{item.direccion}</Text>
+              {item.telefono && <Text style={styles.cardTel}>📞 {item.telefono}</Text>}
+              {item.rubro && <Text style={styles.cardTel}>🏷️ {item.rubro}</Text>}
+              {(item.departamento || item.zona) && (
+                <Text style={styles.cardTel}>📍 {[item.departamento, item.zona].filter(Boolean).join(' · ')}</Text>
               )}
-            </View>
-            <Text style={styles.cardDir}>{item.direccion}</Text>
-            {item.telefono && <Text style={styles.cardTel}>📞 {item.telefono}</Text>}
-            {item.rubro && <Text style={styles.cardTel}>🏷️ {item.rubro}</Text>}
-            {(item.departamento || item.zona) && (
-              <Text style={styles.cardTel}>📍 {[item.departamento, item.zona].filter(Boolean).join(' · ')}</Text>
-            )}
-          </TouchableOpacity>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.btnEstado, item.activo ? styles.btnDesactivar : styles.btnActivar]}
+              onPress={() => handleCambiarEstado(item)}
+            >
+              <Text style={[styles.btnEstadoTexto, item.activo ? styles.btnEstadoTextoDesactivar : styles.btnEstadoTextoActivar]}>
+                {item.activo ? 'Desactivar' : 'Activar'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
-        ListEmptyComponent={<Text style={styles.vacio}>No se encontraron clientes con ese filtro</Text>}
+        ListEmptyComponent={
+          <Text style={styles.vacio}>
+            {estadoFiltro === 'inactivos' ? 'No hay clientes inactivos' : 'No se encontraron clientes con ese filtro'}
+          </Text>
+        }
       />
 
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
@@ -450,6 +508,18 @@ const styles = StyleSheet.create({
   btnNuevo: { backgroundColor: COLORS.primary, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
   btnNuevoTexto: { color: '#fff', fontWeight: '700', fontSize: 14 },
   filtros: { paddingHorizontal: 16, paddingBottom: 12, gap: 10 },
+  estadoFila: { flexDirection: 'row', gap: 8 },
+  estadoChip: {
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    backgroundColor: COLORS.card,
+  },
+  estadoChipActivo: { borderColor: COLORS.primary, backgroundColor: COLORS.primary },
+  estadoChipTexto: { fontWeight: '700', fontSize: 13, color: COLORS.textLight },
+  estadoChipTextoActivo: { color: '#fff' },
   categoriasFila: { flexDirection: 'row', gap: 8 },
   categoriaChip: {
     width: 36,
@@ -473,12 +543,25 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: COLORS.primary,
   },
+  cardInactivo: { borderLeftColor: COLORS.textLight, opacity: 0.7 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardNombre: { fontSize: 15, fontWeight: '700', color: COLORS.text, flex: 1 },
   cardDir: { fontSize: 13, color: COLORS.textLight },
   cardTel: { fontSize: 12, color: COLORS.textLight },
   badge: { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 3, marginLeft: 8 },
   badgeTexto: { color: '#fff', fontWeight: '800', fontSize: 13 },
+  btnEstado: {
+    marginTop: 10,
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  btnDesactivar: { borderColor: COLORS.danger, backgroundColor: '#FEF2F2' },
+  btnActivar: { borderColor: COLORS.success, backgroundColor: '#F0FDF4' },
+  btnEstadoTexto: { fontWeight: '700', fontSize: 13 },
+  btnEstadoTextoDesactivar: { color: COLORS.danger },
+  btnEstadoTextoActivar: { color: COLORS.success },
   vacio: { textAlign: 'center', color: COLORS.textLight, marginTop: 60, fontSize: 14 },
   vacioChico: { fontSize: 12, color: COLORS.textLight, fontStyle: 'italic' },
   modal: { flex: 1, backgroundColor: COLORS.background },

@@ -75,14 +75,17 @@ export const obtenerParadas = (jornada_id: number) =>
   api.get(`/paradas?jornada_id=${jornada_id}`);
 
 // Clientes
-export const obtenerClientes = () =>
-  api.get('/clientes');
+export const obtenerClientes = (estado?: 'activos' | 'inactivos' | 'todos') =>
+  api.get('/clientes', { params: estado ? { estado } : undefined });
 
 export const crearCliente = (data: any) =>
   api.post('/clientes', data);
 
 export const actualizarCliente = (id: number, data: any) =>
   api.put(`/clientes/${id}`, data);
+
+export const cambiarEstadoCliente = (id: number, activo: boolean) =>
+  api.patch(`/clientes/${id}/estado`, { activo });
 
 export const actualizarCoordenadas = (id: number, lat: number, lng: number) =>
   api.patch(`/clientes/${id}/coords`, { lat, lng });

@@ -4,11 +4,15 @@ import { authMiddleware, soloAdmin, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
-router.get('/', authMiddleware, async (_req: Request, res: Response) => {
+router.get('/', authMiddleware, async (req: Request, res: Response) => {
+  const { estado } = req.query;
+  let where = 'c.activo=true';
+  if (estado === 'inactivos') where = 'c.activo=false';
+  else if (estado === 'todos') where = '1=1';
   try {
     const { rows } = await pool.query(
       `SELECT c.*, (SELECT rc.ruta_id FROM ruta_clientes rc WHERE rc.cliente_id=c.id LIMIT 1) as ruta_id
-       FROM clientes c WHERE c.activo=true ORDER BY c.nombre`
+       FROM clientes c WHERE ${where} ORDER BY c.nombre`
     );
     res.json(rows);
   } catch {
@@ -155,6 +159,20 @@ router.delete('/:id', authMiddleware, soloAdmin, async (req: AuthRequest, res: R
   try {
     await pool.query('UPDATE clientes SET activo=false WHERE id=$1', [id]);
     res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: 'Error' });
+  }
+});
+
+// Activar / desactivar un cliente (admin)
+router.patch('/:id/estado', authMiddleware, soloAdmin, async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const { activo } = req.body;
+  if (typeof activo !== 'boolean') return res.status(400).json({ error: 'activo (boolean) requerido' });
+  try {
+    const { rows } = await pool.query('UPDATE clientes SET activo=$1 WHERE id=$2 RETURNING *', [activo, id]);
+    if (!rows.length) return res.status(404).json({ error: 'Cliente no encontrado' });
+    res.json(rows[0]);
   } catch {
     res.status(500).json({ error: 'Error' });
   }

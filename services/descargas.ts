@@ -61,7 +61,25 @@ export async function descargarFoto(uriRelativa?: string | null) {
 const filaParada = (p: any, index: number) => {
   const llegada = p.timestamp_llegada ? format(new Date(p.timestamp_llegada), 'HH:mm') : '–';
   const salida = p.timestamp_salida ? format(new Date(p.timestamp_salida), 'HH:mm') : '–';
-  const fotos = [p.foto1_uri, p.foto2_uri].filter(Boolean).map(urlFoto);
+  const fotos = [p.foto1_uri, p.foto2_uri, p.foto3_uri, p.foto4_uri, p.foto5_uri].filter(Boolean).map(urlFoto);
+
+  const detalles: string[] = [];
+  if (p.tiene_vencidos) {
+    detalles.push(
+      `⚠️ Mercadería vencida${p.mercaderia_vencida ? `: ${p.mercaderia_vencida}` : ''}` +
+      (p.fecha_vencimiento ? ` (${p.fecha_vencimiento === 'Vencida' ? 'ya vencida' : `vence ${p.fecha_vencimiento}`})` : '')
+    );
+  }
+  if (p.urgente) {
+    detalles.push(`🚨 Urgente${p.urgencia_descripcion ? `: ${p.urgencia_descripcion}` : ''}`);
+  }
+  if (p.accion_requerida) {
+    detalles.push(`🔧 Acción requerida: ${p.accion_requerida}`);
+  }
+  if (p.producto_informe) {
+    detalles.push(`📦 Producto informado: ${p.producto_informe}${p.precio_informe ? ` — $${p.precio_informe}` : ''}`);
+  }
+
   return `
     <div class="parada">
       <div class="parada-header">
@@ -73,6 +91,7 @@ const filaParada = (p: any, index: number) => {
         <div class="parada-horario">${llegada} → ${salida}</div>
       </div>
       ${p.nota ? `<div class="parada-nota">📝 ${p.nota}</div>` : ''}
+      ${detalles.length ? `<div class="parada-detalles">${detalles.map((d) => `<div class="parada-detalle">${d}</div>`).join('')}</div>` : ''}
       ${fotos.length ? `<div class="parada-fotos">${fotos.map((f) => `<img src="${f}" />`).join('')}</div>` : ''}
     </div>
   `;
@@ -105,8 +124,10 @@ const generarHtmlReporte = (detalle: any) => {
           .parada-direccion { font-size: 12px; color: #6B7280; }
           .parada-horario { margin-left: auto; font-size: 13px; font-weight: 700; color: #1A3A5C; }
           .parada-nota { margin-top: 8px; font-size: 13px; font-style: italic; color: #1A1A2E; }
-          .parada-fotos { margin-top: 10px; display: flex; gap: 10px; }
-          .parada-fotos img { width: 140px; height: 140px; object-fit: cover; border-radius: 8px; }
+          .parada-detalles { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+          .parada-detalle { font-size: 13px; font-weight: 600; color: #D97706; }
+          .parada-fotos { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+          .parada-fotos img { width: 105px; height: 105px; object-fit: cover; border-radius: 8px; }
         </style>
       </head>
       <body>

@@ -30,6 +30,14 @@ export default function PreventistaLayout() {
         }}
       />
       <Tabs.Screen
+        name="mapa"
+        options={{
+          title: 'Mapa',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📍</Text>,
+          headerTitle: 'Mapa de la Ruta',
+        }}
+      />
+      <Tabs.Screen
         name="historial"
         options={{
           title: 'Historial',

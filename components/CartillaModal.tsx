@@ -7,7 +7,8 @@ import { actualizarCliente, cambiarEstadoCliente, obtenerDepartamentos, crearDep
 import { COLORS, COLOR_CATEGORIA } from '../constants';
 import { Cliente } from '../types';
 import { useAuthStore } from '../store/authStore';
-import SelectorConAgregar from './SelectorConAgregar';
+import SelectorModal from './SelectorModal';
+import SelectorModalMultiple from './SelectorModalMultiple';
 
 const FRECUENCIAS = ['Semanal', 'Quincenal', 'Mensual', 'Ocasional'];
 const FORMAS_PAGO = ['Efectivo', 'Cuenta corriente', 'Transferencia'];
@@ -17,7 +18,7 @@ const TIPOS_COMERCIO = [
   'Kiosco/MaxiKiosco', 'Verdulería', 'Dietética', 'Cotillón', 'Otros',
 ];
 
-const MARCAS = ['BIMBO', 'CITRIC', 'SANAS', 'ARRABAL'];
+const MARCAS = ['BIMBO', 'CITRIC', 'SANAS', 'ARRABAL', 'FARGO', 'LACTAL'];
 
 const FORM_VACIO = {
   nombre: '', direccion: '',
@@ -67,14 +68,19 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
   const [horaVisita, setHoraVisita] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [eliminando, setEliminando] = useState(false);
-  const [departamentos, setDepartamentos] = useState<string[]>([]);
-  const [distritos, setDistritos] = useState<string[]>([]);
+  const [departamentos, setDepartamentos] = useState<{ id: number; nombre: string }[]>([]);
+  const [distritos, setDistritos] = useState<{ id: number; nombre: string; departamento_id: number | null }[]>([]);
 
   useEffect(() => {
     if (!visible) return;
-    obtenerDepartamentos().then((res) => setDepartamentos(res.data.map((d: any) => d.nombre))).catch(() => {});
-    obtenerDistritos().then((res) => setDistritos(res.data.map((d: any) => d.nombre))).catch(() => {});
+    obtenerDepartamentos().then((res) => setDepartamentos(res.data)).catch(() => {});
+    obtenerDistritos().then((res) => setDistritos(res.data)).catch(() => {});
   }, [visible]);
+
+  const departamentoId = departamentos.find((d) => d.nombre === form.departamento)?.id ?? null;
+  const distritosFiltrados = departamentoId
+    ? distritos.filter((d) => d.departamento_id === departamentoId).map((d) => d.nombre)
+    : [];
 
   useEffect(() => {
     if (!cliente) return;
@@ -268,7 +274,8 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
 
           <Text style={styles.seccionTitulo}>Tipo de comercio</Text>
           <View style={styles.formGroup}>
-            <Chips
+            <SelectorModal
+              titulo="Tipo de comercio"
               opciones={TIPOS_COMERCIO}
               valor={form.tipo_comercio}
               color={color}
@@ -278,55 +285,57 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
 
           <Text style={styles.seccionTitulo}>Marcas que compra</Text>
           <View style={styles.formGroup}>
-            <View style={styles.chipsRow}>
-              {MARCAS.map((op) => {
-                const activo = form.marcas.includes(op);
-                return (
-                  <TouchableOpacity
-                    key={op}
-                    style={[styles.chip, { borderColor: color }, activo && { backgroundColor: color }]}
-                    onPress={() => setForm((prev) => ({
-                      ...prev,
-                      marcas: activo ? prev.marcas.filter((m) => m !== op) : [...prev.marcas, op],
-                    }))}
-                  >
-                    <Text style={[styles.chipTexto, { color: activo ? '#fff' : color }]}>{op}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            <SelectorModalMultiple
+              titulo="Marcas que compra"
+              opciones={MARCAS}
+              valores={form.marcas}
+              onCambiar={(v) => setForm((prev) => ({ ...prev, marcas: v }))}
+              color={color}
+            />
           </View>
 
           <Text style={styles.seccionTitulo}>Ubicación</Text>
           <View style={styles.formGroup}>
             <Text style={styles.label}>Departamento</Text>
-            <SelectorConAgregar
-              opciones={departamentos}
+            <SelectorModal
+              titulo="Departamento"
+              opciones={departamentos.map((d) => d.nombre)}
               valor={form.departamento}
-              onSeleccionar={(v) => setForm((prev) => ({ ...prev, departamento: v }))}
+              onSeleccionar={(v) => setForm((prev) => ({
+                ...prev,
+                departamento: v,
+                zona: distritos.some((d) => d.nombre === prev.zona && d.departamento_id === (departamentos.find((dep) => dep.nombre === v)?.id ?? null))
+                  ? prev.zona
+                  : '',
+              }))}
               color={color}
               puedeAgregar={puedeAgregarZonas}
-              placeholderNuevo="Ej: SAN RAFAEL"
+              placeholderNuevo="Ej: San Rafael"
               onAgregar={async (nombre) => {
-                await crearDepartamento(nombre);
-                setDepartamentos((prev) => (prev.includes(nombre) ? prev : [...prev, nombre].sort()));
+                const res = await crearDepartamento(nombre);
+                setDepartamentos((prev) => [...prev, res.data].sort((a, b) => a.nombre.localeCompare(b.nombre)));
               }}
             />
           </View>
           <View style={styles.formGroup}>
             <Text style={styles.label}>Zona / Distrito</Text>
-            <SelectorConAgregar
-              opciones={distritos}
-              valor={form.zona}
-              onSeleccionar={(v) => setForm((prev) => ({ ...prev, zona: v }))}
-              color={color}
-              puedeAgregar={puedeAgregarZonas}
-              placeholderNuevo="Ej: CENTRO"
-              onAgregar={async (nombre) => {
-                await crearDistrito(nombre);
-                setDistritos((prev) => (prev.includes(nombre) ? prev : [...prev, nombre].sort()));
-              }}
-            />
+            {form.departamento ? (
+              <SelectorModal
+                titulo="Zona / Distrito"
+                opciones={distritosFiltrados}
+                valor={form.zona}
+                onSeleccionar={(v) => setForm((prev) => ({ ...prev, zona: v }))}
+                color={color}
+                puedeAgregar={puedeAgregarZonas}
+                placeholderNuevo="Ej: Centro"
+                onAgregar={async (nombre) => {
+                  const res = await crearDistrito(nombre, departamentoId);
+                  setDistritos((prev) => [...prev, res.data]);
+                }}
+              />
+            ) : (
+              <Text style={styles.ayuda}>Elegí primero un departamento</Text>
+            )}
           </View>
 
           <Text style={styles.seccionTitulo}>Datos de la empresa</Text>
@@ -464,6 +473,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
   },
   inputMultiline: { minHeight: 80, textAlignVertical: 'top' },
+  ayuda: { fontSize: 13, color: COLORS.textLight, fontStyle: 'italic' },
   inputHora: { width: 120 },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { borderWidth: 1.5, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7 },

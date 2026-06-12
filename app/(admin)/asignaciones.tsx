@@ -10,6 +10,9 @@ import {
 import { COLORS } from '../../constants';
 import SelectorFechas from '../../components/SelectorFechas';
 import SelectorPersonas from '../../components/SelectorPersonas';
+import SelectorModal from '../../components/SelectorModal';
+
+const ICONO_ROL: Record<string, string> = { repartidor: '🚚', preventista: '👔', supervisor: '🛡️', admin: '⭐' };
 import Buscador from '../../components/Buscador';
 import { format } from 'date-fns';
 
@@ -77,11 +80,10 @@ export default function Asignaciones() {
     }
   };
 
-  // ── Ruta fija ──────────────────────────────────────────────────────────────
+  // ── Rutas habilitadas ────────────────────────────────────────────────────────
   const abrirModalFija = (usuario: any) => {
-    const fijaActual = fijas.find((f) => f.usuario_id === usuario.id);
     setUsuarioFijaSel(usuario);
-    setRutaFijaSel(fijaActual?.ruta ?? null);
+    setRutaFijaSel(null);
     setBusquedaFija('');
     setModalFijaVisible(true);
   };
@@ -100,16 +102,16 @@ export default function Asignaciones() {
     }
   };
 
-  const handleEliminarFija = async (usuario_id: number) => {
-    Alert.alert('Quitar ruta fija', '¿Querés quitar la ruta automática para este repartidor?', [
+  const handleEliminarFija = async (usuario_id: number, ruta_id: number) => {
+    Alert.alert('Quitar ruta', '¿Querés quitar esta ruta habilitada para este usuario?', [
       { text: 'Cancelar', style: 'cancel' },
       {
         text: 'Quitar', style: 'destructive', onPress: async () => {
           try {
-            await eliminarAsignacionFija(usuario_id);
+            await eliminarAsignacionFija(usuario_id, ruta_id);
             cargar();
           } catch {
-            Alert.alert('Error', 'No se pudo quitar la ruta fija');
+            Alert.alert('Error', 'No se pudo quitar la ruta');
           }
         }
       }
@@ -133,9 +135,13 @@ export default function Asignaciones() {
 
   const rutasFijasFiltradas = useMemo(() => {
     const q = busquedaFija.trim().toLowerCase();
-    if (!q) return rutas;
-    return rutas.filter((r) => r.nombre?.toLowerCase().includes(q));
-  }, [rutas, busquedaFija]);
+    const yaAsignadas = new Set(
+      fijas.filter((f) => f.usuario_id === usuarioFijaSel?.id).map((f) => f.ruta_id)
+    );
+    return rutas
+      .filter((r) => !yaAsignadas.has(r.id))
+      .filter((r) => !q || r.nombre?.toLowerCase().includes(q));
+  }, [rutas, busquedaFija, fijas, usuarioFijaSel]);
 
   const personasNoAdmin = usuarios.filter((u) => u.rol !== 'admin');
 
@@ -144,11 +150,13 @@ export default function Asignaciones() {
   return (
     <View style={styles.container}>
       <ScrollView>
-        {/* ── Sección Rutas Fijas ────────────────────────────────────────── */}
+        {/* ── Sección Rutas habilitadas ─────────────────────────────────── */}
         <TouchableOpacity style={styles.fijasHeader} onPress={() => setMostrarFijas((v) => !v)}>
           <View>
-            <Text style={styles.fijasHeaderTitulo}>⚙️ Rutas fijas (automáticas)</Text>
-            <Text style={styles.fijasHeaderSub}>Se aplican cada día sin necesidad de asignar manualmente</Text>
+            <Text style={styles.fijasHeaderTitulo}>⚙️ Rutas habilitadas</Text>
+            <Text style={styles.fijasHeaderSub}>
+              Cada repartidor/preventista elige cuál de estas rutas hacer al iniciar jornada (se resetea los domingos)
+            </Text>
           </View>
           <Text style={styles.chevron}>{mostrarFijas ? '▲' : '▼'}</Text>
         </TouchableOpacity>
@@ -156,27 +164,29 @@ export default function Asignaciones() {
         {mostrarFijas && (
           <View style={styles.fijasList}>
             {personasNoAdmin.map((usuario) => {
-              const fija = fijas.find((f) => f.usuario_id === usuario.id);
+              const fijasUsuario = fijas.filter((f) => f.usuario_id === usuario.id);
               return (
                 <View key={usuario.id} style={styles.fijaRow}>
                   <View style={styles.fijaInfo}>
                     <Text style={styles.fijaNombre}>
                       {usuario.rol === 'repartidor' ? '🚚' : usuario.rol === 'supervisor' ? '🛡️' : '👔'} {usuario.nombre}
                     </Text>
-                    <Text style={[styles.fijaRuta, !fija && styles.fijaRutaVacia]}>
-                      {fija ? `📍 ${fija.ruta.nombre}` : 'Sin ruta fija'}
-                    </Text>
-                  </View>
-                  <View style={styles.fijaBtns}>
-                    <TouchableOpacity style={styles.btnFija} onPress={() => abrirModalFija(usuario)}>
-                      <Text style={styles.btnFijaTexto}>{fija ? 'Cambiar' : 'Asignar'}</Text>
-                    </TouchableOpacity>
-                    {fija && (
-                      <TouchableOpacity style={styles.btnFijaQuitar} onPress={() => handleEliminarFija(usuario.id)}>
-                        <Text style={styles.btnFijaQuitarTexto}>✕</Text>
-                      </TouchableOpacity>
+                    {fijasUsuario.length ? (
+                      fijasUsuario.map((f) => (
+                        <View key={f.id} style={styles.fijaRutaRow}>
+                          <Text style={styles.fijaRuta}>📍 {f.ruta.nombre}</Text>
+                          <TouchableOpacity onPress={() => handleEliminarFija(usuario.id, f.ruta_id)}>
+                            <Text style={styles.btnFijaQuitarTexto}>✕</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={[styles.fijaRuta, styles.fijaRutaVacia]}>Sin rutas habilitadas</Text>
                     )}
                   </View>
+                  <TouchableOpacity style={styles.btnFija} onPress={() => abrirModalFija(usuario)}>
+                    <Text style={styles.btnFijaTexto}>+ Ruta</Text>
+                  </TouchableOpacity>
                 </View>
               );
             })}
@@ -239,11 +249,13 @@ export default function Asignaciones() {
             <Text style={styles.label}>¿Para qué día?</Text>
             <SelectorFechas fecha={fechaNueva} onCambiar={setFechaNueva} diasAtras={0} diasAdelante={21} />
             <Text style={styles.label}>¿Quién va a hacer el recorrido?</Text>
-            <SelectorPersonas
-              personas={personasNoAdmin}
-              seleccionado={usuarioSel?.id ?? null}
-              onSeleccionar={(id) => setUsuarioSel(personasNoAdmin.find((u) => u.id === id) ?? null)}
-              incluirTodos={false}
+            <SelectorModal
+              titulo="¿Quién va a hacer el recorrido?"
+              opciones={personasNoAdmin.map((u) => u.nombre)}
+              valor={usuarioSel?.nombre ?? ''}
+              onSeleccionar={(v) => setUsuarioSel(personasNoAdmin.find((u) => u.nombre === v) ?? null)}
+              iconos={Object.fromEntries(personasNoAdmin.map((u) => [u.nombre, ICONO_ROL[u.rol] ?? '']))}
+              placeholder="Elegí una persona"
             />
             <Text style={styles.label}>Ruta ({rutas.length} disponibles)</Text>
             <Buscador valor={busquedaRuta} onCambiar={setBusquedaRuta} placeholder="Buscar ruta por nombre..." />
@@ -268,12 +280,12 @@ export default function Asignaciones() {
         </View>
       </Modal>
 
-      {/* ── Modal ruta fija ────────────────────────────────────────────────── */}
+      {/* ── Modal agregar ruta habilitada ─────────────────────────────────── */}
       <Modal visible={modalFijaVisible} animationType="slide" presentationStyle="pageSheet">
         <View style={styles.modal}>
           <View style={styles.modalHeader}>
             <View>
-              <Text style={styles.modalTitulo}>Ruta fija</Text>
+              <Text style={styles.modalTitulo}>Habilitar ruta</Text>
               {usuarioFijaSel && (
                 <Text style={styles.modalSub}>{usuarioFijaSel.nombre}</Text>
               )}
@@ -283,7 +295,9 @@ export default function Asignaciones() {
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
-            <Text style={styles.label}>Elegí la ruta permanente para este repartidor</Text>
+            <Text style={styles.label}>
+              Agregá una ruta que esta persona pueda elegir al iniciar jornada
+            </Text>
             <Buscador valor={busquedaFija} onCambiar={setBusquedaFija} placeholder="Buscar ruta..." />
             <View style={{ gap: 8 }}>
               {rutasFijasFiltradas.map((r) => (
@@ -297,9 +311,12 @@ export default function Asignaciones() {
                   <Text style={styles.opcionDesc}>{r.clientes?.length ?? 0} clientes</Text>
                 </TouchableOpacity>
               ))}
+              {rutasFijasFiltradas.length === 0 && (
+                <Text style={styles.vacioChico}>No hay más rutas para habilitar</Text>
+              )}
             </View>
             <TouchableOpacity style={styles.btnConfirmar} onPress={handleGuardarFija}>
-              <Text style={styles.btnConfirmarTexto}>Guardar ruta fija</Text>
+              <Text style={styles.btnConfirmarTexto}>Habilitar ruta</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -325,22 +342,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: COLORS.border,
   },
   fijaRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10,
     paddingHorizontal: 16, paddingVertical: 12,
     borderBottomWidth: 1, borderBottomColor: COLORS.border,
   },
-  fijaInfo: { flex: 1 },
+  fijaInfo: { flex: 1, gap: 4 },
   fijaNombre: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  fijaRutaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   fijaRuta: { fontSize: 12, color: COLORS.primary, marginTop: 2 },
   fijaRutaVacia: { color: COLORS.textLight },
   fijaBtns: { flexDirection: 'row', gap: 6, alignItems: 'center' },
   btnFija: { backgroundColor: COLORS.primary, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
   btnFijaTexto: { color: '#fff', fontWeight: '700', fontSize: 12 },
-  btnFijaQuitar: {
-    borderWidth: 1, borderColor: COLORS.danger, borderRadius: 8,
-    paddingHorizontal: 10, paddingVertical: 6,
-  },
-  btnFijaQuitarTexto: { color: COLORS.danger, fontWeight: '700', fontSize: 12 },
+  btnFijaQuitarTexto: { color: COLORS.danger, fontWeight: '700', fontSize: 14 },
 
   // Diarias
   filtroPersonas: { backgroundColor: COLORS.card, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border },

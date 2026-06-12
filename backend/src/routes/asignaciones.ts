@@ -4,6 +4,17 @@ import { authMiddleware, soloAdmin, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
+// Lunes (00:00) de la semana que contiene `fecha`. Las semanas van de lunes a
+// domingo, por lo que el reseteo ocurre el domingo a la noche al pasar a una
+// nueva semana_inicio.
+function inicioSemana(fecha: Date): string {
+  const d = new Date(fecha);
+  const dia = d.getUTCDay(); // 0=domingo ... 6=sábado
+  const diff = dia === 0 ? -6 : 1 - dia;
+  d.setUTCDate(d.getUTCDate() + diff);
+  return d.toISOString().split('T')[0];
+}
+
 // Helper: arma el objeto completo de asignación (ruta + clientes)
 async function fetchAsignacionCompleta(asig: any) {
   const { rows: rc } = await pool.query(
@@ -42,40 +53,118 @@ async function fetchAsignacionCompleta(asig: any) {
 }
 
 // Asignación del día para el usuario autenticado.
-// Si no hay asignación manual, aplica automáticamente la ruta fija.
+// Orden de prioridad:
+//   1. Asignación manual del admin para hoy.
+//   2. Ruta ya elegida por el usuario para la semana en curso.
+//   3. Si tiene una sola ruta habilitada, se elige automáticamente.
+//   4. Si tiene varias, se informa que debe elegir (necesita_eleccion).
 router.get('/hoy', authMiddleware, async (req: AuthRequest, res: Response) => {
   const usuario_id = req.usuario!.id;
-  const hoy = new Date().toISOString().split('T')[0];
+  const ahora = new Date();
+  const hoy = ahora.toISOString().split('T')[0];
+  const semana = inicioSemana(ahora);
   try {
-    let { rows } = await pool.query(
+    const { rows: manual } = await pool.query(
       `SELECT a.*, r.nombre as ruta_nombre, r.descripcion as ruta_desc
        FROM asignaciones a JOIN rutas r ON r.id=a.ruta_id
        WHERE a.usuario_id=$1 AND a.fecha=$2 LIMIT 1`,
       [usuario_id, hoy]
     );
+    if (manual.length) return res.json(await fetchAsignacionCompleta(manual[0]));
 
-    // Sin asignación manual → aplicar ruta fija si existe
-    if (!rows.length) {
-      const { rows: fija } = await pool.query(
-        `SELECT af.ruta_id, r.nombre as ruta_nombre, r.descripcion as ruta_desc
-         FROM asignaciones_fijas af JOIN rutas r ON r.id=af.ruta_id
-         WHERE af.usuario_id=$1 AND af.activo=true`,
-        [usuario_id]
-      );
-      if (fija.length) {
-        const { rows: nueva } = await pool.query(
-          `INSERT INTO asignaciones (usuario_id, ruta_id, fecha) VALUES ($1,$2,$3)
-           ON CONFLICT (usuario_id, fecha) DO UPDATE SET ruta_id=$2 RETURNING *`,
-          [usuario_id, fija[0].ruta_id, hoy]
-        );
-        rows = [{ ...nueva[0], ruta_nombre: fija[0].ruta_nombre, ruta_desc: fija[0].ruta_desc }];
-      }
+    const { rows: seleccion } = await pool.query(
+      `SELECT sr.ruta_id, r.nombre as ruta_nombre, r.descripcion as ruta_desc
+       FROM selecciones_ruta sr JOIN rutas r ON r.id=sr.ruta_id
+       WHERE sr.usuario_id=$1 AND sr.semana_inicio=$2`,
+      [usuario_id, semana]
+    );
+    if (seleccion.length) {
+      return res.json(await fetchAsignacionCompleta({
+        usuario_id, ruta_id: seleccion[0].ruta_id, fecha: hoy,
+        ruta_nombre: seleccion[0].ruta_nombre, ruta_desc: seleccion[0].ruta_desc,
+      }));
     }
 
-    if (!rows.length) return res.json(null);
-    res.json(await fetchAsignacionCompleta(rows[0]));
+    const { rows: fijas } = await pool.query(
+      `SELECT af.ruta_id, r.nombre as ruta_nombre, r.descripcion as ruta_desc,
+              (SELECT COUNT(*) FROM ruta_clientes WHERE ruta_id=af.ruta_id)::int as clientes_count
+       FROM asignaciones_fijas af JOIN rutas r ON r.id=af.ruta_id
+       WHERE af.usuario_id=$1 AND af.activo=true ORDER BY r.nombre`,
+      [usuario_id]
+    );
+
+    if (!fijas.length) return res.json(null);
+
+    if (fijas.length === 1) {
+      await pool.query(
+        `INSERT INTO selecciones_ruta (usuario_id, ruta_id, semana_inicio) VALUES ($1,$2,$3)
+         ON CONFLICT (usuario_id, semana_inicio) DO UPDATE SET ruta_id=$2`,
+        [usuario_id, fijas[0].ruta_id, semana]
+      );
+      return res.json(await fetchAsignacionCompleta({
+        usuario_id, ruta_id: fijas[0].ruta_id, fecha: hoy,
+        ruta_nombre: fijas[0].ruta_nombre, ruta_desc: fijas[0].ruta_desc,
+      }));
+    }
+
+    res.json({
+      necesita_eleccion: true,
+      opciones: fijas.map((f) => ({
+        id: f.ruta_id, nombre: f.ruta_nombre, descripcion: f.ruta_desc, clientes_count: f.clientes_count,
+      })),
+    });
   } catch {
     res.status(500).json({ error: 'Error' });
+  }
+});
+
+// Rutas habilitadas para el usuario autenticado y cuál tiene elegida esta semana.
+router.get('/rutas-disponibles', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const usuario_id = req.usuario!.id;
+  const semana = inicioSemana(new Date());
+  try {
+    const { rows: fijas } = await pool.query(
+      `SELECT af.ruta_id, r.nombre as ruta_nombre, r.descripcion as ruta_desc,
+              (SELECT COUNT(*) FROM ruta_clientes WHERE ruta_id=af.ruta_id)::int as clientes_count
+       FROM asignaciones_fijas af JOIN rutas r ON r.id=af.ruta_id
+       WHERE af.usuario_id=$1 AND af.activo=true ORDER BY r.nombre`,
+      [usuario_id]
+    );
+    const { rows: seleccion } = await pool.query(
+      `SELECT ruta_id FROM selecciones_ruta WHERE usuario_id=$1 AND semana_inicio=$2`,
+      [usuario_id, semana]
+    );
+    res.json({
+      opciones: fijas.map((f) => ({
+        id: f.ruta_id, nombre: f.ruta_nombre, descripcion: f.ruta_desc, clientes_count: f.clientes_count,
+      })),
+      seleccion_actual: seleccion[0]?.ruta_id ?? null,
+    });
+  } catch {
+    res.status(500).json({ error: 'Error' });
+  }
+});
+
+// El usuario elige cuál de sus rutas habilitadas va a hacer esta semana.
+router.post('/elegir', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const usuario_id = req.usuario!.id;
+  const { ruta_id } = req.body;
+  if (!ruta_id) return res.status(400).json({ error: 'ruta_id requerido' });
+  const semana = inicioSemana(new Date());
+  try {
+    const { rows: permitida } = await pool.query(
+      `SELECT 1 FROM asignaciones_fijas WHERE usuario_id=$1 AND ruta_id=$2 AND activo=true`,
+      [usuario_id, ruta_id]
+    );
+    if (!permitida.length) return res.status(403).json({ error: 'Esa ruta no está habilitada para vos' });
+    await pool.query(
+      `INSERT INTO selecciones_ruta (usuario_id, ruta_id, semana_inicio) VALUES ($1,$2,$3)
+       ON CONFLICT (usuario_id, semana_inicio) DO UPDATE SET ruta_id=$2`,
+      [usuario_id, ruta_id, semana]
+    );
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: 'Error al elegir ruta' });
   }
 });
 
@@ -104,7 +193,7 @@ router.get('/fijas', authMiddleware, soloAdmin, async (_req: AuthRequest, res: R
   }
 });
 
-// Asignar o cambiar ruta fija de un usuario (upsert)
+// Habilitar una ruta más para un usuario (no reemplaza las que ya tiene)
 router.put('/fijas/:usuario_id', authMiddleware, soloAdmin, async (req: AuthRequest, res: Response) => {
   const { usuario_id } = req.params;
   const { ruta_id } = req.body;
@@ -112,7 +201,7 @@ router.put('/fijas/:usuario_id', authMiddleware, soloAdmin, async (req: AuthRequ
   try {
     await pool.query(
       `INSERT INTO asignaciones_fijas (usuario_id, ruta_id, activo) VALUES ($1,$2,true)
-       ON CONFLICT (usuario_id) DO UPDATE SET ruta_id=$2, activo=true`,
+       ON CONFLICT (usuario_id, ruta_id) DO UPDATE SET activo=true`,
       [usuario_id, ruta_id]
     );
     res.json({ ok: true });
@@ -121,11 +210,11 @@ router.put('/fijas/:usuario_id', authMiddleware, soloAdmin, async (req: AuthRequ
   }
 });
 
-// Quitar ruta fija de un usuario
-router.delete('/fijas/:usuario_id', authMiddleware, soloAdmin, async (req: AuthRequest, res: Response) => {
-  const { usuario_id } = req.params;
+// Quitar una ruta habilitada de un usuario
+router.delete('/fijas/:usuario_id/:ruta_id', authMiddleware, soloAdmin, async (req: AuthRequest, res: Response) => {
+  const { usuario_id, ruta_id } = req.params;
   try {
-    await pool.query('UPDATE asignaciones_fijas SET activo=false WHERE usuario_id=$1', [usuario_id]);
+    await pool.query('UPDATE asignaciones_fijas SET activo=false WHERE usuario_id=$1 AND ruta_id=$2', [usuario_id, ruta_id]);
     res.json({ ok: true });
   } catch {
     res.status(500).json({ error: 'Error' });

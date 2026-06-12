@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, Alert,
   ScrollView, ActivityIndicator, Image, TextInput, Modal, FlatList,
 } from 'react-native';
+import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import * as ImagePicker from 'expo-image-picker';
 import { useJornadaStore } from '../../store/jornadaStore';
 import { registrarParada, obtenerParadas, obtenerAsignacionHoy, actualizarOrdenRuta } from '../../services/api';
@@ -191,16 +192,9 @@ export default function JornadaRepartidor() {
 
   if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
 
-  const clientesRuta: Cliente[] = asignacion?.ruta?.clientes?.map((c: any) => c.cliente) ?? [];
   const paradasCompletadas = paradas.filter((p) => p.completada);
 
-  const moverCliente = (index: number, direccion: -1 | 1) => {
-    const lista = asignacion?.ruta?.clientes;
-    if (!lista) return;
-    const nuevoIndex = index + direccion;
-    if (nuevoIndex < 0 || nuevoIndex >= lista.length) return;
-    const nuevos = [...lista];
-    [nuevos[index], nuevos[nuevoIndex]] = [nuevos[nuevoIndex], nuevos[index]];
+  const handleReordenar = (nuevos: any[]) => {
     setAsignacion({ ...asignacion, ruta: { ...asignacion.ruta, clientes: nuevos } });
     const rutaId = asignacion.ruta.id;
     if (rutaId) {
@@ -373,43 +367,33 @@ export default function JornadaRepartidor() {
               </TouchableOpacity>
             </View>
           </View>
-          <FlatList
-            data={clientesRuta}
-            keyExtractor={(item) => String(item.id)}
+          <DraggableFlatList
+            data={asignacion?.ruta?.clientes ?? []}
+            keyExtractor={(item: any) => String(item.cliente.id)}
             contentContainerStyle={{ padding: 16, gap: 10 }}
-            renderItem={({ item, index }) => {
-              const yaVisitado = paradas.some((p) => p.cliente_id === item.id && p.completada)
-                || pendientes.some((p) => p.cliente_id === item.id);
+            onDragEnd={({ data }) => handleReordenar(data)}
+            renderItem={({ item, getIndex, drag, isActive }: RenderItemParams<any>) => {
+              const index = getIndex() ?? 0;
+              const cliente = item.cliente;
+              const yaVisitado = paradas.some((p) => p.cliente_id === cliente.id && p.completada)
+                || pendientes.some((p) => p.cliente_id === cliente.id);
               return (
-                <View style={styles.clienteRow}>
-                  <View style={styles.flechasOrden}>
-                    <TouchableOpacity
-                      style={[styles.btnFlecha, index === 0 && styles.btnFlechaDisabled]}
-                      onPress={() => moverCliente(index, -1)}
-                      disabled={index === 0}
-                    >
-                      <Text style={styles.btnFlechaTexto}>▲</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.btnFlecha, index === clientesRuta.length - 1 && styles.btnFlechaDisabled]}
-                      onPress={() => moverCliente(index, 1)}
-                      disabled={index === clientesRuta.length - 1}
-                    >
-                      <Text style={styles.btnFlechaTexto}>▼</Text>
-                    </TouchableOpacity>
-                  </View>
+                <View style={[styles.clienteRow, isActive && styles.clienteRowActiva]}>
+                  <TouchableOpacity onLongPress={drag} delayLongPress={150} style={styles.asa}>
+                    <Text style={styles.asaTexto}>☰</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.clienteItem, yaVisitado && styles.clienteItemVisitado]}
-                    onPress={() => iniciarParadaEnCliente(item)}
+                    onPress={() => iniciarParadaEnCliente(cliente)}
                     disabled={yaVisitado}
                   >
-                    <Text style={styles.clienteNombre}>{index + 1}. {item.nombre}</Text>
-                    <Text style={styles.clienteDireccion}>{item.direccion}</Text>
+                    <Text style={styles.clienteNombre}>{index + 1}. {cliente.nombre}</Text>
+                    <Text style={styles.clienteDireccion}>{cliente.direccion}</Text>
                     {yaVisitado && <Text style={styles.clienteVisitado}>✓ Visitado</Text>}
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.btnCartilla} onPress={() => {
                     setClientesModal(false);
-                    setClienteCartilla(item);
+                    setClienteCartilla(cliente);
                   }}>
                     <Text style={styles.btnCartillaIcono}>📋</Text>
                     <Text style={styles.btnCartillaTexto}>Cartilla</Text>
@@ -623,15 +607,12 @@ const styles = StyleSheet.create({
   },
   btnNuevoClienteTexto: { color: '#fff', fontWeight: '700', fontSize: 12 },
   clienteRow: { flexDirection: 'row', gap: 8, alignItems: 'stretch' },
-  flechasOrden: { gap: 2, justifyContent: 'center' },
-  btnFlecha: {
-    width: 26, height: 22, borderRadius: 6,
-    backgroundColor: COLORS.background,
+  clienteRowActiva: { opacity: 0.85 },
+  asa: {
+    width: 34, borderRadius: 8,
     justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: COLORS.border,
   },
-  btnFlechaDisabled: { opacity: 0.3 },
-  btnFlechaTexto: { fontSize: 11, color: COLORS.repartidor, fontWeight: '700' },
+  asaTexto: { fontSize: 18, color: COLORS.textLight },
   clienteItem: {
     flex: 1,
     backgroundColor: COLORS.card,

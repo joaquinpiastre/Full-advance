@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity,
+  View, Text, StyleSheet, ActivityIndicator, TouchableOpacity,
   Alert, ScrollView, Image, TextInput,
 } from 'react-native';
+import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import * as ImagePicker from 'expo-image-picker';
 import { useJornadaStore } from '../../store/jornadaStore';
 import {
@@ -199,11 +200,7 @@ export default function RutaPreventista() {
     }
   };
 
-  const moverCliente = (index: number, direccion: -1 | 1) => {
-    const nuevoIndex = index + direccion;
-    if (nuevoIndex < 0 || nuevoIndex >= clientes.length) return;
-    const nuevos = [...clientes];
-    [nuevos[index], nuevos[nuevoIndex]] = [nuevos[nuevoIndex], nuevos[index]];
+  const handleReordenar = (nuevos: Cliente[]) => {
     setClientes(nuevos);
     if (rutaId) {
       actualizarOrdenRuta(rutaId, nuevos.map((c) => c.id)).catch(() => {});
@@ -442,34 +439,23 @@ export default function RutaPreventista() {
             </View>
           </View>
 
-          <FlatList
+          <DraggableFlatList
             data={clientes}
             keyExtractor={(item) => String(item.id)}
             contentContainerStyle={{ padding: 16, gap: 10 }}
-            renderItem={({ item, index }) => {
+            onDragEnd={({ data }) => handleReordenar(data)}
+            renderItem={({ item, getIndex, drag, isActive }: RenderItemParams<Cliente>) => {
+              const index = getIndex() ?? 0;
               const visitado = paradas.some((p) => p.cliente_id === item.id && p.completada)
                 || pendientes.some((p) => p.cliente_id === item.id);
               return (
-                <View style={[styles.clienteCard, visitado && styles.clienteCardVisitado]}>
+                <View style={[styles.clienteCard, visitado && styles.clienteCardVisitado, isActive && styles.clienteCardActiva]}>
                   <View style={styles.clienteOrden}>
                     <Text style={styles.clienteOrdenNum}>{index + 1}</Text>
                   </View>
-                  <View style={styles.flechasOrden}>
-                    <TouchableOpacity
-                      style={[styles.btnFlecha, index === 0 && styles.btnFlechaDisabled]}
-                      onPress={() => moverCliente(index, -1)}
-                      disabled={index === 0}
-                    >
-                      <Text style={styles.btnFlechaTexto}>▲</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.btnFlecha, index === clientes.length - 1 && styles.btnFlechaDisabled]}
-                      onPress={() => moverCliente(index, 1)}
-                      disabled={index === clientes.length - 1}
-                    >
-                      <Text style={styles.btnFlechaTexto}>▼</Text>
-                    </TouchableOpacity>
-                  </View>
+                  <TouchableOpacity onLongPress={drag} delayLongPress={150} style={styles.asa}>
+                    <Text style={styles.asaTexto}>☰</Text>
+                  </TouchableOpacity>
                   <View style={styles.clienteInfo}>
                     <Text style={styles.clienteNombre}>{item.nombre}</Text>
                     <Text style={styles.clienteDireccion}>{item.direccion}</Text>
@@ -718,6 +704,7 @@ const styles = StyleSheet.create({
     borderLeftColor: COLORS.preventista,
   },
   clienteCardVisitado: { borderLeftColor: COLORS.success, opacity: 0.75 },
+  clienteCardActiva: { opacity: 0.85, shadowOpacity: 0.2, elevation: 6 },
   clienteOrden: {
     width: 34,
     height: 34,
@@ -727,15 +714,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   clienteOrdenNum: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  flechasOrden: { gap: 2 },
-  btnFlecha: {
-    width: 26, height: 22, borderRadius: 6,
-    backgroundColor: COLORS.background,
+  asa: {
+    width: 34, height: 34, borderRadius: 8,
     justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: COLORS.border,
   },
-  btnFlechaDisabled: { opacity: 0.3 },
-  btnFlechaTexto: { fontSize: 11, color: COLORS.preventista, fontWeight: '700' },
+  asaTexto: { fontSize: 18, color: COLORS.textLight },
   clienteInfo: { flex: 1 },
   clienteNombre: { fontSize: 14, fontWeight: '700', color: COLORS.text },
   clienteDireccion: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },

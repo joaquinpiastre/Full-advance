@@ -3,8 +3,12 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, ActivityIn
 import { router } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
 import { useJornadaStore } from '../../store/jornadaStore';
-import { iniciarJornada, finalizarJornada, obtenerJornadaActiva, obtenerAsignacionHoy } from '../../services/api';
+import {
+  iniciarJornada, finalizarJornada, obtenerJornadaActiva, obtenerAsignacionHoy,
+  obtenerRutasDisponibles, elegirRuta,
+} from '../../services/api';
 import { iniciarGps, detenerGps } from '../../services/gps';
+import EleccionRutaModal, { OpcionRuta } from '../../components/EleccionRutaModal';
 import { COLORS } from '../../constants';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -14,6 +18,8 @@ export default function InicioRepartidor() {
   const { jornada, setJornada } = useJornadaStore();
   const [cargando, setCargando] = useState(true);
   const [asignacion, setAsignacion] = useState<any>(null);
+  const [rutasDisponibles, setRutasDisponibles] = useState<{ opciones: OpcionRuta[]; seleccion_actual: number | null }>({ opciones: [], seleccion_actual: null });
+  const [modalEleccionVisible, setModalEleccionVisible] = useState(false);
 
   useEffect(() => {
     cargarEstado();
@@ -22,17 +28,33 @@ export default function InicioRepartidor() {
   const cargarEstado = async () => {
     setCargando(true);
     try {
-      const [jornadaRes, asigRes] = await Promise.allSettled([
+      const [jornadaRes, asigRes, rutasRes] = await Promise.allSettled([
         obtenerJornadaActiva(),
         obtenerAsignacionHoy(),
+        obtenerRutasDisponibles(),
       ]);
       if (jornadaRes.status === 'fulfilled') setJornada(jornadaRes.value.data);
       if (asigRes.status === 'fulfilled') setAsignacion(asigRes.value.data);
+      if (rutasRes.status === 'fulfilled') setRutasDisponibles(rutasRes.value.data);
     } catch {}
     setCargando(false);
   };
 
+  const handleElegirRuta = async (ruta_id: number) => {
+    try {
+      await elegirRuta(ruta_id);
+      setModalEleccionVisible(false);
+      await cargarEstado();
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo elegir la ruta');
+    }
+  };
+
   const handleIniciar = async () => {
+    if (asignacion?.necesita_eleccion) {
+      setModalEleccionVisible(true);
+      return;
+    }
     Alert.alert('Iniciar jornada', '¿Empezar el seguimiento GPS?', [
       { text: 'Cancelar', style: 'cancel' },
       {
@@ -71,24 +93,40 @@ export default function InicioRepartidor() {
   if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
 
   const hoy = format(new Date(), "EEEE d 'de' MMMM", { locale: es });
+  const puedeCambiarRuta = !jornada && rutasDisponibles.opciones.length > 1;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.bienvenida}>Hola, {usuario?.nombre} 👋</Text>
       <Text style={styles.fecha}>{hoy}</Text>
 
-      {asignacion ? (
+      {asignacion?.necesita_eleccion ? (
+        <View style={[styles.card, styles.cardWarning]}>
+          <Text style={styles.cardLabel}>Elegí tu ruta de la semana</Text>
+          <Text style={styles.cardDesc}>
+            Tenés {asignacion.opciones?.length ?? 0} rutas habilitadas. Elegí cuál vas a hacer esta semana.
+          </Text>
+          <TouchableOpacity style={styles.btnEleccion} onPress={() => setModalEleccionVisible(true)}>
+            <Text style={styles.btnEleccionTexto}>Elegir ruta</Text>
+          </TouchableOpacity>
+        </View>
+      ) : asignacion ? (
         <View style={styles.card}>
           <Text style={styles.cardLabel}>Ruta asignada hoy</Text>
           <Text style={styles.cardTitulo}>{asignacion.ruta?.nombre}</Text>
           {asignacion.ruta?.descripcion && (
             <Text style={styles.cardDesc}>{asignacion.ruta.descripcion}</Text>
           )}
+          {puedeCambiarRuta && (
+            <TouchableOpacity style={styles.btnCambiar} onPress={() => setModalEleccionVisible(true)}>
+              <Text style={styles.btnCambiarTexto}>Cambiar ruta de la semana</Text>
+            </TouchableOpacity>
+          )}
         </View>
       ) : (
         <View style={[styles.card, styles.cardWarning]}>
           <Text style={styles.cardLabel}>Sin asignación hoy</Text>
-          <Text style={styles.cardDesc}>El admin aún no asignó una ruta para hoy.</Text>
+          <Text style={styles.cardDesc}>El admin aún no te habilitó una ruta.</Text>
         </View>
       )}
 
@@ -119,6 +157,15 @@ export default function InicioRepartidor() {
       <TouchableOpacity style={styles.btnLogout} onPress={() => { logout(); router.replace('/(auth)/login'); }}>
         <Text style={styles.btnLogoutTexto}>Cerrar sesión</Text>
       </TouchableOpacity>
+
+      <EleccionRutaModal
+        visible={modalEleccionVisible}
+        opciones={asignacion?.necesita_eleccion ? asignacion.opciones : rutasDisponibles.opciones}
+        seleccionActual={rutasDisponibles.seleccion_actual}
+        color={COLORS.primary}
+        onElegir={handleElegirRuta}
+        onClose={!asignacion?.necesita_eleccion ? () => setModalEleccionVisible(false) : undefined}
+      />
     </ScrollView>
   );
 }
@@ -139,12 +186,30 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 6,
     elevation: 2,
+    gap: 4,
   },
   cardWarning: { borderLeftColor: COLORS.warning },
   cardSuccess: { borderLeftColor: COLORS.success },
   cardLabel: { fontSize: 12, color: COLORS.textLight, fontWeight: '600', marginBottom: 4 },
   cardTitulo: { fontSize: 17, fontWeight: '700', color: COLORS.text },
   cardDesc: { fontSize: 13, color: COLORS.textLight, marginTop: 4 },
+  btnEleccion: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  btnEleccionTexto: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  btnCambiar: {
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    borderRadius: 10,
+    padding: 10,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  btnCambiarTexto: { color: COLORS.primary, fontWeight: '700', fontSize: 13 },
   btnPrimario: {
     backgroundColor: COLORS.primary,
     borderRadius: 12,

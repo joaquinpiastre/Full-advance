@@ -97,11 +97,11 @@ export const obtenerDepartamentos = () =>
 export const crearDepartamento = (nombre: string) =>
   api.post('/zonas/departamentos', { nombre });
 
-export const obtenerDistritos = () =>
-  api.get('/zonas/distritos');
+export const obtenerDistritos = (departamento_id?: number) =>
+  api.get('/zonas/distritos', { params: departamento_id ? { departamento_id } : undefined });
 
-export const crearDistrito = (nombre: string) =>
-  api.post('/zonas/distritos', { nombre });
+export const crearDistrito = (nombre: string, departamento_id?: number | null) =>
+  api.post('/zonas/distritos', { nombre, departamento_id: departamento_id ?? null });
 
 // Rutas
 export const obtenerRutas = () =>
@@ -129,15 +129,22 @@ export const asignarRuta = (data: { usuario_id: number; ruta_id: number; fecha: 
 export const obtenerAsignaciones = () =>
   api.get('/asignaciones');
 
-// Rutas fijas (asignación permanente que se aplica automáticamente cada día)
+// Rutas fijas (rutas habilitadas para un usuario, puede tener varias)
 export const obtenerAsignacionesFijas = () =>
   api.get('/asignaciones/fijas');
 
 export const guardarAsignacionFija = (usuario_id: number, ruta_id: number) =>
   api.put(`/asignaciones/fijas/${usuario_id}`, { ruta_id });
 
-export const eliminarAsignacionFija = (usuario_id: number) =>
-  api.delete(`/asignaciones/fijas/${usuario_id}`);
+export const eliminarAsignacionFija = (usuario_id: number, ruta_id: number) =>
+  api.delete(`/asignaciones/fijas/${usuario_id}/${ruta_id}`);
+
+// Rutas habilitadas para el usuario autenticado + cuál eligió esta semana
+export const obtenerRutasDisponibles = () =>
+  api.get('/asignaciones/rutas-disponibles');
+
+export const elegirRuta = (ruta_id: number) =>
+  api.post('/asignaciones/elegir', { ruta_id });
 
 // Alertas admin (paradas con urgente o vencidos, últimos 7 días)
 export const obtenerAlertas = () =>

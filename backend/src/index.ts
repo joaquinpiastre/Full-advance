@@ -107,7 +107,29 @@ pool.query(`
     ADD COLUMN IF NOT EXISTS foto5_uri VARCHAR(500)
 `).catch(() => {});
 
-// Listas de departamentos y distritos seleccionables, ampliables por admin/supervisor
+// Listas de departamentos y distritos seleccionables, ampliables por admin/supervisor.
+// Los distritos pertenecen a un departamento: al elegir un departamento en la app
+// se muestran solo los distritos de ese departamento.
+const DEPARTAMENTOS_INICIALES: { nombre: string; distritos: string[] }[] = [
+  {
+    nombre: 'San Rafael',
+    distritos: [
+      '9 de Julio / Los Sauces', 'Alvear', 'Av. Moreno', 'Ballofet', 'Centro',
+      'El Cerrito', 'H. Yrigoyen de Este a Oeste', 'Malargüe', 'Mitre',
+      'Rama Caída y Cuadro Benegas', 'Rama Caída y Valle Grande',
+      'Sarmiento, Alberdi, P. Vargas', 'Yrigoyen, Rivadavia, Iselin', 'Zapata',
+    ],
+  },
+  {
+    nombre: 'Alvear',
+    distritos: ['Alvear', 'Ballofet'],
+  },
+  {
+    nombre: 'Malargüe',
+    distritos: ['Av. Moreno', 'Malargüe', 'Yrigoyen, Rivadavia, Iselin'],
+  },
+];
+
 pool.query(`
   CREATE TABLE IF NOT EXISTS departamentos (
     id SERIAL PRIMARY KEY,
@@ -117,21 +139,51 @@ pool.query(`
   .then(() => pool.query(`
     CREATE TABLE IF NOT EXISTS distritos (
       id SERIAL PRIMARY KEY,
-      nombre VARCHAR(100) UNIQUE NOT NULL
+      nombre VARCHAR(100) NOT NULL,
+      departamento_id INTEGER REFERENCES departamentos(id),
+      UNIQUE(nombre, departamento_id)
     )
   `))
+  // Migración para bases existentes: agregar departamento_id y ajustar el UNIQUE.
   .then(() => pool.query(`
-    INSERT INTO departamentos (nombre)
-    SELECT DISTINCT TRIM(departamento) FROM clientes
-    WHERE departamento IS NOT NULL AND TRIM(departamento) <> ''
-    ON CONFLICT (nombre) DO NOTHING
+    ALTER TABLE distritos ADD COLUMN IF NOT EXISTS departamento_id INTEGER REFERENCES departamentos(id)
   `))
   .then(() => pool.query(`
-    INSERT INTO distritos (nombre)
-    SELECT DISTINCT TRIM(zona) FROM clientes
-    WHERE zona IS NOT NULL AND TRIM(zona) <> ''
-    ON CONFLICT (nombre) DO NOTHING
+    ALTER TABLE distritos DROP CONSTRAINT IF EXISTS distritos_nombre_key
   `))
+  .then(() => pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'distritos_nombre_departamento_id_key'
+      ) THEN
+        ALTER TABLE distritos ADD CONSTRAINT distritos_nombre_departamento_id_key UNIQUE (nombre, departamento_id);
+      END IF;
+    END $$;
+  `))
+  // Reemplazo único de la lista de departamentos/distritos por San Rafael, Alvear y Malargüe
+  // (con sus distritos), basado en los datos de clientes existentes. Solo corre una vez.
+  .then(() => pool.query(`SELECT COUNT(*)::int AS c FROM distritos WHERE departamento_id IS NOT NULL`))
+  .then(async ({ rows }) => {
+    if (rows[0].c > 0) return;
+    await pool.query('DELETE FROM distritos');
+    await pool.query('DELETE FROM departamentos');
+    for (const dep of DEPARTAMENTOS_INICIALES) {
+      const { rows: depRows } = await pool.query(
+        `INSERT INTO departamentos (nombre) VALUES ($1)
+         ON CONFLICT (nombre) DO UPDATE SET nombre=EXCLUDED.nombre
+         RETURNING id`,
+        [dep.nombre]
+      );
+      for (const distrito of dep.distritos) {
+        await pool.query(
+          `INSERT INTO distritos (nombre, departamento_id) VALUES ($1, $2)
+           ON CONFLICT (nombre, departamento_id) DO NOTHING`,
+          [distrito, depRows[0].id]
+        );
+      }
+    }
+  })
   .catch(() => {});
 
 // Noticias/anuncios de admin y supervisor para repartidores y preventistas

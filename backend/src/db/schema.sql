@@ -67,7 +67,9 @@ CREATE TABLE IF NOT EXISTS departamentos (
 
 CREATE TABLE IF NOT EXISTS distritos (
   id SERIAL PRIMARY KEY,
-  nombre VARCHAR(100) UNIQUE NOT NULL
+  nombre VARCHAR(100) NOT NULL,
+  departamento_id INTEGER REFERENCES departamentos(id),
+  UNIQUE(nombre, departamento_id)
 );
 
 -- Noticias/anuncios que admin y supervisor publican para repartidores y preventistas.
@@ -104,15 +106,40 @@ CREATE TABLE IF NOT EXISTS asignaciones (
   UNIQUE(usuario_id, fecha)
 );
 
--- Ruta permanente de cada repartidor/preventista, se aplica automáticamente cada día
--- si no hay una asignación manual para esa fecha.
+-- Rutas habilitadas para cada repartidor/preventista. Un usuario puede tener
+-- varias rutas posibles; elige cuál hacer al iniciar la jornada (ver
+-- selecciones_ruta). Si solo tiene una, se aplica automáticamente.
 CREATE TABLE IF NOT EXISTS asignaciones_fijas (
   id SERIAL PRIMARY KEY,
   usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
   ruta_id INTEGER NOT NULL REFERENCES rutas(id),
   activo BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(usuario_id)
+  UNIQUE(usuario_id, ruta_id)
+);
+
+-- Migración: si la base ya existía con UNIQUE(usuario_id), lo cambiamos a
+-- UNIQUE(usuario_id, ruta_id) para permitir varias rutas por usuario.
+ALTER TABLE asignaciones_fijas DROP CONSTRAINT IF EXISTS asignaciones_fijas_usuario_id_key;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'asignaciones_fijas_usuario_id_ruta_id_key'
+  ) THEN
+    ALTER TABLE asignaciones_fijas ADD CONSTRAINT asignaciones_fijas_usuario_id_ruta_id_key UNIQUE (usuario_id, ruta_id);
+  END IF;
+END $$;
+
+-- Ruta elegida por el usuario para la semana en curso (lunes a domingo).
+-- Se resetea automáticamente cada semana: el domingo a la noche cambia la
+-- semana_inicio y el usuario debe elegir de nuevo al iniciar jornada.
+CREATE TABLE IF NOT EXISTS selecciones_ruta (
+  id SERIAL PRIMARY KEY,
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+  ruta_id INTEGER NOT NULL REFERENCES rutas(id),
+  semana_inicio DATE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(usuario_id, semana_inicio)
 );
 
 CREATE TABLE IF NOT EXISTS jornadas (

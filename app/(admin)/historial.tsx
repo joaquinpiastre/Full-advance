@@ -331,10 +331,35 @@ export default function HistorialAdmin() {
               <View key={p.id} style={styles.paradaCard}>
                 <View style={styles.paradaHeaderRow}>
                   <Text style={styles.paradaNombre}>{p.cliente?.nombre ?? 'Sin cliente'}</Text>
-                  <Text style={styles.paradaHora}>{format(new Date(p.timestamp_llegada), 'HH:mm')}</Text>
+                  <Text style={styles.paradaHora}>
+                    {format(new Date(p.timestamp_llegada), 'HH:mm')}
+                    {p.timestamp_salida ? ` → ${format(new Date(p.timestamp_salida), 'HH:mm')}` : ''}
+                  </Text>
                 </View>
                 <Text style={styles.paradaDireccion}>{p.cliente?.direccion}</Text>
                 <FotosGrid item={p} />
+                {p.urgente && (
+                  <View style={styles.vcUrgenteCaja}>
+                    <Text style={styles.vcUrgenteTexto}>🚨 {p.urgencia_descripcion ?? 'Urgente'}</Text>
+                  </View>
+                )}
+                {p.tiene_vencidos && (
+                  <Text style={styles.vcVencText}>
+                    📦 Mercadería vencida{p.mercaderia_vencida ? `: ${p.mercaderia_vencida}` : ''}
+                    {p.fecha_vencimiento ? ` · ${p.fecha_vencimiento === 'Vencida' ? 'Ya vencida' : p.fecha_vencimiento}` : ''}
+                  </Text>
+                )}
+                {p.accion_requerida && (
+                  <View style={styles.accionCaja}>
+                    <Text style={styles.accionTexto}>🔧 Acción requerida: {p.accion_requerida}</Text>
+                  </View>
+                )}
+                {p.producto_informe && (
+                  <Text style={styles.informeTexto}>
+                    💰 Producto informado: {p.producto_informe}
+                    {p.precio_informe ? ` — $${p.precio_informe}` : ''}
+                  </Text>
+                )}
                 {p.nota ? <Text style={styles.nota}>📝 {p.nota}</Text> : null}
               </View>
             ))}
@@ -439,6 +464,9 @@ const styles = StyleSheet.create({
   vcUrgenteCaja: { backgroundColor: '#FEF2F2', borderRadius: 8, padding: 8 },
   vcUrgenteTexto: { fontSize: 13, color: COLORS.danger, fontWeight: '600' },
   vcVencText: { fontSize: 13, color: COLORS.warning, fontWeight: '600' },
+  accionCaja: { backgroundColor: '#EFF6FF', borderRadius: 8, padding: 8 },
+  accionTexto: { fontSize: 13, color: COLORS.secondary, fontWeight: '600' },
+  informeTexto: { fontSize: 13, color: '#1D4ED8', fontWeight: '600' },
 
   // Paradas
   paradaCard: {

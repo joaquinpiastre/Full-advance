@@ -11,7 +11,8 @@ import {
 import { COLORS, COLOR_CATEGORIA } from '../../constants';
 import { Cliente, CategoriaCliente, Ruta } from '../../types';
 import Buscador from '../../components/Buscador';
-import SelectorConAgregar from '../../components/SelectorConAgregar';
+import SelectorModal from '../../components/SelectorModal';
+import SelectorModalMultiple from '../../components/SelectorModalMultiple';
 
 const FORM_VACIO = {
   nombre: '', direccion: '', telefono: '', notas: '',
@@ -26,7 +27,7 @@ const CATEGORIAS: CategoriaCliente[] = ['A', 'B', 'C', 'D', 'E', 'F'];
 const FRECUENCIAS = ['Semanal', 'Quincenal', 'Mensual', 'Ocasional'];
 const FORMAS_PAGO = ['Efectivo', 'Cuenta corriente', 'Transferencia'];
 const DIAS_VISITA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Sin preferencia'];
-const MARCAS = ['BIMBO', 'CITRIC', 'SANAS', 'ARRABAL'];
+const MARCAS = ['BIMBO', 'CITRIC', 'SANAS', 'ARRABAL', 'FARGO', 'LACTAL'];
 
 function Chips({ opciones, valor, onSeleccionar, colorPorOpcion }: {
   opciones: string[];
@@ -67,8 +68,8 @@ export default function Clientes() {
   const [busqueda, setBusqueda] = useState('');
   const [categoriaFiltro, setCategoriaFiltro] = useState<CategoriaCliente | null>(null);
   const [estadoFiltro, setEstadoFiltro] = useState<'activos' | 'inactivos'>('activos');
-  const [departamentos, setDepartamentos] = useState<string[]>([]);
-  const [distritos, setDistritos] = useState<string[]>([]);
+  const [departamentos, setDepartamentos] = useState<{ id: number; nombre: string }[]>([]);
+  const [distritos, setDistritos] = useState<{ id: number; nombre: string; departamento_id: number | null }[]>([]);
 
   useEffect(() => {
     cargar();
@@ -82,11 +83,16 @@ export default function Clientes() {
       ]);
       setClientes(resClientes.data);
       setRutas(resRutas.data);
-      setDepartamentos(resDeptos.data.map((d: any) => d.nombre));
-      setDistritos(resDistritos.data.map((d: any) => d.nombre));
+      setDepartamentos(resDeptos.data);
+      setDistritos(resDistritos.data);
     } catch {}
     setCargando(false);
   };
+
+  const departamentoId = departamentos.find((d) => d.nombre === form.departamento)?.id ?? null;
+  const distritosFiltrados = departamentoId
+    ? distritos.filter((d) => d.departamento_id === departamentoId).map((d) => d.nombre)
+    : [];
 
   const handleCambiarEstado = (c: Cliente) => {
     const activar = !c.activo;
@@ -329,24 +335,12 @@ export default function Clientes() {
             <Text style={styles.seccionTitulo}>Ruta</Text>
             <View style={styles.formGroup}>
               <Text style={styles.label}>Ruta asignada *</Text>
-              <View style={styles.chipsRow}>
-                {rutas.map((r) => {
-                  const activo = form.ruta_id === r.id;
-                  return (
-                    <TouchableOpacity
-                      key={r.id}
-                      style={[
-                        styles.chip,
-                        { borderColor: COLORS.primary },
-                        activo && { backgroundColor: COLORS.primary },
-                      ]}
-                      onPress={() => setForm((prev) => ({ ...prev, ruta_id: r.id }))}
-                    >
-                      <Text style={[styles.chipTexto, { color: activo ? '#fff' : COLORS.primary }]}>{r.nombre}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+              <SelectorModal
+                titulo="Ruta asignada"
+                opciones={rutas.map((r) => r.nombre)}
+                valor={rutas.find((r) => r.id === form.ruta_id)?.nombre ?? ''}
+                onSeleccionar={(v) => setForm((prev) => ({ ...prev, ruta_id: rutas.find((r) => r.nombre === v)?.id ?? '' }))}
+              />
               {rutas.length === 0 && (
                 <Text style={styles.vacioChico}>No hay rutas creadas. Creá una ruta primero.</Text>
               )}
@@ -365,53 +359,54 @@ export default function Clientes() {
 
             <Text style={styles.seccionTitulo}>Marcas que compra</Text>
             <View style={styles.formGroup}>
-              <View style={styles.chipsRow}>
-                {MARCAS.map((op) => {
-                  const activo = form.marcas.includes(op);
-                  return (
-                    <TouchableOpacity
-                      key={op}
-                      style={[styles.chip, { borderColor: COLORS.primary }, activo && { backgroundColor: COLORS.primary }]}
-                      onPress={() => setForm((prev) => ({
-                        ...prev,
-                        marcas: activo ? prev.marcas.filter((m) => m !== op) : [...prev.marcas, op],
-                      }))}
-                    >
-                      <Text style={[styles.chipTexto, { color: activo ? '#fff' : COLORS.primary }]}>{op}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+              <SelectorModalMultiple
+                titulo="Marcas que compra"
+                opciones={MARCAS}
+                valores={form.marcas}
+                onCambiar={(v) => setForm((prev) => ({ ...prev, marcas: v }))}
+              />
             </View>
 
             <Text style={styles.seccionTitulo}>Ubicación</Text>
             <View style={styles.formGroup}>
               <Text style={styles.label}>Departamento</Text>
-              <SelectorConAgregar
-                opciones={departamentos}
+              <SelectorModal
+                titulo="Departamento"
+                opciones={departamentos.map((d) => d.nombre)}
                 valor={form.departamento}
-                onSeleccionar={(v) => setForm((prev) => ({ ...prev, departamento: v }))}
+                onSeleccionar={(v) => setForm((prev) => ({
+                  ...prev,
+                  departamento: v,
+                  zona: distritos.some((d) => d.nombre === prev.zona && d.departamento_id === (departamentos.find((dep) => dep.nombre === v)?.id ?? null))
+                    ? prev.zona
+                    : '',
+                }))}
                 puedeAgregar
-                placeholderNuevo="Ej: SAN RAFAEL"
+                placeholderNuevo="Ej: San Rafael"
                 onAgregar={async (nombre) => {
-                  await crearDepartamento(nombre);
-                  setDepartamentos((prev) => (prev.includes(nombre) ? prev : [...prev, nombre].sort()));
+                  const res = await crearDepartamento(nombre);
+                  setDepartamentos((prev) => [...prev, res.data].sort((a, b) => a.nombre.localeCompare(b.nombre)));
                 }}
               />
             </View>
             <View style={styles.formGroup}>
               <Text style={styles.label}>Zona / Distrito</Text>
-              <SelectorConAgregar
-                opciones={distritos}
-                valor={form.zona}
-                onSeleccionar={(v) => setForm((prev) => ({ ...prev, zona: v }))}
-                puedeAgregar
-                placeholderNuevo="Ej: CENTRO"
-                onAgregar={async (nombre) => {
-                  await crearDistrito(nombre);
-                  setDistritos((prev) => (prev.includes(nombre) ? prev : [...prev, nombre].sort()));
-                }}
-              />
+              {form.departamento ? (
+                <SelectorModal
+                  titulo="Zona / Distrito"
+                  opciones={distritosFiltrados}
+                  valor={form.zona}
+                  onSeleccionar={(v) => setForm((prev) => ({ ...prev, zona: v }))}
+                  puedeAgregar
+                  placeholderNuevo="Ej: Centro"
+                  onAgregar={async (nombre) => {
+                    const res = await crearDistrito(nombre, departamentoId);
+                    setDistritos((prev) => [...prev, res.data]);
+                  }}
+                />
+              ) : (
+                <Text style={styles.ayuda}>Elegí primero un departamento</Text>
+              )}
             </View>
 
             <Text style={styles.seccionTitulo}>Datos de la empresa</Text>
@@ -593,6 +588,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
   },
   inputMultiline: { minHeight: 80, textAlignVertical: 'top' },
+  ayuda: { fontSize: 13, color: COLORS.textLight, fontStyle: 'italic' },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     borderWidth: 1.5,

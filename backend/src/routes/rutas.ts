@@ -167,4 +167,15 @@ router.put('/:id/orden', authMiddleware, async (req: AuthRequest, res: Response)
   }
 });
 
+router.delete('/:id', authMiddleware, soloAdmin, async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  try {
+    const { rows } = await pool.query('UPDATE rutas SET activa=false WHERE id=$1 RETURNING id', [id]);
+    if (!rows.length) return res.status(404).json({ error: 'No encontrada' });
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: 'Error al eliminar ruta' });
+  }
+});
+
 export default router;

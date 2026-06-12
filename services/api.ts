@@ -119,6 +119,9 @@ export const actualizarRuta = (id: number, data: any) =>
 export const actualizarOrdenRuta = (id: number, clientes: number[]) =>
   api.put(`/rutas/${id}/orden`, { clientes });
 
+export const eliminarRuta = (id: number) =>
+  api.delete(`/rutas/${id}`);
+
 // Asignaciones
 export const obtenerAsignacionHoy = () =>
   api.get('/asignaciones/hoy');

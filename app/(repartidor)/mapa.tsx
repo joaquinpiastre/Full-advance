@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useJornadaStore } from '../../store/jornadaStore';
 import { obtenerAsignacionHoy, obtenerParadas } from '../../services/api';
@@ -31,14 +31,6 @@ export default function MapaRepartidor() {
   useFocusEffect(useCallback(() => { cargar(); }, [cargar]));
 
   if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.repartidor} size="large" /></View>;
-
-  if (Platform.OS === 'web') {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.vacio}>El mapa no está disponible en la versión web.</Text>
-      </View>
-    );
-  }
 
   if (!clientes.length) {
     return (

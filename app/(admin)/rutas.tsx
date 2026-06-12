@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, Modal, TextInput, Alert, ScrollView,
 } from 'react-native';
-import { obtenerRutas, crearRuta, actualizarRuta, obtenerRuta, obtenerClientes } from '../../services/api';
+import { obtenerRutas, crearRuta, actualizarRuta, obtenerRuta, obtenerClientes, eliminarRuta } from '../../services/api';
 import { COLORS } from '../../constants';
 import { Cliente, Ruta } from '../../types';
 import Buscador from '../../components/Buscador';
@@ -108,6 +108,29 @@ export default function Rutas() {
     }
   };
 
+  const handleEliminar = (ruta: Ruta) => {
+    Alert.alert(
+      'Eliminar ruta',
+      `¿Seguro que querés eliminar la ruta "${ruta.nombre}"?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await eliminarRuta(ruta.id);
+              if (detalleRuta?.id === ruta.id) setDetalleRuta(null);
+              cargar();
+            } catch (e: any) {
+              Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo eliminar la ruta');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
 
   return (
@@ -120,9 +143,14 @@ export default function Rutas() {
               <TouchableOpacity onPress={() => setDetalleRuta(null)}>
                 <Text style={styles.back}>← Volver</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.btnEditar} onPress={() => abrirEdicion(detalleRuta)}>
-                <Text style={styles.btnEditarTexto}>✏️ Editar clientes</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity style={styles.btnEditar} onPress={() => abrirEdicion(detalleRuta)}>
+                  <Text style={styles.btnEditarTexto}>✏️ Editar clientes</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.btnEliminar} onPress={() => handleEliminar(detalleRuta)}>
+                  <Text style={styles.btnEliminarTexto}>🗑️ Eliminar</Text>
+                </TouchableOpacity>
+              </View>
             </View>
             <Text style={styles.detalleTitulo}>{detalleRuta.nombre}</Text>
             {detalleRuta.descripcion ? <Text style={styles.detalleDesc}>{detalleRuta.descripcion}</Text> : null}
@@ -159,7 +187,12 @@ export default function Rutas() {
             contentContainerStyle={{ padding: 16, gap: 12 }}
             renderItem={({ item }) => (
               <TouchableOpacity style={styles.card} onPress={() => setDetalleRuta(item)}>
-                <Text style={styles.cardNombre}>{item.nombre}</Text>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.cardNombre}>{item.nombre}</Text>
+                  <TouchableOpacity onPress={() => handleEliminar(item)}>
+                    <Text style={styles.cardEliminar}>🗑️</Text>
+                  </TouchableOpacity>
+                </View>
                 {item.descripcion && <Text style={styles.cardDesc}>{item.descripcion}</Text>}
                 <Text style={styles.cardClientes}>{item.clientes?.length ?? 0} clientes</Text>
               </TouchableOpacity>
@@ -302,6 +335,8 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: COLORS.primary,
   },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  cardEliminar: { fontSize: 16 },
   cardNombre: { fontSize: 16, fontWeight: '700', color: COLORS.text },
   cardDesc: { fontSize: 13, color: COLORS.textLight },
   cardClientes: { fontSize: 13, color: COLORS.primary, fontWeight: '600' },
@@ -318,6 +353,8 @@ const styles = StyleSheet.create({
   back: { fontSize: 14, color: COLORS.primary, fontWeight: '600' },
   btnEditar: { backgroundColor: COLORS.primary, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
   btnEditarTexto: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  btnEliminar: { backgroundColor: COLORS.danger, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
+  btnEliminarTexto: { color: '#fff', fontWeight: '700', fontSize: 13 },
   detalleTitulo: { fontSize: 20, fontWeight: '800', color: COLORS.text },
   detalleDesc: { fontSize: 13, color: COLORS.textLight },
   clienteCard: {

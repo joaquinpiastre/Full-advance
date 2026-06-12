@@ -12,6 +12,7 @@ const ROLES = [
   { key: 'repartidor', label: '🚚 Repartidor', color: COLORS.repartidor },
   { key: 'preventista', label: '👔 Preventista', color: COLORS.preventista },
   { key: 'supervisor', label: '🛡️ Supervisor', color: COLORS.supervisor },
+  { key: 'admin', label: '⭐ Administrador', color: COLORS.primary },
 ];
 const ROL_COLOR: Record<string, string> = Object.fromEntries(ROLES.map((r) => [r.key, r.color]));
 const ROL_LABEL: Record<string, string> = Object.fromEntries(ROLES.map((r) => [r.key, r.label]));
@@ -114,19 +115,19 @@ export default function Usuarios() {
 
   if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
 
-  const noAdmins = usuarios.filter((u) => u.rol !== 'admin' && u.activo !== false);
+  const activos = usuarios.filter((u) => u.activo !== false);
 
   return (
     <View style={styles.container}>
       <View style={styles.headerBar}>
-        <Text style={styles.total}>{noAdmins.length} usuarios</Text>
+        <Text style={styles.total}>{activos.length} usuarios</Text>
         <TouchableOpacity style={styles.btnNuevo} onPress={abrirNuevo}>
           <Text style={styles.btnNuevoTexto}>+ Nuevo</Text>
         </TouchableOpacity>
       </View>
 
       <FlatList
-        data={noAdmins}
+        data={activos}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={{ padding: 16, gap: 10 }}
         renderItem={({ item }) => (
@@ -200,7 +201,7 @@ export default function Usuarios() {
             </View>
             <View style={styles.formGroup}>
               <Text style={styles.label}>Rol *</Text>
-              <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                 {ROLES.map((r) => (
                   <TouchableOpacity
                     key={r.key}
@@ -298,7 +299,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
   },
   rolOpcion: {
-    flex: 1,
+    flexBasis: '47%',
+    flexGrow: 1,
     borderWidth: 2,
     borderColor: COLORS.border,
     borderRadius: 10,

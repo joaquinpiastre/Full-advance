@@ -11,6 +11,7 @@ import { COLORS } from '../../constants';
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [verPassword, setVerPassword] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
   const { setUsuario } = useAuthStore();
@@ -67,14 +68,19 @@ export default function Login() {
           value={email}
           onChangeText={setEmail}
         />
-        <TextInput
-          style={styles.input}
-          placeholder="Contraseña"
-          placeholderTextColor={COLORS.textLight}
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
+        <View style={styles.passwordWrapper}>
+          <TextInput
+            style={styles.passwordInput}
+            placeholder="Contraseña"
+            placeholderTextColor={COLORS.textLight}
+            secureTextEntry={!verPassword}
+            value={password}
+            onChangeText={setPassword}
+          />
+          <TouchableOpacity style={styles.ojito} onPress={() => setVerPassword((v) => !v)}>
+            <Text style={styles.ojitoTexto}>{verPassword ? '🙈' : '👁️'}</Text>
+          </TouchableOpacity>
+        </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -157,6 +163,27 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     marginBottom: 12,
     backgroundColor: COLORS.background,
+  },
+  passwordWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    marginBottom: 12,
+    backgroundColor: COLORS.background,
+  },
+  passwordInput: {
+    flex: 1,
+    padding: 14,
+    fontSize: 15,
+    color: COLORS.text,
+  },
+  ojito: {
+    paddingHorizontal: 14,
+  },
+  ojitoTexto: {
+    fontSize: 18,
   },
   btn: {
     backgroundColor: COLORS.primary,

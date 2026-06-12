@@ -15,10 +15,45 @@ export default function FechaVencimientoPicker({ value, onChange }: Props) {
   const formatear = (d: Date) =>
     `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 
+  const formatearISO = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
   const onCambio = (_event: any, selected?: Date) => {
     if (Platform.OS === 'android') setMostrar(false);
     if (selected) onChange(selected);
   };
+
+  // Web: @react-native-community/datetimepicker no tiene implementación para
+  // web, así que usamos el selector de fecha nativo del navegador.
+  if (Platform.OS === 'web') {
+    return (
+      <View>
+        {/* @ts-ignore: elemento HTML, válido bajo react-native-web */}
+        <input
+          type="date"
+          value={value ? formatearISO(value) : ''}
+          min={formatearISO(new Date())}
+          onChange={(e: any) => {
+            const v = e.target.value;
+            if (!v) return;
+            const [y, m, d2] = v.split('-').map(Number);
+            onChange(new Date(y, m - 1, d2));
+          }}
+          style={{
+            width: '100%',
+            padding: 13,
+            borderRadius: 10,
+            border: `1px solid ${COLORS.border}`,
+            backgroundColor: COLORS.card,
+            fontSize: 15,
+            fontWeight: 600,
+            color: COLORS.text,
+            marginTop: 8,
+          }}
+        />
+      </View>
+    );
+  }
 
   return (
     <View>

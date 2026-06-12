@@ -92,8 +92,10 @@ function esErrorDeRed(e: any) {
 
 // Procesa la cola de visitas pendientes: registra la parada si falta,
 // sube las fotos y finaliza. Si encuentra un error de red, se detiene
-// (se reintentará más tarde); si el error es del servidor, descarta esa
-// visita para no bloquear el resto.
+// (se reintentará más tarde). Si el error es del servidor al registrar la
+// parada o finalizarla, descarta esa visita para no bloquear el resto; si es
+// al subir una foto puntual, descarta solo esa foto pero sigue finalizando
+// la visita (para que no quede una parada incompleta para siempre).
 export async function procesarVisitasPendientes() {
   if (procesando) return;
   procesando = true;
@@ -117,10 +119,21 @@ export async function procesarVisitasPendientes() {
 
         while (item.fotos.length) {
           const foto = item.fotos[0];
-          const form = new FormData();
-          form.append('foto', { uri: foto.uri, type: 'image/jpeg', name: `foto${foto.numero}.jpg` } as any);
-          form.append('numero', String(foto.numero));
-          await subirFoto(paradaId, form);
+          try {
+            const form = new FormData();
+            form.append('foto', { uri: foto.uri, type: 'image/jpeg', name: `foto${foto.numero}.jpg` } as any);
+            form.append('numero', String(foto.numero));
+            await subirFoto(paradaId, form);
+          } catch (e: any) {
+            if (esErrorDeRed(e)) {
+              // Sin conexión: se reintenta esta foto en el próximo ciclo,
+              // sin perder ni descartar el resto de la visita.
+              return;
+            }
+            // Error del servidor al subir esta foto puntual: la descartamos
+            // pero seguimos con el resto de la visita y la finalizamos igual,
+            // para no dejar la parada incompleta para siempre.
+          }
           item.fotos.shift();
           await guardarCola();
         }

@@ -3,14 +3,47 @@ import {
   View, Text, StyleSheet, FlatList, ScrollView,
   ActivityIndicator, TouchableOpacity, RefreshControl, LayoutAnimation,
 } from 'react-native';
-import { obtenerAlertas } from '../../services/api';
-import { Alerta } from '../../types';
+import { obtenerAlertas, obtenerEliminacionesRuta } from '../../services/api';
+import { Alerta, EliminacionRuta } from '../../types';
 import { COLORS } from '../../constants';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 const AUTO_REFRESH_MS = 15000;
-type Filtro = 'todas' | 'urgentes' | 'vencimientos' | 'acciones';
+type Filtro = 'todas' | 'urgentes' | 'vencimientos' | 'acciones' | 'bajas';
+
+function CardBaja({ item }: { item: EliminacionRuta }) {
+  const hora = format(new Date(item.created_at), "d MMM, HH:mm", { locale: es });
+  return (
+    <View style={[styles.card, styles.cardBaja]}>
+      <View style={styles.cardRow}>
+        <View style={[styles.tipoPill, styles.pillBaja]}>
+          <Text style={styles.pillTexto}>🚫 BAJA DE RUTA</Text>
+        </View>
+        <View style={styles.cardInfo}>
+          <Text style={styles.cardCliente} numberOfLines={1}>{item.cliente?.nombre}</Text>
+          <Text style={styles.cardDir} numberOfLines={1}>Ruta: {item.ruta?.nombre}</Text>
+        </View>
+        <View style={styles.cardDerecha}>
+          <Text style={styles.cardHora}>{hora}</Text>
+        </View>
+      </View>
+      <View style={styles.detalle}>
+        <View style={styles.detalleSep} />
+        <View style={styles.detalleRow}>
+          <Text style={styles.detalleLabel}>QUITADO POR</Text>
+          <Text style={styles.detalleValor}>
+            {item.usuario?.nombre}
+            <Text style={styles.detalleRol}> · {item.usuario?.rol}</Text>
+          </Text>
+        </View>
+        <View style={[styles.detalleCaja, styles.cajaBaja]}>
+          <Text style={styles.cajaBajaTexto}>📝 {item.nota}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
 
 function CardAlerta({ item }: { item: Alerta }) {
   const [expandido, setExpandido] = useState(false);
@@ -105,6 +138,7 @@ function CardAlerta({ item }: { item: Alerta }) {
 
 export default function SupervisorAlertas() {
   const [alertas, setAlertas] = useState<Alerta[]>([]);
+  const [bajas, setBajas] = useState<EliminacionRuta[]>([]);
   const [cargando, setCargando] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [ultimaAct, setUltimaAct] = useState<Date | null>(null);
@@ -113,8 +147,9 @@ export default function SupervisorAlertas() {
   const cargar = useCallback(async (silent = false) => {
     if (!silent) setCargando(true);
     try {
-      const res = await obtenerAlertas();
-      setAlertas(res.data);
+      const [resAlertas, resBajas] = await Promise.all([obtenerAlertas(), obtenerEliminacionesRuta()]);
+      setAlertas(resAlertas.data);
+      setBajas(resBajas.data);
       setUltimaAct(new Date());
     } catch {}
     setCargando(false);
@@ -166,6 +201,7 @@ export default function SupervisorAlertas() {
           { key: 'urgentes', label: '🚨 Urgentes', count: urgentes.length },
           { key: 'vencimientos', label: '📦 Vencimientos', count: vencidos.length + proximosAVencer.length },
           { key: 'acciones', label: '📋 Acciones', count: acciones.length },
+          { key: 'bajas', label: '🚫 Bajas de ruta', count: bajas.length },
         ] as { key: Filtro; label: string; count: number }[]).map((tab) => (
           <TouchableOpacity
             key={tab.key}
@@ -181,6 +217,7 @@ export default function SupervisorAlertas() {
                 tab.key === 'urgentes' && { backgroundColor: COLORS.danger },
                 tab.key === 'vencimientos' && { backgroundColor: '#F59E0B' },
                 tab.key === 'acciones' && { backgroundColor: COLORS.secondary },
+                tab.key === 'bajas' && { backgroundColor: COLORS.danger },
               ]}>
                 <Text style={styles.tabBadgeTexto}>{tab.count}</Text>
               </View>
@@ -233,6 +270,23 @@ export default function SupervisorAlertas() {
             ))
           )}
         </ScrollView>
+      ) : filtro === 'bajas' ? (
+        <FlatList
+          data={bajas}
+          keyExtractor={(item) => String(item.id)}
+          contentContainerStyle={styles.lista}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); cargar(); }} />
+          }
+          renderItem={({ item }) => <CardBaja item={item} />}
+          ListEmptyComponent={
+            <View style={styles.vacio}>
+              <Text style={styles.vacioEmoji}>✅</Text>
+              <Text style={styles.vacioTexto}>Sin clientes quitados de rutas</Text>
+            </View>
+          }
+          ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+        />
       ) : (
         <FlatList
           data={lista}
@@ -327,6 +381,7 @@ const styles = StyleSheet.create({
   cardUrgente: { borderLeftColor: COLORS.danger, backgroundColor: '#FEF2F2' },
   cardVenc: { borderLeftColor: '#F59E0B' },
   cardAccion: { borderLeftColor: COLORS.secondary, backgroundColor: '#EFF6FF' },
+  cardBaja: { borderLeftColor: COLORS.danger, backgroundColor: '#FEF2F2' },
 
   cardRow: {
     flexDirection: 'row',
@@ -342,6 +397,7 @@ const styles = StyleSheet.create({
   pillUrgente: { backgroundColor: COLORS.danger },
   pillVenc: { backgroundColor: '#F59E0B' },
   pillAccion: { backgroundColor: COLORS.secondary },
+  pillBaja: { backgroundColor: COLORS.danger },
   pillTexto: { color: '#fff', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
 
   cardInfo: { flex: 1 },
@@ -368,6 +424,8 @@ const styles = StyleSheet.create({
   cajaVencFecha: { fontSize: 13, fontWeight: '600', color: COLORS.success },
   cajaAccion: { backgroundColor: 'rgba(0,48,135,0.07)' },
   cajaAccionTexto: { fontSize: 13, color: COLORS.secondary, fontWeight: '600' },
+  cajaBaja: { backgroundColor: 'rgba(220,38,38,0.08)' },
+  cajaBajaTexto: { fontSize: 13, color: COLORS.danger, fontWeight: '600' },
 
   detallleNota: { fontSize: 12, color: COLORS.textLight, fontStyle: 'italic' },
 

@@ -3,10 +3,11 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, Modal, TextInput, Alert, ScrollView,
 } from 'react-native';
-import { obtenerRutas, crearRuta, actualizarRuta, obtenerRuta, obtenerClientes, eliminarRuta } from '../../services/api';
+import { obtenerRutas, crearRuta, actualizarRuta, obtenerRuta, obtenerClientes, eliminarRuta, quitarClienteDeRuta } from '../../services/api';
 import { COLORS } from '../../constants';
 import { Cliente, Ruta } from '../../types';
 import Buscador from '../../components/Buscador';
+import { coincideBusqueda } from '../../utils/busqueda';
 
 export default function Rutas() {
   const [rutas, setRutas] = useState<Ruta[]>([]);
@@ -20,6 +21,8 @@ export default function Rutas() {
   const [busquedaCliente, setBusquedaCliente] = useState('');
   const [rutaEditando, setRutaEditando] = useState<Ruta | null>(null);
   const [departamentoSel, setDepartamentoSel] = useState<string | null>(null);
+  const [clienteAQuitar, setClienteAQuitar] = useState<{ cliente_id: number; nombre: string } | null>(null);
+  const [notaQuitar, setNotaQuitar] = useState('');
 
   useEffect(() => {
     cargar();
@@ -48,14 +51,9 @@ export default function Rutas() {
   }, [clientes]);
 
   const clientesFiltrados = useMemo(() => {
-    const q = busquedaCliente.trim().toLowerCase();
     return clientes.filter((c) => {
       if (departamentoSel && c.departamento !== departamentoSel) return false;
-      if (!q) return true;
-      return c.nombre?.toLowerCase().includes(q)
-        || c.direccion?.toLowerCase().includes(q)
-        || c.rubro?.toLowerCase().includes(q)
-        || c.zona?.toLowerCase().includes(q);
+      return coincideBusqueda(busquedaCliente, c.nombre, c.direccion, c.rubro, c.razon_social, c.zona, c.telefono, c.contacto_nombre);
     });
   }, [clientes, busquedaCliente, departamentoSel]);
 
@@ -131,6 +129,21 @@ export default function Rutas() {
     );
   };
 
+  const handleQuitarCliente = async () => {
+    if (!detalleRuta || !clienteAQuitar) return;
+    if (!notaQuitar.trim()) { Alert.alert('Error', 'Tenés que explicar el motivo'); return; }
+    try {
+      await quitarClienteDeRuta(detalleRuta.id, clienteAQuitar.cliente_id, notaQuitar.trim());
+      const res = await obtenerRuta(detalleRuta.id);
+      setDetalleRuta(res.data);
+      setRutas((prev) => prev.map((r) => (r.id === res.data.id ? res.data : r)));
+      setClienteAQuitar(null);
+      setNotaQuitar('');
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo quitar el cliente');
+    }
+  };
+
   if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
 
   return (
@@ -164,10 +177,16 @@ export default function Rutas() {
                 <View style={styles.clienteOrden}>
                   <Text style={styles.clienteOrdenNum}>{index + 1}</Text>
                 </View>
-                <View>
+                <View style={{ flex: 1 }}>
                   <Text style={styles.clienteNombre}>{item.cliente?.nombre}</Text>
                   <Text style={styles.clienteDir}>{item.cliente?.direccion}</Text>
                 </View>
+                <TouchableOpacity
+                  style={styles.btnQuitar}
+                  onPress={() => setClienteAQuitar({ cliente_id: item.cliente_id, nombre: item.cliente?.nombre ?? '' })}
+                >
+                  <Text style={styles.btnQuitarTexto}>Quitar</Text>
+                </TouchableOpacity>
               </View>
             )}
           />
@@ -304,6 +323,39 @@ export default function Rutas() {
           </View>
         </View>
       </Modal>
+
+      {/* Modal para explicar por qué se quita un cliente de la ruta */}
+      <Modal visible={!!clienteAQuitar} animationType="fade" transparent>
+        <View style={styles.overlay}>
+          <View style={styles.notaModal}>
+            <Text style={styles.notaTitulo}>Quitar de la ruta</Text>
+            <Text style={styles.notaSubtitulo}>
+              {clienteAQuitar?.nombre} se quitará de esta ruta (sigue existiendo como cliente).
+              Explicá el motivo, va a quedar registrado en Alertas.
+            </Text>
+            <TextInput
+              style={styles.notaInput}
+              placeholder="Motivo de la baja..."
+              placeholderTextColor={COLORS.textLight}
+              value={notaQuitar}
+              onChangeText={setNotaQuitar}
+              multiline
+              numberOfLines={4}
+            />
+            <View style={styles.notaAcciones}>
+              <TouchableOpacity
+                style={styles.notaCancelar}
+                onPress={() => { setClienteAQuitar(null); setNotaQuitar(''); }}
+              >
+                <Text style={styles.notaCancelarTexto}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.notaConfirmar} onPress={handleQuitarCliente}>
+                <Text style={styles.notaConfirmarTexto}>Quitar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -376,6 +428,31 @@ const styles = StyleSheet.create({
   clienteOrdenNum: { color: '#fff', fontWeight: '700' },
   clienteNombre: { fontSize: 14, fontWeight: '700', color: COLORS.text },
   clienteDir: { fontSize: 12, color: COLORS.textLight },
+  btnQuitar: { backgroundColor: COLORS.danger, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  btnQuitarTexto: { color: '#fff', fontWeight: '700', fontSize: 12 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  notaModal: { backgroundColor: COLORS.card, borderRadius: 16, padding: 20, width: '100%', maxWidth: 420, gap: 12 },
+  notaTitulo: { fontSize: 17, fontWeight: '800', color: COLORS.text },
+  notaSubtitulo: { fontSize: 13, color: COLORS.textLight, lineHeight: 18 },
+  notaInput: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 14,
+    color: COLORS.text,
+    backgroundColor: COLORS.background,
+    minHeight: 90,
+    textAlignVertical: 'top',
+  },
+  notaAcciones: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  notaCancelar: {
+    flex: 1, borderRadius: 10, padding: 14, alignItems: 'center',
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+  notaCancelarTexto: { color: COLORS.textLight, fontWeight: '700' },
+  notaConfirmar: { flex: 1, backgroundColor: COLORS.danger, borderRadius: 10, padding: 14, alignItems: 'center' },
+  notaConfirmarTexto: { color: '#fff', fontWeight: '700' },
   modal: { flex: 1, backgroundColor: COLORS.background },
   modalHeader: {
     flexDirection: 'row',

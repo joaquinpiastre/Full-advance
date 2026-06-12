@@ -3,6 +3,7 @@ import {
   View, Text, TouchableOpacity, TextInput, StyleSheet, Modal, FlatList,
 } from 'react-native';
 import { COLORS } from '../constants';
+import { coincideBusqueda } from '../utils/busqueda';
 
 interface Props {
   titulo: string;
@@ -30,8 +31,7 @@ export default function SelectorModalMultiple({
     onCambiar(valores.includes(op) ? valores.filter((v) => v !== op) : [...valores, op]);
   };
 
-  const q = busqueda.trim().toLowerCase();
-  const opcionesFiltradas = q ? opciones.filter((op) => op.toLowerCase().includes(q)) : opciones;
+  const opcionesFiltradas = opciones.filter((op) => coincideBusqueda(busqueda, op));
 
   return (
     <>

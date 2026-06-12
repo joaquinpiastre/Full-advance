@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../db/client';
-import { authMiddleware, soloAdmin, AuthRequest } from '../middleware/auth';
+import { authMiddleware, soloAdmin, adminOSupervisor, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -35,6 +35,33 @@ router.get('/', authMiddleware, async (_req: Request, res: Response) => {
       })),
     }));
     res.json(result);
+  } catch {
+    res.status(500).json({ error: 'Error' });
+  }
+});
+
+// Historial de clientes quitados de rutas (alertas para admin/supervisor)
+router.get('/eliminaciones', authMiddleware, adminOSupervisor, async (_req: AuthRequest, res: Response) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT e.id, e.nota, e.created_at,
+        r.id as ruta_id, r.nombre as ruta_nombre,
+        c.id as cliente_id, c.nombre as cliente_nombre, c.direccion as cliente_dir,
+        u.id as usuario_id, u.nombre as usuario_nombre, u.rol as usuario_rol
+      FROM eliminaciones_ruta_cliente e
+      LEFT JOIN rutas r ON r.id = e.ruta_id
+      LEFT JOIN clientes c ON c.id = e.cliente_id
+      LEFT JOIN usuarios u ON u.id = e.usuario_id
+      ORDER BY e.created_at DESC
+    `);
+    res.json(rows.map((r) => ({
+      id: r.id,
+      nota: r.nota,
+      created_at: r.created_at,
+      ruta: { id: r.ruta_id, nombre: r.ruta_nombre },
+      cliente: { id: r.cliente_id, nombre: r.cliente_nombre, direccion: r.cliente_dir },
+      usuario: { id: r.usuario_id, nombre: r.usuario_nombre, rol: r.usuario_rol },
+    })));
   } catch {
     res.status(500).json({ error: 'Error' });
   }
@@ -162,6 +189,37 @@ router.put('/:id/orden', authMiddleware, async (req: AuthRequest, res: Response)
   } catch {
     await client.query('ROLLBACK');
     res.status(500).json({ error: 'Error al actualizar el orden' });
+  } finally {
+    client.release();
+  }
+});
+
+// Quitar un cliente de la ruta (no lo elimina de la base de clientes).
+// Requiere una nota explicando el motivo, que queda registrada como alerta.
+router.delete('/:id/clientes/:clienteId', authMiddleware, soloAdmin, async (req: AuthRequest, res: Response) => {
+  const { id, clienteId } = req.params;
+  const { nota } = req.body;
+  if (!nota || !String(nota).trim()) return res.status(400).json({ error: 'La nota es obligatoria' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      'DELETE FROM ruta_clientes WHERE ruta_id=$1 AND cliente_id=$2 RETURNING id',
+      [id, clienteId]
+    );
+    if (!rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'El cliente no está en esa ruta' });
+    }
+    await client.query(
+      'INSERT INTO eliminaciones_ruta_cliente (ruta_id, cliente_id, usuario_id, nota) VALUES ($1,$2,$3,$4)',
+      [id, clienteId, req.usuario?.id, String(nota).trim()]
+    );
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: 'Error al quitar el cliente de la ruta' });
   } finally {
     client.release();
   }

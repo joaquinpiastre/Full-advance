@@ -97,6 +97,18 @@ CREATE TABLE IF NOT EXISTS ruta_clientes (
   orden INTEGER DEFAULT 0
 );
 
+-- Registro de clientes quitados de una ruta (no se elimina al cliente de la
+-- base, solo se lo saca de la ruta). Sirve como alerta para los admins: quién
+-- lo quitó, de qué ruta y por qué motivo.
+CREATE TABLE IF NOT EXISTS eliminaciones_ruta_cliente (
+  id SERIAL PRIMARY KEY,
+  ruta_id INTEGER REFERENCES rutas(id) ON DELETE CASCADE,
+  cliente_id INTEGER REFERENCES clientes(id) ON DELETE CASCADE,
+  usuario_id INTEGER REFERENCES usuarios(id),
+  nota TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS asignaciones (
   id SERIAL PRIMARY KEY,
   usuario_id INTEGER REFERENCES usuarios(id),

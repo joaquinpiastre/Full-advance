@@ -323,6 +323,7 @@ export default function JornadaRepartidor() {
           </TouchableOpacity>
 
           <FlatList
+            style={{ flex: 1 }}
             data={paradasCompletadas}
             keyExtractor={(item) => String(item.id)}
             contentContainerStyle={{ padding: 16, gap: 12 }}
@@ -368,6 +369,7 @@ export default function JornadaRepartidor() {
             </View>
           </View>
           <DraggableFlatList
+            style={{ flex: 1 }}
             data={asignacion?.ruta?.clientes ?? []}
             keyExtractor={(item: any) => String(item.cliente.id)}
             contentContainerStyle={{ padding: 16, gap: 10 }}

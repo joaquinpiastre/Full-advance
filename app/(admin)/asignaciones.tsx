@@ -14,6 +14,7 @@ import SelectorModal from '../../components/SelectorModal';
 
 const ICONO_ROL: Record<string, string> = { repartidor: '🚚', preventista: '👔', supervisor: '🛡️', admin: '⭐' };
 import Buscador from '../../components/Buscador';
+import { coincideBusqueda } from '../../utils/busqueda';
 import { format } from 'date-fns';
 
 export default function Asignaciones() {
@@ -128,19 +129,16 @@ export default function Asignaciones() {
   }, [asignaciones, fechaFiltro, usuarioFiltro]);
 
   const rutasFiltradas = useMemo(() => {
-    const q = busquedaRuta.trim().toLowerCase();
-    if (!q) return rutas;
-    return rutas.filter((r) => r.nombre?.toLowerCase().includes(q) || r.descripcion?.toLowerCase().includes(q));
+    return rutas.filter((r) => coincideBusqueda(busquedaRuta, r.nombre, r.descripcion));
   }, [rutas, busquedaRuta]);
 
   const rutasFijasFiltradas = useMemo(() => {
-    const q = busquedaFija.trim().toLowerCase();
     const yaAsignadas = new Set(
       fijas.filter((f) => f.usuario_id === usuarioFijaSel?.id).map((f) => f.ruta_id)
     );
     return rutas
       .filter((r) => !yaAsignadas.has(r.id))
-      .filter((r) => !q || r.nombre?.toLowerCase().includes(q));
+      .filter((r) => coincideBusqueda(busquedaFija, r.nombre, r.descripcion));
   }, [rutas, busquedaFija, fijas, usuarioFijaSel]);
 
   const personasNoAdmin = usuarios.filter((u) => u.rol !== 'admin');

@@ -440,6 +440,7 @@ export default function RutaPreventista() {
           </View>
 
           <DraggableFlatList
+            style={{ flex: 1 }}
             data={clientes}
             keyExtractor={(item) => String(item.id)}
             contentContainerStyle={{ padding: 16, gap: 10 }}

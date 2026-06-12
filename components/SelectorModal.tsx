@@ -4,6 +4,7 @@ import {
   Modal, FlatList, ActivityIndicator,
 } from 'react-native';
 import { COLORS } from '../constants';
+import { coincideBusqueda } from '../utils/busqueda';
 
 interface Props {
   titulo: string;
@@ -55,8 +56,7 @@ export default function SelectorModal({
     setGuardando(false);
   };
 
-  const q = busqueda.trim().toLowerCase();
-  const opcionesFiltradas = q ? opciones.filter((op) => op.toLowerCase().includes(q)) : opciones;
+  const opcionesFiltradas = opciones.filter((op) => coincideBusqueda(busqueda, op));
 
   return (
     <>

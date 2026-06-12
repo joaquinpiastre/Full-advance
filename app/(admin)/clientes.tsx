@@ -11,6 +11,7 @@ import {
 import { COLORS, COLOR_CATEGORIA } from '../../constants';
 import { Cliente, CategoriaCliente, Ruta } from '../../types';
 import Buscador from '../../components/Buscador';
+import { coincideBusqueda } from '../../utils/busqueda';
 import SelectorModal from '../../components/SelectorModal';
 import SelectorModalMultiple from '../../components/SelectorModalMultiple';
 
@@ -197,15 +198,12 @@ export default function Clientes() {
   };
 
   const clientesFiltrados = useMemo(() => {
-    const q = busqueda.trim().toLowerCase();
     return clientes.filter((c) => {
-      const coincideTexto = !q
-        || c.nombre?.toLowerCase().includes(q)
-        || c.direccion?.toLowerCase().includes(q)
-        || c.rubro?.toLowerCase().includes(q)
-        || c.razon_social?.toLowerCase().includes(q)
-        || c.zona?.toLowerCase().includes(q)
-        || c.departamento?.toLowerCase().includes(q);
+      const coincideTexto = coincideBusqueda(
+        busqueda,
+        c.nombre, c.direccion, c.rubro, c.razon_social, c.zona, c.departamento,
+        c.telefono, c.email, c.contacto_nombre, c.cuit, c.notas
+      );
       const coincideCategoria = !categoriaFiltro || c.categoria === categoriaFiltro;
       return coincideTexto && coincideCategoria;
     });

@@ -129,6 +129,15 @@ export interface Alerta {
   usuario: { nombre: string; rol: Rol };
 }
 
+export interface EliminacionRuta {
+  id: number;
+  nota: string;
+  created_at: string;
+  ruta: { id: number; nombre: string };
+  cliente: { id: number; nombre: string; direccion?: string };
+  usuario: { id: number; nombre: string; rol: Rol };
+}
+
 export interface Anuncio {
   id: number;
   titulo?: string;

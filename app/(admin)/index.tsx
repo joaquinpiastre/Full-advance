@@ -109,6 +109,10 @@ export default function AdminMapa() {
           setClientes((prev) => prev.map((c) => (c.id === actualizado.id ? actualizado : c)));
           setClienteFicha(null);
         }}
+        onEliminado={(id) => {
+          setClientes((prev) => prev.filter((c) => c.id !== id));
+          setClienteFicha(null);
+        }}
       />
     </View>
   );

@@ -164,8 +164,8 @@ router.delete('/:id', authMiddleware, soloAdmin, async (req: AuthRequest, res: R
   }
 });
 
-// Activar / desactivar un cliente (admin)
-router.patch('/:id/estado', authMiddleware, soloAdmin, async (req: AuthRequest, res: Response) => {
+// Activar / desactivar un cliente (todos los roles)
+router.patch('/:id/estado', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const { activo } = req.body;
   if (typeof activo !== 'boolean') return res.status(400).json({ error: 'activo (boolean) requerido' });

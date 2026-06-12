@@ -484,6 +484,7 @@ export default function RutaSupervisor() {
         color={COLORS.supervisor}
         onClose={() => setClienteCartilla(null)}
         onGuardado={cargar}
+        onEliminado={cargar}
       />
 
       <NuevoClienteModal

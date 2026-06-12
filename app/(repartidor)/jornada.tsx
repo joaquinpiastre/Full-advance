@@ -409,6 +409,7 @@ export default function JornadaRepartidor() {
           setTimeout(() => setClientesModal(true), 350);
         }}
         onGuardado={cargarDatos}
+        onEliminado={cargarDatos}
       />
 
       <NuevoClienteModal

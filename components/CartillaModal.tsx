@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, Modal, TextInput,
   ScrollView, Alert, ActivityIndicator,
 } from 'react-native';
-import { actualizarCliente, obtenerDepartamentos, crearDepartamento, obtenerDistritos, crearDistrito } from '../services/api';
+import { actualizarCliente, cambiarEstadoCliente, obtenerDepartamentos, crearDepartamento, obtenerDistritos, crearDistrito } from '../services/api';
 import { COLORS, COLOR_CATEGORIA } from '../constants';
 import { Cliente } from '../types';
 import { useAuthStore } from '../store/authStore';
@@ -57,14 +57,16 @@ interface Props {
   color?: string;
   onClose: () => void;
   onGuardado?: (cliente: Cliente) => void;
+  onEliminado?: (id: number) => void;
 }
 
-export default function CartillaModal({ cliente, visible, color = COLORS.primary, onClose, onGuardado }: Props) {
+export default function CartillaModal({ cliente, visible, color = COLORS.primary, onClose, onGuardado, onEliminado }: Props) {
   const { usuario } = useAuthStore();
   const puedeAgregarZonas = usuario?.rol === 'admin' || usuario?.rol === 'supervisor';
   const [form, setForm] = useState(FORM_VACIO);
   const [horaVisita, setHoraVisita] = useState('');
   const [guardando, setGuardando] = useState(false);
+  const [eliminando, setEliminando] = useState(false);
   const [departamentos, setDepartamentos] = useState<string[]>([]);
   const [distritos, setDistritos] = useState<string[]>([]);
 
@@ -148,6 +150,31 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
       Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo guardar los datos del cliente');
     }
     setGuardando(false);
+  };
+
+  const eliminar = () => {
+    Alert.alert(
+      'Eliminar cliente',
+      `¿Eliminar a "${cliente.nombre}"? No aparecerá más en las rutas ni en el mapa.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            setEliminando(true);
+            try {
+              await cambiarEstadoCliente(cliente.id, false);
+              onEliminado?.(cliente.id);
+              onClose();
+            } catch (e: any) {
+              Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo eliminar el cliente');
+            }
+            setEliminando(false);
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -391,6 +418,10 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
           <TouchableOpacity style={[styles.btnGuardar, { backgroundColor: color }]} onPress={guardar} disabled={guardando}>
             {guardando ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnGuardarTexto}>Guardar cartilla</Text>}
           </TouchableOpacity>
+
+          <TouchableOpacity style={styles.btnEliminar} onPress={eliminar} disabled={eliminando}>
+            {eliminando ? <ActivityIndicator color={COLORS.danger} /> : <Text style={styles.btnEliminarTexto}>Eliminar cliente</Text>}
+          </TouchableOpacity>
         </ScrollView>
       </View>
     </Modal>
@@ -439,4 +470,9 @@ const styles = StyleSheet.create({
   chipTexto: { fontWeight: '700', fontSize: 13 },
   btnGuardar: { borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 8 },
   btnGuardarTexto: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  btnEliminar: {
+    borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 8,
+    borderWidth: 1.5, borderColor: COLORS.danger,
+  },
+  btnEliminarTexto: { color: COLORS.danger, fontWeight: '700', fontSize: 16 },
 });

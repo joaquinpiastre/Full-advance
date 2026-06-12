@@ -484,6 +484,7 @@ export default function RutaPreventista() {
         color={COLORS.preventista}
         onClose={() => setClienteCartilla(null)}
         onGuardado={cargar}
+        onEliminado={cargar}
       />
 
       <NuevoClienteModal

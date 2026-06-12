@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { registrarParada, subirFoto, finalizarParada } from './api';
 
 const STORAGE_KEY = 'visitas_pendientes_v1';
@@ -121,7 +121,23 @@ export async function procesarVisitasPendientes() {
           const foto = item.fotos[0];
           try {
             const form = new FormData();
-            form.append('foto', { uri: foto.uri, type: 'image/jpeg', name: `foto${foto.numero}.jpg` } as any);
+            if (Platform.OS === 'web') {
+              // En web, foto.uri es una blob: URL del navegador; FormData
+              // necesita el Blob real, no el objeto {uri,type,name} de RN.
+              // Si la blob: URL ya no es válida (ej. se recargó la página),
+              // no hay forma de recuperarla: se descarta solo esta foto.
+              let blob: Blob;
+              try {
+                blob = await (await fetch(foto.uri)).blob();
+              } catch {
+                item.fotos.shift();
+                await guardarCola();
+                continue;
+              }
+              form.append('foto', blob, `foto${foto.numero}.jpg`);
+            } else {
+              form.append('foto', { uri: foto.uri, type: 'image/jpeg', name: `foto${foto.numero}.jpg` } as any);
+            }
             form.append('numero', String(foto.numero));
             await subirFoto(paradaId, form);
           } catch (e: any) {

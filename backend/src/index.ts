@@ -46,7 +46,46 @@ pool.query(`
     ruta_id INTEGER NOT NULL REFERENCES rutas(id),
     activo BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(usuario_id)
+    UNIQUE(usuario_id, ruta_id)
+  )
+`).catch(() => {});
+
+// Un usuario puede tener varias rutas habilitadas: reemplaza la restricción
+// vieja (una sola ruta por usuario) por una de (usuario_id, ruta_id).
+pool.query(`ALTER TABLE asignaciones_fijas DROP CONSTRAINT IF EXISTS asignaciones_fijas_usuario_id_key`)
+  .then(() => pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'asignaciones_fijas_usuario_id_ruta_id_key'
+      ) THEN
+        ALTER TABLE asignaciones_fijas ADD CONSTRAINT asignaciones_fijas_usuario_id_ruta_id_key UNIQUE (usuario_id, ruta_id);
+      END IF;
+    END $$;
+  `))
+  .catch(() => {});
+
+// Ruta elegida por el usuario para la semana en curso (se resetea cada semana).
+pool.query(`
+  CREATE TABLE IF NOT EXISTS selecciones_ruta (
+    id SERIAL PRIMARY KEY,
+    usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+    ruta_id INTEGER NOT NULL REFERENCES rutas(id),
+    semana_inicio DATE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(usuario_id, semana_inicio)
+  )
+`).catch(() => {});
+
+// Historial de clientes quitados de una ruta (para alertas del admin).
+pool.query(`
+  CREATE TABLE IF NOT EXISTS eliminaciones_ruta_cliente (
+    id SERIAL PRIMARY KEY,
+    ruta_id INTEGER REFERENCES rutas(id) ON DELETE CASCADE,
+    cliente_id INTEGER REFERENCES clientes(id) ON DELETE CASCADE,
+    usuario_id INTEGER REFERENCES usuarios(id),
+    nota TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
   )
 `).catch(() => {});
 

@@ -1,0 +1,10 @@
+
+> full-advance-backend@1.0.0 dev
+> ts-node-dev --respawn --transpile-only src/index.ts
+
+[INFO] 11:38:00 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 5.9.3)
+Full Advance backend corriendo en http://localhost:3001
+[INFO] 11:47:29 Restarting: C:\Users\joaco\Desktop\Apps\full-advance\backend\src\index.ts has been modified
+Full Advance backend corriendo en http://localhost:3001
+[INFO] 11:47:48 Restarting: C:\Users\joaco\Desktop\Apps\full-advance\backend\src\index.ts has been modified
+Full Advance backend corriendo en http://localhost:3001

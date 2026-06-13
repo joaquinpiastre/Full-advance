@@ -15,13 +15,17 @@ type Props = {
 type MapState = { map: any; markers: any[]; polyline: any; L: any };
 
 function crearPopup(c: Cliente, index: number, visitado: boolean, color: string): string {
+  const estadoColor = visitado ? COLORS.success : color;
   return `
-    <div style="font-family:-apple-system,Helvetica,sans-serif;min-width:160px;line-height:1.4">
-      <div style="font-size:14px;font-weight:700;color:#1A1A2E;margin-bottom:3px">${index + 1}. ${c.nombre}</div>
-      ${c.direccion ? `<div style="font-size:12px;color:#6B7280">📍 ${c.direccion}</div>` : ''}
-      ${c.telefono ? `<div style="font-size:12px;color:#6B7280">📞 ${c.telefono}</div>` : ''}
-      <div style="font-size:12px;font-weight:700;margin-top:6px;color:${visitado ? COLORS.success : color}">
-        ${visitado ? 'Visitado' : 'Pendiente'}
+    <div style="font-family:-apple-system,Helvetica,sans-serif;min-width:200px;max-width:270px;line-height:1.4">
+      <div style="font-size:15px;font-weight:700;color:#1A1A2E;margin-bottom:3px">${index + 1}. ${c.nombre}</div>
+      ${c.razon_social ? `<div style="font-size:12px;color:#6B7280;margin-bottom:5px">${c.razon_social}</div>` : ''}
+      ${c.direccion ? `<div style="font-size:13px;margin-bottom:3px">📍 ${c.direccion}</div>` : ''}
+      ${(c.zona || c.departamento) ? `<div style="font-size:12px;color:#6B7280;margin-bottom:3px">${[c.departamento, c.zona].filter(Boolean).join(' · ')}</div>` : ''}
+      ${c.telefono ? `<div style="font-size:13px;margin-bottom:3px">📞 ${c.telefono}</div>` : ''}
+      ${c.contacto_nombre ? `<div style="font-size:12px;color:#6B7280">👤 ${c.contacto_nombre}</div>` : ''}
+      <div style="display:inline-block;background:${estadoColor};color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:12px;margin-top:6px">
+        ${visitado ? '✓ Visitado' : 'Pendiente'}
       </div>
     </div>
   `;
@@ -39,14 +43,14 @@ function actualizarMapa(state: MapState, clientes: Cliente[], visitados: Set<num
     const markerColor = visitado ? COLORS.success : color;
     const icon = L.divIcon({
       className: '',
-      html: `<div style="background:${markerColor};width:30px;height:30px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:13px">${visitado ? '✓' : index + 1}</div>`,
-      iconSize: [30, 30],
-      iconAnchor: [15, 15],
-      popupAnchor: [0, -15],
+      html: `<div style="background:${markerColor};width:11px;height:11px;border-radius:50%;border:2px solid rgba(255,255,255,0.95);box-shadow:0 1px 5px rgba(0,0,0,.5);cursor:pointer" title="${index + 1}. ${c.nombre}"></div>`,
+      iconSize: [11, 11],
+      iconAnchor: [5, 5],
+      popupAnchor: [0, -7],
     });
     return L.marker([c.lat, c.lng], { icon })
       .addTo(map)
-      .bindPopup(crearPopup(c, index, visitado, color));
+      .bindPopup(crearPopup(c, index, visitado, color), { maxWidth: 290 });
   });
 
   if (validos.length > 1) {

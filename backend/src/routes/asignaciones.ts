@@ -52,6 +52,17 @@ async function fetchAsignacionCompleta(asig: any) {
   };
 }
 
+// Todas las rutas activas, en formato de "opción" (para cuando el usuario no
+// tiene rutas habilitadas por el admin y puede elegir entre todas).
+async function obtenerTodasLasRutas() {
+  const { rows } = await pool.query(
+    `SELECT r.id as ruta_id, r.nombre as ruta_nombre, r.descripcion as ruta_desc,
+            (SELECT COUNT(*) FROM ruta_clientes WHERE ruta_id=r.id)::int as clientes_count
+     FROM rutas r WHERE r.activa=true ORDER BY r.nombre`
+  );
+  return rows;
+}
+
 // Asignación del día para el usuario autenticado.
 // Orden de prioridad:
 //   1. Asignación manual del admin para hoy.
@@ -93,8 +104,6 @@ router.get('/hoy', authMiddleware, async (req: AuthRequest, res: Response) => {
       [usuario_id]
     );
 
-    if (!fijas.length) return res.json(null);
-
     if (fijas.length === 1) {
       await pool.query(
         `INSERT INTO selecciones_ruta (usuario_id, ruta_id, semana_inicio) VALUES ($1,$2,$3)
@@ -107,9 +116,12 @@ router.get('/hoy', authMiddleware, async (req: AuthRequest, res: Response) => {
       }));
     }
 
+    // Sin restricción del admin (o con varias rutas habilitadas): elige entre todas las activas.
+    const opciones = fijas.length > 1 ? fijas : await obtenerTodasLasRutas();
+
     res.json({
       necesita_eleccion: true,
-      opciones: fijas.map((f) => ({
+      opciones: opciones.map((f) => ({
         id: f.ruta_id, nombre: f.ruta_nombre, descripcion: f.ruta_desc, clientes_count: f.clientes_count,
       })),
     });
@@ -134,8 +146,10 @@ router.get('/rutas-disponibles', authMiddleware, async (req: AuthRequest, res: R
       `SELECT ruta_id FROM selecciones_ruta WHERE usuario_id=$1 AND semana_inicio=$2`,
       [usuario_id, semana]
     );
+    // Si el admin no le habilitó rutas específicas, puede elegir entre todas las activas.
+    const opciones = fijas.length > 0 ? fijas : await obtenerTodasLasRutas();
     res.json({
-      opciones: fijas.map((f) => ({
+      opciones: opciones.map((f) => ({
         id: f.ruta_id, nombre: f.ruta_nombre, descripcion: f.ruta_desc, clientes_count: f.clientes_count,
       })),
       seleccion_actual: seleccion[0]?.ruta_id ?? null,
@@ -152,11 +166,20 @@ router.post('/elegir', authMiddleware, async (req: AuthRequest, res: Response) =
   if (!ruta_id) return res.status(400).json({ error: 'ruta_id requerido' });
   const semana = inicioSemana(new Date());
   try {
-    const { rows: permitida } = await pool.query(
-      `SELECT 1 FROM asignaciones_fijas WHERE usuario_id=$1 AND ruta_id=$2 AND activo=true`,
-      [usuario_id, ruta_id]
+    const { rows: fijas } = await pool.query(
+      `SELECT 1 FROM asignaciones_fijas WHERE usuario_id=$1 AND activo=true`,
+      [usuario_id]
     );
-    if (!permitida.length) return res.status(403).json({ error: 'Esa ruta no está habilitada para vos' });
+    if (fijas.length) {
+      const { rows: permitida } = await pool.query(
+        `SELECT 1 FROM asignaciones_fijas WHERE usuario_id=$1 AND ruta_id=$2 AND activo=true`,
+        [usuario_id, ruta_id]
+      );
+      if (!permitida.length) return res.status(403).json({ error: 'Esa ruta no está habilitada para vos' });
+    } else {
+      const { rows: activa } = await pool.query('SELECT 1 FROM rutas WHERE id=$1 AND activa=true', [ruta_id]);
+      if (!activa.length) return res.status(404).json({ error: 'Ruta no encontrada' });
+    }
     await pool.query(
       `INSERT INTO selecciones_ruta (usuario_id, ruta_id, semana_inicio) VALUES ($1,$2,$3)
        ON CONFLICT (usuario_id, semana_inicio) DO UPDATE SET ruta_id=$2`,

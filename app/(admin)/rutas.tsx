@@ -23,6 +23,8 @@ export default function Rutas() {
   const [departamentoSel, setDepartamentoSel] = useState<string | null>(null);
   const [clienteAQuitar, setClienteAQuitar] = useState<{ cliente_id: number; nombre: string } | null>(null);
   const [notaQuitar, setNotaQuitar] = useState('');
+  const [rutaRenombrando, setRutaRenombrando] = useState<Ruta | null>(null);
+  const [nombreRenombrar, setNombreRenombrar] = useState('');
 
   useEffect(() => {
     cargar();
@@ -106,6 +108,31 @@ export default function Rutas() {
     }
   };
 
+  const abrirRenombrar = (ruta: Ruta) => {
+    setRutaRenombrando(ruta);
+    setNombreRenombrar(ruta.nombre);
+  };
+
+  const handleRenombrar = async () => {
+    if (!rutaRenombrando) return;
+    const nuevoNombre = nombreRenombrar.trim();
+    if (!nuevoNombre) { Alert.alert('Error', 'El nombre es obligatorio'); return; }
+    try {
+      const datos = {
+        nombre: nuevoNombre,
+        descripcion: rutaRenombrando.descripcion ?? null,
+        clientes: rutaRenombrando.clientes.map((c) => c.cliente_id),
+      };
+      await actualizarRuta(rutaRenombrando.id, datos);
+      setRutas((prev) => prev.map((r) => (r.id === rutaRenombrando.id ? { ...r, nombre: nuevoNombre } : r)));
+      if (detalleRuta?.id === rutaRenombrando.id) setDetalleRuta({ ...detalleRuta, nombre: nuevoNombre });
+      setRutaRenombrando(null);
+      setNombreRenombrar('');
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo renombrar la ruta');
+    }
+  };
+
   const handleEliminar = (ruta: Ruta) => {
     Alert.alert(
       'Eliminar ruta',
@@ -157,6 +184,9 @@ export default function Rutas() {
                 <Text style={styles.back}>← Volver</Text>
               </TouchableOpacity>
               <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity style={styles.btnEditar} onPress={() => abrirRenombrar(detalleRuta)}>
+                  <Text style={styles.btnEditarTexto}>✏️ Renombrar</Text>
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.btnEditar} onPress={() => abrirEdicion(detalleRuta)}>
                   <Text style={styles.btnEditarTexto}>✏️ Editar clientes</Text>
                 </TouchableOpacity>
@@ -208,9 +238,14 @@ export default function Rutas() {
               <TouchableOpacity style={styles.card} onPress={() => setDetalleRuta(item)}>
                 <View style={styles.cardHeader}>
                   <Text style={styles.cardNombre}>{item.nombre}</Text>
-                  <TouchableOpacity onPress={() => handleEliminar(item)}>
-                    <Text style={styles.cardEliminar}>🗑️</Text>
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <TouchableOpacity onPress={() => abrirRenombrar(item)}>
+                      <Text style={styles.cardEliminar}>✏️</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleEliminar(item)}>
+                      <Text style={styles.cardEliminar}>🗑️</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
                 {item.descripcion && <Text style={styles.cardDesc}>{item.descripcion}</Text>}
                 <Text style={styles.cardClientes}>{item.clientes?.length ?? 0} clientes</Text>
@@ -351,6 +386,34 @@ export default function Rutas() {
               </TouchableOpacity>
               <TouchableOpacity style={styles.notaConfirmar} onPress={handleQuitarCliente}>
                 <Text style={styles.notaConfirmarTexto}>Quitar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal para renombrar la ruta */}
+      <Modal visible={!!rutaRenombrando} animationType="fade" transparent>
+        <View style={styles.overlay}>
+          <View style={styles.notaModal}>
+            <Text style={styles.notaTitulo}>Renombrar ruta</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Nombre de la ruta"
+              placeholderTextColor={COLORS.textLight}
+              value={nombreRenombrar}
+              onChangeText={setNombreRenombrar}
+              autoFocus
+            />
+            <View style={styles.notaAcciones}>
+              <TouchableOpacity
+                style={styles.notaCancelar}
+                onPress={() => { setRutaRenombrando(null); setNombreRenombrar(''); }}
+              >
+                <Text style={styles.notaCancelarTexto}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.notaConfirmar} onPress={handleRenombrar}>
+                <Text style={styles.notaConfirmarTexto}>Guardar</Text>
               </TouchableOpacity>
             </View>
           </View>

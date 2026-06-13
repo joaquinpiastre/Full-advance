@@ -62,9 +62,7 @@ export default function MapaRuta({ clientes, visitados, color }: Props) {
             coordinate={{ latitude: c.lat, longitude: c.lng }}
             anchor={{ x: 0.5, y: 0.5 }}
           >
-            <View style={[styles.pin, { backgroundColor: visitado ? COLORS.success : color }]}>
-              <Text style={styles.pinTexto}>{visitado ? '✓' : index + 1}</Text>
-            </View>
+            <View style={[styles.pin, { backgroundColor: visitado ? COLORS.success : color }]} />
             <Callout style={styles.callout}>
               <Text style={styles.calloutNombre}>{index + 1}. {c.nombre}</Text>
               {c.direccion ? <Text style={styles.calloutDato}>📍 {c.direccion}</Text> : null}
@@ -83,11 +81,9 @@ export default function MapaRuta({ clientes, visitados, color }: Props) {
 const styles = StyleSheet.create({
   mapa: { flex: 1 },
   pin: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     borderWidth: 2,
     borderColor: '#fff',
     shadowColor: '#000',
@@ -95,7 +91,6 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 4,
   },
-  pinTexto: { color: '#fff', fontWeight: '800', fontSize: 13 },
   callout: { minWidth: 160, padding: 4 },
   calloutNombre: { fontSize: 14, fontWeight: '700', color: COLORS.text, marginBottom: 4 },
   calloutDato: { fontSize: 12, color: COLORS.textLight },

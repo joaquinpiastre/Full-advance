@@ -93,7 +93,7 @@ export default function InicioRepartidor() {
   if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
 
   const hoy = format(new Date(), "EEEE d 'de' MMMM", { locale: es });
-  const puedeCambiarRuta = !jornada && rutasDisponibles.opciones.length > 1;
+  const puedeCambiarRuta = !jornada && rutasDisponibles.opciones.length > 0;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -126,7 +126,14 @@ export default function InicioRepartidor() {
       ) : (
         <View style={[styles.card, styles.cardWarning]}>
           <Text style={styles.cardLabel}>Sin asignación hoy</Text>
-          <Text style={styles.cardDesc}>El admin aún no te habilitó una ruta.</Text>
+          <Text style={styles.cardDesc}>
+            {puedeCambiarRuta ? 'Elegí qué ruta vas a hacer hoy.' : 'El admin aún no te habilitó una ruta.'}
+          </Text>
+          {puedeCambiarRuta && (
+            <TouchableOpacity style={styles.btnEleccion} onPress={() => setModalEleccionVisible(true)}>
+              <Text style={styles.btnEleccionTexto}>Elegir ruta</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 

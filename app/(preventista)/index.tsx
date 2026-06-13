@@ -94,6 +94,7 @@ export default function InicioPreventsita() {
 
   const hoy = format(new Date(), "EEEE d 'de' MMMM", { locale: es });
   const puedeCambiarRuta = !jornada && rutasDisponibles.opciones.length > 0;
+  const puedeElegirSinAsignacion = !asignacion && rutasDisponibles.opciones.length > 0;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -127,9 +128,9 @@ export default function InicioPreventsita() {
         <View style={[styles.card, styles.cardWarning]}>
           <Text style={styles.cardLabel}>Sin asignación hoy</Text>
           <Text style={styles.cardDesc}>
-            {puedeCambiarRuta ? 'Elegí qué ruta vas a hacer hoy.' : 'El admin aún no te habilitó una ruta.'}
+            {puedeElegirSinAsignacion ? 'Elegí qué ruta vas a hacer hoy.' : 'El admin aún no te habilitó una ruta.'}
           </Text>
-          {puedeCambiarRuta && (
+          {puedeElegirSinAsignacion && (
             <TouchableOpacity style={styles.btnEleccion} onPress={() => setModalEleccionVisible(true)}>
               <Text style={styles.btnEleccionTexto}>Elegir ruta</Text>
             </TouchableOpacity>

@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS clientes (
   cartilla_actualizada_at TIMESTAMPTZ,
   zona VARCHAR(100),
   departamento VARCHAR(100),
-  marcas TEXT[]
+  marcas TEXT[],
+  numero_cliente VARCHAR(50)
 );
 
 -- Si la tabla ya existía de antes, sumamos las columnas de la cartilla.
@@ -56,6 +57,7 @@ ALTER TABLE clientes ADD COLUMN IF NOT EXISTS cartilla_actualizada_at TIMESTAMPT
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS zona VARCHAR(100);
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS departamento VARCHAR(100);
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS marcas TEXT[];
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS numero_cliente VARCHAR(50);
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS horario_preferido VARCHAR(100);
 
 -- Listas de departamentos y distritos seleccionables para clasificar clientes.
@@ -79,6 +81,19 @@ CREATE TABLE IF NOT EXISTS anuncios (
   titulo VARCHAR(150),
   mensaje TEXT NOT NULL,
   tipo VARCHAR(20) NOT NULL DEFAULT 'info' CHECK (tipo IN ('info', 'oferta')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Tareas asignadas entre usuarios (preventista/supervisor/admin -> repartidor/preventista).
+-- El asignado puede marcarla como realizada, lo que queda visible para quien la asignó
+-- y para admin/supervisor en la sección de alertas.
+CREATE TABLE IF NOT EXISTS tareas (
+  id SERIAL PRIMARY KEY,
+  autor_id INTEGER NOT NULL REFERENCES usuarios(id),
+  asignado_id INTEGER NOT NULL REFERENCES usuarios(id),
+  mensaje TEXT NOT NULL,
+  completada BOOLEAN DEFAULT false,
+  completada_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -200,6 +215,20 @@ CREATE TABLE IF NOT EXISTS paradas (
   foto5_uri VARCHAR(500),
   nota TEXT,
   completada BOOLEAN DEFAULT false
+);
+
+-- Calificaciones que el supervisor hace, al final de una visita de control,
+-- sobre cómo el repartidor/preventista asignado a esa ruta atiende a ese
+-- cliente. Visible para admin y supervisor.
+CREATE TABLE IF NOT EXISTS calificaciones_visita (
+  id SERIAL PRIMARY KEY,
+  supervisor_id INTEGER NOT NULL REFERENCES usuarios(id),
+  evaluado_id INTEGER NOT NULL REFERENCES usuarios(id),
+  cliente_id INTEGER REFERENCES clientes(id),
+  ruta_id INTEGER REFERENCES rutas(id),
+  calificacion VARCHAR(20) NOT NULL CHECK (calificacion IN ('excelente','bueno','regular','malo','muy_malo')),
+  comentario TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Admin por defecto (password: admin1234)

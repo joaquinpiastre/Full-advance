@@ -6,7 +6,7 @@ import {
 import {
   obtenerClientes, crearCliente, actualizarCliente, obtenerRutas,
   obtenerDepartamentos, crearDepartamento, obtenerDistritos, crearDistrito,
-  cambiarEstadoCliente,
+  cambiarEstadoCliente, eliminarCliente,
 } from '../../services/api';
 import { COLORS, COLOR_CATEGORIA } from '../../constants';
 import { Cliente, CategoriaCliente, Ruta } from '../../types';
@@ -16,7 +16,7 @@ import SelectorModal from '../../components/SelectorModal';
 import SelectorModalMultiple from '../../components/SelectorModalMultiple';
 
 const FORM_VACIO = {
-  nombre: '', direccion: '', telefono: '', notas: '',
+  nombre: '', numero_cliente: '', direccion: '', telefono: '', notas: '',
   categoria: '' as CategoriaCliente | '',
   razon_social: '', cuit: '', rubro: '', email: '', contacto_nombre: '', horario_atencion: '',
   monto_compra_promedio: '', frecuencia_compra: '', forma_pago: '', dia_visita_preferido: '',
@@ -120,6 +120,28 @@ export default function Clientes() {
     );
   };
 
+  const handleEliminar = (c: Cliente) => {
+    Alert.alert(
+      'Eliminar cliente',
+      `¿Eliminar definitivamente a "${c.nombre}"? Esta acción no se puede deshacer.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await eliminarCliente(c.id);
+              setClientes((prev) => prev.filter((x) => x.id !== c.id));
+            } catch (e: any) {
+              Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo eliminar el cliente');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const abrirNuevo = () => {
     setEditando(null);
     setForm(FORM_VACIO);
@@ -130,6 +152,7 @@ export default function Clientes() {
     setEditando(c);
     setForm({
       nombre: c.nombre,
+      numero_cliente: c.numero_cliente ?? '',
       direccion: c.direccion,
       telefono: c.telefono ?? '',
       notas: c.notas ?? '',
@@ -163,6 +186,7 @@ export default function Clientes() {
     }
     const data = {
       nombre: form.nombre.trim(),
+      numero_cliente: form.numero_cliente.trim() || null,
       direccion: form.direccion.trim(),
       lat: 0,
       lng: 0,
@@ -201,7 +225,7 @@ export default function Clientes() {
     return clientes.filter((c) => {
       const coincideTexto = coincideBusqueda(
         busqueda,
-        c.nombre, c.direccion, c.rubro, c.razon_social, c.zona, c.departamento,
+        c.nombre, c.numero_cliente, c.direccion, c.rubro, c.razon_social, c.zona, c.departamento,
         c.telefono, c.email, c.contacto_nombre, c.cuit, c.notas
       );
       const coincideCategoria = !categoriaFiltro || c.categoria === categoriaFiltro;
@@ -267,7 +291,10 @@ export default function Clientes() {
           <View style={[styles.card, !item.activo && styles.cardInactivo]}>
             <TouchableOpacity onPress={() => abrirEditar(item)}>
               <View style={styles.cardHeader}>
-                <Text style={styles.cardNombre}>{item.nombre}</Text>
+                <Text style={styles.cardNombre}>
+                  {item.nombre}
+                  {item.numero_cliente ? <Text style={styles.cardNumero}> · #{item.numero_cliente}</Text> : null}
+                </Text>
                 {item.categoria && (
                   <View style={[styles.badge, { backgroundColor: COLOR_CATEGORIA[item.categoria] }]}>
                     <Text style={styles.badgeTexto}>{item.categoria}</Text>
@@ -281,14 +308,24 @@ export default function Clientes() {
                 <Text style={styles.cardTel}>📍 {[item.departamento, item.zona].filter(Boolean).join(' · ')}</Text>
               )}
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.btnEstado, item.activo ? styles.btnDesactivar : styles.btnActivar]}
-              onPress={() => handleCambiarEstado(item)}
-            >
-              <Text style={[styles.btnEstadoTexto, item.activo ? styles.btnEstadoTextoDesactivar : styles.btnEstadoTextoActivar]}>
-                {item.activo ? 'Desactivar' : 'Activar'}
-              </Text>
-            </TouchableOpacity>
+            <View style={styles.accionesFila}>
+              <TouchableOpacity
+                style={[styles.btnEstado, item.activo ? styles.btnDesactivar : styles.btnActivar]}
+                onPress={() => handleCambiarEstado(item)}
+              >
+                <Text style={[styles.btnEstadoTexto, item.activo ? styles.btnEstadoTextoDesactivar : styles.btnEstadoTextoActivar]}>
+                  {item.activo ? 'Desactivar' : 'Activar'}
+                </Text>
+              </TouchableOpacity>
+              {!item.activo && (
+                <TouchableOpacity
+                  style={[styles.btnEstado, styles.btnEliminar]}
+                  onPress={() => handleEliminar(item)}
+                >
+                  <Text style={[styles.btnEstadoTexto, styles.btnEstadoTextoEliminar]}>Eliminar</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         )}
         ListEmptyComponent={
@@ -310,6 +347,7 @@ export default function Clientes() {
             <Text style={styles.seccionTitulo}>Datos básicos</Text>
             {([
               { key: 'nombre', label: 'Nombre *', placeholder: 'Nombre del cliente' },
+              { key: 'numero_cliente', label: 'Número de cliente', placeholder: 'Opcional' },
               { key: 'razon_social', label: 'Razón social', placeholder: 'Nombre legal / fantasía' },
               { key: 'cuit', label: 'CUIT / CUIL', placeholder: '20-12345678-9', keyboard: 'numbers-and-punctuation' },
               { key: 'direccion', label: 'Dirección *', placeholder: 'Dirección' },
@@ -539,12 +577,18 @@ const styles = StyleSheet.create({
   cardInactivo: { borderLeftColor: COLORS.textLight, opacity: 0.7 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardNombre: { fontSize: 15, fontWeight: '700', color: COLORS.text, flex: 1 },
+  cardNumero: { fontSize: 13, fontWeight: '400', color: COLORS.textLight },
   cardDir: { fontSize: 13, color: COLORS.textLight },
   cardTel: { fontSize: 12, color: COLORS.textLight },
   badge: { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 3, marginLeft: 8 },
   badgeTexto: { color: '#fff', fontWeight: '800', fontSize: 13 },
-  btnEstado: {
+  accionesFila: {
+    flexDirection: 'row',
+    gap: 8,
     marginTop: 10,
+  },
+  btnEstado: {
+    flex: 1,
     borderRadius: 8,
     paddingVertical: 8,
     alignItems: 'center',
@@ -552,9 +596,11 @@ const styles = StyleSheet.create({
   },
   btnDesactivar: { borderColor: COLORS.danger, backgroundColor: '#FEF2F2' },
   btnActivar: { borderColor: COLORS.success, backgroundColor: '#F0FDF4' },
+  btnEliminar: { borderColor: COLORS.danger, backgroundColor: COLORS.danger },
   btnEstadoTexto: { fontWeight: '700', fontSize: 13 },
   btnEstadoTextoDesactivar: { color: COLORS.danger },
   btnEstadoTextoActivar: { color: COLORS.success },
+  btnEstadoTextoEliminar: { color: '#fff' },
   vacio: { textAlign: 'center', color: COLORS.textLight, marginTop: 60, fontSize: 14 },
   vacioChico: { fontSize: 12, color: COLORS.textLight, fontStyle: 'italic' },
   modal: { flex: 1, backgroundColor: COLORS.background },

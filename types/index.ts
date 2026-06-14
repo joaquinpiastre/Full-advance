@@ -15,6 +15,7 @@ export type CategoriaCliente = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
 export interface Cliente {
   id: number;
   nombre: string;
+  numero_cliente?: string;
   direccion: string;
   lat: number;
   lng: number;
@@ -155,6 +156,20 @@ export interface Anuncio {
   created_at: string;
 }
 
+export interface Tarea {
+  id: number;
+  autor_id: number;
+  asignado_id: number;
+  mensaje: string;
+  completada: boolean;
+  completada_at?: string;
+  created_at: string;
+  autor_nombre?: string;
+  autor_rol?: Rol;
+  asignado_nombre?: string;
+  asignado_rol?: Rol;
+}
+
 export interface UbicacionLive {
   usuario_id: number;
   nombre: string;
@@ -177,4 +192,39 @@ export interface JornadaActiva {
   gps_timestamp?: string;
   gps_activo: boolean;
   ruta: { id: number; nombre: string; total: number } | null;
+}
+
+export type Calificacion = 'excelente' | 'bueno' | 'regular' | 'malo' | 'muy_malo';
+
+export const CALIFICACION_LABEL: Record<Calificacion, string> = {
+  excelente: 'Excelente',
+  bueno: 'Bueno',
+  regular: 'Regular',
+  malo: 'Malo',
+  muy_malo: 'Muy malo',
+};
+
+export const CALIFICACION_COLOR: Record<Calificacion, string> = {
+  excelente: '#16A34A',
+  bueno: '#65A30D',
+  regular: '#F59E0B',
+  malo: '#EA580C',
+  muy_malo: '#DC2626',
+};
+
+export interface CalificacionVisita {
+  id: number;
+  supervisor_id: number;
+  evaluado_id: number;
+  cliente_id: number | null;
+  ruta_id: number | null;
+  calificacion: Calificacion;
+  comentario?: string | null;
+  created_at: string;
+  supervisor_nombre?: string;
+  evaluado_nombre?: string;
+  evaluado_rol?: Rol;
+  cliente_nombre?: string;
+  cliente_dir?: string;
+  ruta_nombre?: string;
 }

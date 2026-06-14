@@ -37,6 +37,22 @@ export default function SupervisorLayout() {
         }}
       />
       <Tabs.Screen
+        name="mivisita"
+        options={{
+          title: 'Mi Visita',
+          tabBarIcon: tabIcon('list', 'list-outline'),
+          headerTitle: 'Visita de Control',
+        }}
+      />
+      <Tabs.Screen
+        name="mapa"
+        options={{
+          title: 'Mapa',
+          tabBarIcon: tabIcon('location', 'location-outline'),
+          headerTitle: 'Mapa de la Ruta',
+        }}
+      />
+      <Tabs.Screen
         name="ruta"
         options={{
           title: 'Equipo',
@@ -66,6 +82,14 @@ export default function SupervisorLayout() {
           title: 'Noticias',
           tabBarIcon: tabIcon('newspaper', 'newspaper-outline'),
           headerTitle: 'Noticias',
+        }}
+      />
+      <Tabs.Screen
+        name="tareas"
+        options={{
+          title: 'Tareas',
+          tabBarIcon: tabIcon('checkbox', 'checkbox-outline'),
+          headerTitle: 'Tareas',
         }}
       />
     </Tabs>

@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { pool } from '../db/client';
-import { authMiddleware, soloAdmin, AuthRequest } from '../middleware/auth';
+import { authMiddleware, soloAdmin, adminOSupervisor, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -200,6 +200,25 @@ router.get('/rutas-disponibles', authMiddleware, async (req: AuthRequest, res: R
       })),
       seleccion_actual: seleccion[0]?.ruta_id ?? null,
     });
+  } catch {
+    res.status(500).json({ error: 'Error' });
+  }
+});
+
+// Repartidores/preventistas que tienen asignada esta ruta hoy. Lo usa el
+// supervisor para saber a quién calificar al final de una visita de control.
+router.get('/equipo-ruta/:ruta_id', authMiddleware, adminOSupervisor, async (req: AuthRequest, res: Response) => {
+  const ruta_id = Number(req.params.ruta_id);
+  try {
+    const { rows: usuarios } = await pool.query(
+      `SELECT id, nombre, rol FROM usuarios WHERE activo=true AND rol IN ('repartidor','preventista') ORDER BY nombre`
+    );
+    const equipo = [];
+    for (const u of usuarios) {
+      const ruta = await obtenerRutaIdHoy(u.id);
+      if (ruta === ruta_id) equipo.push(u);
+    }
+    res.json(equipo);
   } catch {
     res.status(500).json({ error: 'Error' });
   }

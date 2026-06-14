@@ -9,7 +9,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useJornadaStore } from '../../store/jornadaStore';
 import {
   obtenerAsignacionHoy, obtenerParadas, obtenerJornadaActiva,
-  registrarParada, actualizarOrdenRuta,
+  registrarParada, actualizarOrdenRuta, obtenerEquipoRuta, crearCalificacion,
 } from '../../services/api';
 import { obtenerUbicacionRapida, detenerGps } from '../../services/gps';
 import {
@@ -17,24 +17,26 @@ import {
   procesarVisitasPendientes, suscribirVisitasPendientes, VisitaPendiente,
 } from '../../services/offlineVisitas';
 import CartillaModal from '../../components/CartillaModal';
-import NuevoClienteModal from '../../components/NuevoClienteModal';
 import MercaderiaVencidaForm from '../../components/MercaderiaVencidaForm';
 import { calcularFechaVencimiento } from '../../utils/vencimiento';
 import FotoReferenciaCliente from '../../components/FotoReferenciaCliente';
 import AccionesList from '../../components/AccionesList';
 import { COLORS } from '../../constants';
-import { Cliente } from '../../types';
+import { Cliente, Calificacion, CALIFICACION_LABEL, CALIFICACION_COLOR } from '../../types';
 
 type EstadoVisita = 'esperando' | 'formulario';
+type EquipoRuta = { id: number; nombre: string; rol: string };
 
-export default function RutaPreventista() {
+const CALIFICACIONES: Calificacion[] = ['excelente', 'bueno', 'regular', 'malo', 'muy_malo'];
+
+export default function MiVisitaSupervisor() {
   const { jornada, setJornada } = useJornadaStore();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [rutaId, setRutaId] = useState<number | null>(null);
   const [paradas, setParadas] = useState<any[]>([]);
+  const [equipoRuta, setEquipoRuta] = useState<EquipoRuta[]>([]);
   const [cargando, setCargando] = useState(true);
   const [clienteCartilla, setClienteCartilla] = useState<Cliente | null>(null);
-  const [nuevoClienteVisible, setNuevoClienteVisible] = useState(false);
 
   // Flujo de visita
   const [clienteActual, setClienteActual] = useState<Cliente | null>(null);
@@ -59,6 +61,11 @@ export default function RutaPreventista() {
   const [pendientes, setPendientes] = useState<VisitaPendiente[]>([]);
   const enviandoRef = useRef(false);
 
+  // Calificación de atención al cliente
+  const [evaluadoId, setEvaluadoId] = useState<number | null>(null);
+  const [calificacion, setCalificacion] = useState<Calificacion | null>(null);
+  const [comentarioCalificacion, setComentarioCalificacion] = useState('');
+
   useEffect(() => {
     if (!jornada) return;
     const cargarPendientes = () => obtenerVisitasPendientes(jornada.id).then(setPendientes);
@@ -71,10 +78,17 @@ export default function RutaPreventista() {
     try {
       const asigRes = await obtenerAsignacionHoy();
       setClientes(asigRes.data?.ruta?.clientes?.map((c: any) => c.cliente) ?? []);
-      setRutaId(asigRes.data?.ruta?.id ?? null);
+      const ruta_id = asigRes.data?.ruta?.id ?? null;
+      setRutaId(ruta_id);
       if (jornada) {
         const paradasRes = await obtenerParadas(jornada.id);
         setParadas(paradasRes.data);
+      }
+      if (ruta_id) {
+        const equipoRes = await obtenerEquipoRuta(ruta_id);
+        setEquipoRuta(equipoRes.data);
+      } else {
+        setEquipoRuta([]);
       }
     } catch {}
     setCargando(false);
@@ -84,13 +98,11 @@ export default function RutaPreventista() {
 
   const iniciarVisita = async (cliente: Cliente) => {
     if (!jornada) {
-      Alert.alert('Sin jornada', 'Iniciá la jornada desde la pantalla de Inicio primero.');
+      Alert.alert('Sin visita en curso', 'Iniciá la visita de control desde la pantalla de Inicio primero.');
       return;
     }
     setProcesando(true);
     try {
-      // Si ya existe una parada sin completar para este cliente (quedó "trabada"
-      // por un corte de conexión), la retomamos en lugar de crear otra.
       const pendiente = paradas.find((p) => p.cliente_id === cliente.id && !p.completada);
       let parada = pendiente;
       if (!parada) {
@@ -100,7 +112,6 @@ export default function RutaPreventista() {
           parada = res.data;
         } catch (e: any) {
           if (e?.response) throw e;
-          // Sin conexión: seguimos offline, la parada se registrará al sincronizar.
           parada = {
             id: -Date.now(),
             jornada_id: jornada.id,
@@ -121,6 +132,9 @@ export default function RutaPreventista() {
       setAccionRequerida(false); setAccionDesc(['']);
       setOportunidades(['']);
       setRespetaPvp(true); setMotivoNoPvp(['']);
+      setEvaluadoId(equipoRuta.length === 1 ? equipoRuta[0].id : null);
+      setCalificacion(null);
+      setComentarioCalificacion('');
       setEstadoVisita('formulario');
     } catch (e: any) {
       Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo registrar la visita');
@@ -160,6 +174,16 @@ export default function RutaPreventista() {
       Alert.alert('Error', 'No se encontró la visita en curso. Volvé a presionar "Visitar".');
       return;
     }
+    if (equipoRuta.length > 0) {
+      if (!evaluadoId) {
+        Alert.alert('Falta calificar', 'Elegí a quién le corresponde esta ruta hoy.');
+        return;
+      }
+      if (!calificacion) {
+        Alert.alert('Falta calificar', 'Elegí cómo atendió al cliente.');
+        return;
+      }
+    }
     enviandoRef.current = true;
     setProcesando(true);
     try {
@@ -191,6 +215,18 @@ export default function RutaPreventista() {
         },
       });
 
+      if (evaluadoId && calificacion) {
+        crearCalificacion({
+          evaluado_id: evaluadoId,
+          cliente_id: clienteActual?.id,
+          ruta_id: rutaId ?? undefined,
+          calificacion,
+          comentario: comentarioCalificacion.trim() || undefined,
+        }).catch(() => {
+          Alert.alert('Calificación no guardada', 'La visita se registró, pero la calificación no se pudo enviar. Probá de nuevo más tarde.');
+        });
+      }
+
       setEstadoVisita('esperando');
       setClienteActual(null);
       setParadaActual(null);
@@ -204,17 +240,14 @@ export default function RutaPreventista() {
     }
   };
 
-  // Si al sincronizar la visita el backend cerró la jornada automáticamente
-  // (porque ya se visitaron todos los clientes de la ruta), refleja eso en
-  // la app: corta el GPS y vuelve a Inicio.
   const verificarJornadaCerrada = async () => {
     try {
       const res = await obtenerJornadaActiva();
       if (!res.data) {
         await detenerGps();
         setJornada(null);
-        Alert.alert('Jornada finalizada', 'Completaste todas las visitas de la ruta. La jornada se cerró automáticamente.');
-        router.replace('/(preventista)');
+        Alert.alert('Visita finalizada', 'Completaste todas las visitas de la ruta. Se cerró automáticamente.');
+        router.replace('/(supervisor)');
       }
     } catch {}
   };
@@ -226,7 +259,7 @@ export default function RutaPreventista() {
     }
   };
 
-  if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.preventista} size="large" /></View>;
+  if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.supervisor} size="large" /></View>;
 
   const paradasCompletadas = paradas.filter((p) => p.completada);
 
@@ -239,7 +272,7 @@ export default function RutaPreventista() {
           <View style={styles.panelHeader}>
             <FotoReferenciaCliente
               cliente={clienteActual}
-              color={COLORS.preventista}
+              color={COLORS.supervisor}
               onActualizado={(uri) => {
                 setClienteActual((prev) => (prev ? { ...prev, foto_referencia_uri: uri } : prev));
                 setClientes((prev) => prev.map((c) => (c.id === clienteActual.id ? { ...c, foto_referencia_uri: uri } : c)));
@@ -264,7 +297,6 @@ export default function RutaPreventista() {
             </TouchableOpacity>
           </View>
 
-          {/* Paso: Formulario */}
           {estadoVisita === 'formulario' && (
             <ScrollView style={styles.panelScroll} contentContainerStyle={styles.panelScrollContent} showsVerticalScrollIndicator={false}>
               {/* Fotos */}
@@ -418,6 +450,57 @@ export default function RutaPreventista() {
                 />
               </View>
 
+              {/* Calificación de atención al cliente */}
+              {equipoRuta.length > 0 && (
+                <View style={styles.calificacionBox}>
+                  <Text style={styles.calificacionTitulo}>⭐ Calificá la atención al cliente</Text>
+                  <Text style={styles.calificacionDesc}>¿A quién corresponde esta ruta hoy?</Text>
+                  <View style={styles.chipsRow}>
+                    {equipoRuta.map((u) => {
+                      const activo = evaluadoId === u.id;
+                      return (
+                        <TouchableOpacity
+                          key={u.id}
+                          style={[styles.chip, activo && { borderColor: COLORS.supervisor, backgroundColor: COLORS.supervisor }]}
+                          onPress={() => setEvaluadoId(u.id)}
+                        >
+                          <Text style={[styles.chipTexto, activo && styles.chipTextoActivo]}>
+                            {u.nombre} · {u.rol === 'repartidor' ? 'Repartidor' : 'Preventista'}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <Text style={[styles.calificacionDesc, { marginTop: 10 }]}>¿Cómo lo atendió?</Text>
+                  <View style={styles.chipsRow}>
+                    {CALIFICACIONES.map((c) => {
+                      const activo = calificacion === c;
+                      return (
+                        <TouchableOpacity
+                          key={c}
+                          style={[styles.chip, activo && { borderColor: CALIFICACION_COLOR[c], backgroundColor: CALIFICACION_COLOR[c] }]}
+                          onPress={() => setCalificacion(c)}
+                        >
+                          <Text style={[styles.chipTexto, activo && styles.chipTextoActivo]}>
+                            {CALIFICACION_LABEL[c]}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <TextInput
+                    style={[styles.input, styles.inputMultiline, { marginTop: 10 }]}
+                    placeholder="Comentario sobre la atención (opcional)..."
+                    placeholderTextColor={COLORS.textLight}
+                    multiline
+                    value={comentarioCalificacion}
+                    onChangeText={setComentarioCalificacion}
+                  />
+                </View>
+              )}
+
               <TouchableOpacity
                 style={[styles.btnConfirmar, procesando && { opacity: 0.6 }]}
                 onPress={confirmarVisita}
@@ -447,9 +530,6 @@ export default function RutaPreventista() {
               <Text style={styles.resumenTexto}>
                 {paradasCompletadas.length + pendientes.length} / {clientes.length} clientes visitados
               </Text>
-              <TouchableOpacity style={styles.btnNuevoCliente} onPress={() => setNuevoClienteVisible(true)}>
-                <Text style={styles.btnNuevoClienteTexto}>+ Nuevo cliente</Text>
-              </TouchableOpacity>
             </View>
             <View style={styles.barra}>
               <View style={[
@@ -504,7 +584,7 @@ export default function RutaPreventista() {
                 </View>
               );
             }}
-            ListEmptyComponent={<Text style={styles.vacio}>No hay clientes en la ruta de hoy</Text>}
+            ListEmptyComponent={<Text style={styles.vacio}>No hay clientes en la ruta elegida</Text>}
           />
         </>
       )}
@@ -512,17 +592,10 @@ export default function RutaPreventista() {
       <CartillaModal
         cliente={clienteCartilla}
         visible={!!clienteCartilla}
-        color={COLORS.preventista}
+        color={COLORS.supervisor}
         onClose={() => setClienteCartilla(null)}
         onGuardado={cargar}
         onEliminado={cargar}
-      />
-
-      <NuevoClienteModal
-        visible={nuevoClienteVisible}
-        color={COLORS.preventista}
-        onClose={() => setNuevoClienteVisible(false)}
-        onCreado={cargar}
       />
     </View>
   );
@@ -532,7 +605,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
-  // Panel de visita
   panel: {
     flex: 1,
     backgroundColor: COLORS.card,
@@ -545,7 +617,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   panelHeader: {
-    backgroundColor: COLORS.preventista,
+    backgroundColor: COLORS.supervisor,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -554,15 +626,11 @@ const styles = StyleSheet.create({
   panelCliente: { fontSize: 16, fontWeight: '800', color: '#fff' },
   panelDir: { fontSize: 12, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
   panelCerrar: { fontSize: 22, color: '#fff', fontWeight: '700', padding: 4 },
-  panelBody: { padding: 20, gap: 12 },
   panelScroll: { flex: 1 },
   panelScrollContent: { padding: 16, gap: 12 },
 
-  // Paso fotos
-  pasoTitulo: { fontSize: 18, fontWeight: '800', color: COLORS.preventista, marginBottom: 4 },
+  pasoTitulo: { fontSize: 18, fontWeight: '800', color: COLORS.supervisor, marginBottom: 4 },
   fotoPanelDesc: { fontSize: 13, color: COLORS.textLight, marginBottom: 4 },
-  fotosRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
-  fotoMini: { width: 70, height: 70, borderRadius: 8 },
   fotosGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   fotoSlot: {
     width: 70,
@@ -590,15 +658,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   fotoSlotBadgeTexto: { color: '#fff', fontSize: 10, fontWeight: '700' },
-  btnPrimario: {
-    backgroundColor: COLORS.preventista,
-    borderRadius: 12,
-    padding: 14,
-    alignItems: 'center',
-  },
-  btnTexto: { color: '#fff', fontWeight: '700', fontSize: 15 },
 
-  // Formulario
   formGroup: { gap: 4 },
   subLabel: { fontSize: 12, fontWeight: '700', color: COLORS.textLight, textTransform: 'uppercase' },
   input: {
@@ -662,7 +722,6 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     backgroundColor: COLORS.card,
   },
-  chipActivo: { borderColor: COLORS.preventista, backgroundColor: COLORS.preventista },
   chipTexto: { fontSize: 13, fontWeight: '600', color: COLORS.textLight },
   chipTextoActivo: { color: '#fff' },
 
@@ -677,6 +736,17 @@ const styles = StyleSheet.create({
   informeTitulo: { fontSize: 14, fontWeight: '700', color: '#1D4ED8' },
   informeDesc: { fontSize: 12, color: '#3B82F6', marginBottom: 4 },
 
+  calificacionBox: {
+    backgroundColor: '#FAF5FF',
+    borderRadius: 12,
+    padding: 14,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+  },
+  calificacionTitulo: { fontSize: 14, fontWeight: '700', color: '#7E22CE' },
+  calificacionDesc: { fontSize: 12, color: '#7E22CE', marginBottom: 4 },
+
   btnConfirmar: {
     backgroundColor: COLORS.success,
     borderRadius: 12,
@@ -686,7 +756,6 @@ const styles = StyleSheet.create({
   },
   btnConfirmarTexto: { color: '#fff', fontWeight: '700', fontSize: 16 },
 
-  // Lista de clientes
   resumen: {
     backgroundColor: COLORS.card,
     padding: 16,
@@ -704,15 +773,8 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   pendientesTexto: { fontSize: 12, color: '#92400E', fontWeight: '600' },
-  btnNuevoCliente: {
-    backgroundColor: COLORS.preventista,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  btnNuevoClienteTexto: { color: '#fff', fontWeight: '700', fontSize: 12 },
   barra: { height: 8, backgroundColor: COLORS.border, borderRadius: 4 },
-  barraFill: { height: 8, backgroundColor: COLORS.preventista, borderRadius: 4 },
+  barraFill: { height: 8, backgroundColor: COLORS.supervisor, borderRadius: 4 },
 
   clienteCard: {
     backgroundColor: COLORS.card,
@@ -726,7 +788,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
     borderLeftWidth: 4,
-    borderLeftColor: COLORS.preventista,
+    borderLeftColor: COLORS.supervisor,
   },
   clienteCardVisitado: { borderLeftColor: COLORS.success, opacity: 0.75 },
   clienteCardActiva: { opacity: 0.85, shadowOpacity: 0.2, elevation: 6 },
@@ -734,7 +796,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: COLORS.preventista,
+    backgroundColor: COLORS.supervisor,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -752,7 +814,7 @@ const styles = StyleSheet.create({
   botonesCard: { flexDirection: 'column', alignItems: 'center', gap: 6 },
   visitadoCheck: { fontSize: 22, color: COLORS.success, fontWeight: '700' },
   btnVisitar: {
-    backgroundColor: COLORS.preventista,
+    backgroundColor: COLORS.supervisor,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,

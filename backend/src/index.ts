@@ -16,6 +16,8 @@ import estadisticasRouter from './routes/estadisticas';
 import ventasCalientesRouter from './routes/ventas-calientes';
 import zonasRouter from './routes/zonas';
 import anunciosRouter from './routes/anuncios';
+import tareasRouter from './routes/tareas';
+import calificacionesRouter from './routes/calificaciones';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -35,6 +37,8 @@ app.use('/estadisticas', estadisticasRouter);
 app.use('/ventas-calientes', ventasCalientesRouter);
 app.use('/zonas', zonasRouter);
 app.use('/anuncios', anunciosRouter);
+app.use('/tareas', tareasRouter);
+app.use('/calificaciones', calificacionesRouter);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', app: 'Full Advance' }));
 
@@ -92,6 +96,11 @@ pool.query(`
 // Marcas que distribuye el cliente (BIMBO, CITRIC, SANAS, ARRABAL)
 pool.query(`
   ALTER TABLE clientes ADD COLUMN IF NOT EXISTS marcas TEXT[]
+`).catch(() => {});
+
+// Número de cliente (opcional, asignado por el admin/empresa)
+pool.query(`
+  ALTER TABLE clientes ADD COLUMN IF NOT EXISTS numero_cliente VARCHAR(50)
 `).catch(() => {});
 
 // Columnas del flujo preventista en paradas
@@ -256,6 +265,34 @@ pool.query(`
     titulo VARCHAR(150),
     mensaje TEXT NOT NULL,
     tipo VARCHAR(20) NOT NULL DEFAULT 'info' CHECK (tipo IN ('info', 'oferta')),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )
+`).catch(() => {});
+
+// Tareas asignadas entre usuarios (preventista/supervisor/admin -> repartidor/preventista)
+pool.query(`
+  CREATE TABLE IF NOT EXISTS tareas (
+    id SERIAL PRIMARY KEY,
+    autor_id INTEGER NOT NULL REFERENCES usuarios(id),
+    asignado_id INTEGER NOT NULL REFERENCES usuarios(id),
+    mensaje TEXT NOT NULL,
+    completada BOOLEAN DEFAULT false,
+    completada_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )
+`).catch(() => {});
+
+// Calificaciones que el supervisor hace, al final de una visita de control,
+// sobre cómo el repartidor/preventista atiende a un cliente de su ruta.
+pool.query(`
+  CREATE TABLE IF NOT EXISTS calificaciones_visita (
+    id SERIAL PRIMARY KEY,
+    supervisor_id INTEGER NOT NULL REFERENCES usuarios(id),
+    evaluado_id INTEGER NOT NULL REFERENCES usuarios(id),
+    cliente_id INTEGER REFERENCES clientes(id),
+    ruta_id INTEGER REFERENCES rutas(id),
+    calificacion VARCHAR(20) NOT NULL CHECK (calificacion IN ('excelente','bueno','regular','malo','muy_malo')),
+    comentario TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
   )
 `).catch(() => {});

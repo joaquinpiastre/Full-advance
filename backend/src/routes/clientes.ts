@@ -36,7 +36,7 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   const {
-    nombre, direccion, lat, lng, telefono, notas,
+    nombre, direccion, lat, lng, telefono, notas, numero_cliente,
     categoria, razon_social, cuit, rubro, email, contacto_nombre, horario_atencion,
     monto_compra_promedio, frecuencia_compra, forma_pago, dia_visita_preferido,
     zona, departamento, marcas,
@@ -64,14 +64,14 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         nombre, direccion, lat, lng, telefono, notas,
         categoria, razon_social, cuit, rubro, email, contacto_nombre, horario_atencion,
         monto_compra_promedio, frecuencia_compra, forma_pago, dia_visita_preferido,
-        zona, departamento, marcas
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING *`,
+        zona, departamento, marcas, numero_cliente
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING *`,
       [
         nombre, direccion, lat ?? 0, lng ?? 0, telefono ?? null, notas ?? null,
         esAdmin ? (categoria ?? null) : null, razon_social ?? null, cuit ?? null, rubro ?? null, email ?? null,
         contacto_nombre ?? null, horario_atencion ?? null,
         monto_compra_promedio ?? null, frecuencia_compra ?? null, forma_pago ?? null, dia_visita_preferido ?? null,
-        zona ?? null, departamento ?? null, marcas ?? null,
+        zona ?? null, departamento ?? null, marcas ?? null, numero_cliente?.trim() || null,
       ]
     );
     const cliente = rows[0];
@@ -97,7 +97,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const esAdmin = req.usuario?.rol === 'admin';
   const {
-    nombre, direccion, lat, lng, telefono, notas,
+    nombre, direccion, lat, lng, telefono, notas, numero_cliente,
     categoria, razon_social, cuit, rubro, email, contacto_nombre, horario_atencion,
     monto_compra_promedio, frecuencia_compra, forma_pago, dia_visita_preferido,
     zona, departamento, marcas, ruta_id,
@@ -110,14 +110,14 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
       'nombre=$1', 'direccion=$2', 'lat=$3', 'lng=$4', 'telefono=$5', 'notas=$6',
       'razon_social=$7', 'cuit=$8', 'rubro=$9', 'email=$10', 'contacto_nombre=$11', 'horario_atencion=$12',
       'monto_compra_promedio=$13', 'frecuencia_compra=$14', 'forma_pago=$15', 'dia_visita_preferido=$16',
-      'zona=$17', 'departamento=$18', 'marcas=$19', 'cartilla_actualizada_at=NOW()',
+      'zona=$17', 'departamento=$18', 'marcas=$19', 'numero_cliente=$20', 'cartilla_actualizada_at=NOW()',
     ];
     const valores: any[] = [
       nombre, direccion, lat ?? 0, lng ?? 0, telefono ?? null, notas ?? null,
       razon_social ?? null, cuit ?? null, rubro ?? null, email ?? null,
       contacto_nombre ?? null, horario_atencion ?? null,
       monto_compra_promedio ?? null, frecuencia_compra ?? null, forma_pago ?? null, dia_visita_preferido ?? null,
-      zona ?? null, departamento ?? null, marcas ?? null,
+      zona ?? null, departamento ?? null, marcas ?? null, numero_cliente?.trim() || null,
     ];
     let i = valores.length + 1;
     // Solo el admin puede cambiar la categoría (A-F).
@@ -168,13 +168,30 @@ router.patch('/:id/coords', authMiddleware, async (req: AuthRequest, res: Respon
   }
 });
 
+// Eliminar definitivamente un cliente (solo si ya está inactivo)
 router.delete('/:id', authMiddleware, soloAdmin, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
+  const client = await pool.connect();
   try {
-    await pool.query('UPDATE clientes SET activo=false WHERE id=$1', [id]);
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT activo FROM clientes WHERE id=$1', [id]);
+    if (!rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Cliente no encontrado' });
+    }
+    if (rows[0].activo) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Solo se pueden eliminar clientes inactivos' });
+    }
+    await client.query('UPDATE paradas SET cliente_id=NULL WHERE cliente_id=$1', [id]);
+    await client.query('DELETE FROM clientes WHERE id=$1', [id]);
+    await client.query('COMMIT');
     res.json({ ok: true });
   } catch {
-    res.status(500).json({ error: 'Error' });
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: 'Error al eliminar el cliente' });
+  } finally {
+    client.release();
   }
 });
 

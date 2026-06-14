@@ -113,6 +113,14 @@ export default function AdminLayout() {
           headerTitle: 'Noticias',
         }}
       />
+      <Tabs.Screen
+        name="tareas"
+        options={{
+          title: 'Tareas',
+          tabBarIcon: tabIcon('checkbox', 'checkbox-outline'),
+          headerTitle: 'Tareas',
+        }}
+      />
     </Tabs>
   );
 }

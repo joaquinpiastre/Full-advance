@@ -3,14 +3,87 @@ import {
   View, Text, StyleSheet, FlatList, ScrollView,
   ActivityIndicator, TouchableOpacity, RefreshControl, LayoutAnimation,
 } from 'react-native';
-import { obtenerAlertas, obtenerEliminacionesRuta } from '../../services/api';
-import { Alerta, EliminacionRuta } from '../../types';
+import { obtenerAlertas, obtenerEliminacionesRuta, obtenerTareas, obtenerCalificaciones } from '../../services/api';
+import { Alerta, EliminacionRuta, Tarea, CalificacionVisita, CALIFICACION_LABEL, CALIFICACION_COLOR } from '../../types';
 import { COLORS } from '../../constants';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 const AUTO_REFRESH_MS = 15000;
-type Filtro = 'todas' | 'urgentes' | 'vencimientos' | 'acciones' | 'bajas';
+type Filtro = 'todas' | 'urgentes' | 'vencimientos' | 'acciones' | 'bajas' | 'tareas' | 'calificaciones';
+
+const ROL_LABEL: Record<string, string> = {
+  repartidor: 'Repartidor',
+  preventista: 'Preventista',
+  supervisor: 'Supervisor',
+  admin: 'Admin',
+};
+
+function CardTarea({ item }: { item: Tarea }) {
+  const hora = format(new Date(item.created_at), "d MMM, HH:mm", { locale: es });
+  return (
+    <View style={[styles.card, item.completada ? styles.cardTareaRealizada : styles.cardTareaPendiente]}>
+      <View style={styles.cardRow}>
+        <View style={[styles.tipoPill, item.completada ? styles.pillRealizada : styles.pillPendiente]}>
+          <Text style={styles.pillTexto}>{item.completada ? '✓ REALIZADA' : '⏳ PENDIENTE'}</Text>
+        </View>
+        <View style={styles.cardInfo}>
+          <Text style={styles.cardCliente} numberOfLines={1}>
+            {item.asignado_nombre} <Text style={styles.detalleRol}>· {ROL_LABEL[item.asignado_rol ?? ''] ?? item.asignado_rol}</Text>
+          </Text>
+          <Text style={styles.cardDir} numberOfLines={1}>
+            Asignada por {item.autor_nombre} · {ROL_LABEL[item.autor_rol ?? ''] ?? item.autor_rol}
+          </Text>
+        </View>
+        <View style={styles.cardDerecha}>
+          <Text style={styles.cardHora}>{hora}</Text>
+        </View>
+      </View>
+      <View style={styles.detalle}>
+        <View style={styles.detalleSep} />
+        <Text style={styles.detallleNota}>📋 {item.mensaje}</Text>
+        {item.completada && item.completada_at ? (
+          <Text style={styles.detallleNota}>
+            Realizada: {format(new Date(item.completada_at), "d MMM, HH:mm", { locale: es })}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function CardCalificacion({ item }: { item: CalificacionVisita }) {
+  const hora = format(new Date(item.created_at), "d MMM, HH:mm", { locale: es });
+  const color = CALIFICACION_COLOR[item.calificacion];
+  return (
+    <View style={[styles.card, styles.cardCalificacion, { borderLeftColor: color }]}>
+      <View style={styles.cardRow}>
+        <View style={[styles.tipoPill, { backgroundColor: color }]}>
+          <Text style={styles.pillTexto}>{CALIFICACION_LABEL[item.calificacion].toUpperCase()}</Text>
+        </View>
+        <View style={styles.cardInfo}>
+          <Text style={styles.cardCliente} numberOfLines={1}>
+            {item.evaluado_nombre} <Text style={styles.detalleRol}>· {ROL_LABEL[item.evaluado_rol ?? ''] ?? item.evaluado_rol}</Text>
+          </Text>
+          <Text style={styles.cardDir} numberOfLines={1}>
+            Cliente: {item.cliente_nombre ?? '—'} {item.ruta_nombre ? `· Ruta: ${item.ruta_nombre}` : ''}
+          </Text>
+        </View>
+        <View style={styles.cardDerecha}>
+          <Text style={styles.cardHora}>{hora}</Text>
+        </View>
+      </View>
+      <View style={styles.detalle}>
+        <View style={styles.detalleSep} />
+        <View style={styles.detalleRow}>
+          <Text style={styles.detalleLabel}>CALIFICADO POR</Text>
+          <Text style={styles.detalleValor}>{item.supervisor_nombre}</Text>
+        </View>
+        {item.comentario ? <Text style={styles.detallleNota}>📝 {item.comentario}</Text> : null}
+      </View>
+    </View>
+  );
+}
 
 function CardBaja({ item }: { item: EliminacionRuta }) {
   const hora = format(new Date(item.created_at), "d MMM, HH:mm", { locale: es });
@@ -142,6 +215,8 @@ function CardAlerta({ item }: { item: Alerta }) {
 export default function AdminAlertas() {
   const [alertas, setAlertas] = useState<Alerta[]>([]);
   const [bajas, setBajas] = useState<EliminacionRuta[]>([]);
+  const [tareas, setTareas] = useState<Tarea[]>([]);
+  const [calificaciones, setCalificaciones] = useState<CalificacionVisita[]>([]);
   const [cargando, setCargando] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [ultimaAct, setUltimaAct] = useState<Date | null>(null);
@@ -150,9 +225,13 @@ export default function AdminAlertas() {
   const cargar = useCallback(async (silent = false) => {
     if (!silent) setCargando(true);
     try {
-      const [resAlertas, resBajas] = await Promise.all([obtenerAlertas(), obtenerEliminacionesRuta()]);
+      const [resAlertas, resBajas, resTareas, resCalif] = await Promise.all([
+        obtenerAlertas(), obtenerEliminacionesRuta(), obtenerTareas(), obtenerCalificaciones(),
+      ]);
       setAlertas(resAlertas.data);
       setBajas(resBajas.data);
+      setTareas(resTareas.data);
+      setCalificaciones(resCalif.data);
       setUltimaAct(new Date());
     } catch {}
     setCargando(false);
@@ -205,6 +284,8 @@ export default function AdminAlertas() {
           { key: 'vencimientos', label: '📦 Vencimientos', count: vencidos.length + proximosAVencer.length },
           { key: 'acciones', label: '📋 Acciones', count: acciones.length },
           { key: 'bajas', label: '🚫 Bajas de ruta', count: bajas.length },
+          { key: 'tareas', label: '📋 Tareas', count: tareas.filter((t) => !t.completada).length },
+          { key: 'calificaciones', label: '⭐ Calificaciones', count: calificaciones.length },
         ] as { key: Filtro; label: string; count: number }[]).map((tab) => (
           <TouchableOpacity
             key={tab.key}
@@ -221,6 +302,8 @@ export default function AdminAlertas() {
                 tab.key === 'vencimientos' && { backgroundColor: '#F59E0B' },
                 tab.key === 'acciones' && { backgroundColor: COLORS.secondary },
                 tab.key === 'bajas' && { backgroundColor: COLORS.danger },
+                tab.key === 'tareas' && { backgroundColor: COLORS.warning },
+                tab.key === 'calificaciones' && { backgroundColor: '#7E22CE' },
               ]}>
                 <Text style={styles.tabBadgeTexto}>{tab.count}</Text>
               </View>
@@ -286,6 +369,40 @@ export default function AdminAlertas() {
             <View style={styles.vacio}>
               <Text style={styles.vacioEmoji}>✅</Text>
               <Text style={styles.vacioTexto}>Sin clientes quitados de rutas</Text>
+            </View>
+          }
+          ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+        />
+      ) : filtro === 'tareas' ? (
+        <FlatList
+          data={tareas}
+          keyExtractor={(item) => String(item.id)}
+          contentContainerStyle={styles.lista}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); cargar(); }} />
+          }
+          renderItem={({ item }) => <CardTarea item={item} />}
+          ListEmptyComponent={
+            <View style={styles.vacio}>
+              <Text style={styles.vacioEmoji}>📋</Text>
+              <Text style={styles.vacioTexto}>Sin tareas asignadas</Text>
+            </View>
+          }
+          ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+        />
+      ) : filtro === 'calificaciones' ? (
+        <FlatList
+          data={calificaciones}
+          keyExtractor={(item) => String(item.id)}
+          contentContainerStyle={styles.lista}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); cargar(); }} />
+          }
+          renderItem={({ item }) => <CardCalificacion item={item} />}
+          ListEmptyComponent={
+            <View style={styles.vacio}>
+              <Text style={styles.vacioEmoji}>⭐</Text>
+              <Text style={styles.vacioTexto}>Sin calificaciones registradas</Text>
             </View>
           }
           ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
@@ -384,7 +501,10 @@ const styles = StyleSheet.create({
   cardUrgente: { borderLeftColor: COLORS.danger, backgroundColor: '#FEF2F2' },
   cardVenc: { borderLeftColor: '#F59E0B' },
   cardAccion: { borderLeftColor: COLORS.secondary, backgroundColor: '#EFF6FF' },
+  cardCalificacion: { backgroundColor: '#FAF5FF' },
   cardBaja: { borderLeftColor: COLORS.danger, backgroundColor: '#FEF2F2' },
+  cardTareaPendiente: { borderLeftColor: '#F59E0B', backgroundColor: '#FFFBEB' },
+  cardTareaRealizada: { borderLeftColor: COLORS.success },
 
   cardRow: {
     flexDirection: 'row',
@@ -401,6 +521,8 @@ const styles = StyleSheet.create({
   pillVenc: { backgroundColor: '#F59E0B' },
   pillAccion: { backgroundColor: COLORS.secondary },
   pillBaja: { backgroundColor: COLORS.danger },
+  pillPendiente: { backgroundColor: '#F59E0B' },
+  pillRealizada: { backgroundColor: COLORS.success },
   pillTexto: { color: '#fff', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
 
   cardInfo: { flex: 1 },

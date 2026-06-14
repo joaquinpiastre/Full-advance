@@ -100,6 +100,9 @@ export const actualizarCliente = (id: number, data: any) =>
 export const cambiarEstadoCliente = (id: number, activo: boolean) =>
   api.patch(`/clientes/${id}/estado`, { activo });
 
+export const eliminarCliente = (id: number) =>
+  api.delete(`/clientes/${id}`);
+
 export const actualizarCoordenadas = (id: number, lat: number, lng: number) =>
   api.patch(`/clientes/${id}/coords`, { lat, lng });
 
@@ -203,6 +206,40 @@ export const crearAnuncio = (data: { titulo?: string; mensaje: string; tipo: 'in
 
 export const eliminarAnuncio = (id: number) =>
   api.delete(`/anuncios/${id}`);
+
+// Tareas asignadas entre usuarios
+export const obtenerUsuariosAsignables = () =>
+  api.get('/tareas/usuarios');
+
+export const obtenerTareasAsignadas = () =>
+  api.get('/tareas/asignadas');
+
+export const obtenerTareasCreadas = () =>
+  api.get('/tareas/creadas');
+
+export const obtenerTareas = () =>
+  api.get('/tareas');
+
+export const crearTarea = (data: { asignado_id: number; mensaje: string }) =>
+  api.post('/tareas', data);
+
+export const completarTarea = (id: number) =>
+  api.patch(`/tareas/${id}/completar`);
+
+// Calificaciones de visitas de control del supervisor
+export const obtenerEquipoRuta = (ruta_id: number) =>
+  api.get(`/asignaciones/equipo-ruta/${ruta_id}`);
+
+export const crearCalificacion = (data: {
+  evaluado_id: number;
+  cliente_id?: number;
+  ruta_id?: number;
+  calificacion: string;
+  comentario?: string;
+}) => api.post('/calificaciones', data);
+
+export const obtenerCalificaciones = () =>
+  api.get('/calificaciones');
 
 export const obtenerVentasCalientesAdmin = (usuario_id?: number) =>
   api.get('/ventas-calientes', { params: usuario_id ? { usuario_id } : {} });

@@ -77,6 +77,14 @@ export default function RepartidorLayout() {
           headerTitle: 'Noticias',
         }}
       />
+      <Tabs.Screen
+        name="tareas"
+        options={{
+          title: 'Tareas',
+          tabBarIcon: tabIcon('checkbox', 'checkbox-outline'),
+          headerTitle: 'Tareas',
+        }}
+      />
     </Tabs>
   );
 }

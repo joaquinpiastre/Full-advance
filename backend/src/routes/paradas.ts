@@ -58,7 +58,7 @@ router.post('/:id/foto', authMiddleware, upload.single('foto'), async (req: Auth
 
 router.post('/:id/finalizar', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const { nota, tiene_vencidos, mercaderia_vencida, fecha_vencimiento, nota_vencido, urgente, urgencia_descripcion, oportunidades, accion_requerida, respeta_pvp, motivo_no_pvp } = req.body;
+  const { nota, tiene_vencidos, mercaderia_vencida, fecha_vencimiento, nota_vencido, urgente, urgencia_descripcion, oportunidades, accion_requerida, respeta_pvp, motivo_no_pvp, compra_comerco } = req.body;
   try {
     const { rows } = await pool.query(
       `UPDATE paradas SET
@@ -67,12 +67,13 @@ router.post('/:id/finalizar', authMiddleware, async (req: AuthRequest, res: Resp
         urgente=$5, urgencia_descripcion=$6,
         oportunidades=$7,
         accion_requerida=$8, nota_vencido=$9,
-        respeta_pvp=$10, motivo_no_pvp=$11
-       WHERE id=$12 RETURNING *`,
+        respeta_pvp=$10, motivo_no_pvp=$11,
+        compra_comerco=$12
+       WHERE id=$13 RETURNING *`,
       [nota ?? null, tiene_vencidos ?? false, mercaderia_vencida ?? null,
        fecha_vencimiento ?? null, urgente ?? false, urgencia_descripcion ?? null,
        oportunidades ?? null, accion_requerida ?? null, nota_vencido ?? null,
-       respeta_pvp ?? null, motivo_no_pvp ?? null, id]
+       respeta_pvp ?? null, motivo_no_pvp ?? null, compra_comerco ?? null, id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Parada no encontrada' });
     const parada = rows[0];

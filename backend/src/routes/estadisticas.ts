@@ -8,7 +8,7 @@ const router = Router();
 // por categoría. Solo el admin necesita esta vista global.
 router.get('/clientes', authMiddleware, soloAdmin, async (_req: AuthRequest, res: Response) => {
   try {
-    const [resumenRes, topRes, porDiaRes, porCategoriaRes] = await Promise.all([
+    const [resumenRes, topRes, porDiaRes, porCategoriaRes, comercoRes] = await Promise.all([
       pool.query(`
         SELECT
           (SELECT COUNT(*) FROM paradas
@@ -43,9 +43,23 @@ router.get('/clientes', authMiddleware, soloAdmin, async (_req: AuthRequest, res
         GROUP BY c.categoria
         ORDER BY c.categoria NULLS LAST
       `),
+      // Última respuesta (por cliente) a "¿le compra a COMERCO?"
+      pool.query(`
+        SELECT compra_comerco, COUNT(*)::int AS total
+        FROM (
+          SELECT DISTINCT ON (cliente_id) cliente_id, compra_comerco
+          FROM paradas
+          WHERE completada = true AND cliente_id IS NOT NULL AND compra_comerco IS NOT NULL
+          ORDER BY cliente_id, timestamp_llegada DESC
+        ) ultimas
+        GROUP BY compra_comerco
+      `),
     ]);
 
     const totalVisitas30d = resumenRes.rows[0].total_visitas_30d;
+
+    const comercoSi = comercoRes.rows.find((r) => r.compra_comerco === true)?.total ?? 0;
+    const comercoNo = comercoRes.rows.find((r) => r.compra_comerco === false)?.total ?? 0;
 
     res.json({
       resumen: {
@@ -57,6 +71,11 @@ router.get('/clientes', authMiddleware, soloAdmin, async (_req: AuthRequest, res
       topClientes: topRes.rows,
       visitasPorDia: porDiaRes.rows,
       visitasPorCategoria: porCategoriaRes.rows,
+      comerco: {
+        si: comercoSi,
+        no: comercoNo,
+        sinDato: Math.max(0, resumenRes.rows[0].total_clientes - comercoSi - comercoNo),
+      },
     });
   } catch {
     res.status(500).json({ error: 'Error al obtener estadísticas' });

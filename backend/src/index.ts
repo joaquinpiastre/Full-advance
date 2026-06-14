@@ -138,6 +138,11 @@ pool.query(`
   ALTER TABLE paradas ADD COLUMN IF NOT EXISTS motivo_no_pvp TEXT
 `).catch(() => {});
 
+// Encuesta: si el cliente le compra a COMERCO (la pregunta el preventista al visitar).
+pool.query(`
+  ALTER TABLE paradas ADD COLUMN IF NOT EXISTS compra_comerco BOOLEAN
+`).catch(() => {});
+
 pool.query(`
   ALTER TABLE paradas
     ADD COLUMN IF NOT EXISTS tiene_vencidos BOOLEAN DEFAULT false,

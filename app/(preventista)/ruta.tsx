@@ -56,6 +56,7 @@ export default function RutaPreventista() {
   const [oportunidades, setOportunidades] = useState<string[]>(['']);
   const [respetaPvp, setRespetaPvp] = useState(true);
   const [motivoNoPvp, setMotivoNoPvp] = useState<string[]>(['']);
+  const [compraComerco, setCompraComerco] = useState(false);
   const [pendientes, setPendientes] = useState<VisitaPendiente[]>([]);
   const enviandoRef = useRef(false);
 
@@ -121,6 +122,7 @@ export default function RutaPreventista() {
       setAccionRequerida(false); setAccionDesc(['']);
       setOportunidades(['']);
       setRespetaPvp(true); setMotivoNoPvp(['']);
+      setCompraComerco(false);
       setEstadoVisita('formulario');
     } catch (e: any) {
       Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo registrar la visita');
@@ -188,6 +190,7 @@ export default function RutaPreventista() {
           oportunidades: oportunidades.map((o) => o.trim()).filter(Boolean).join('\n') || null,
           respeta_pvp: respetaPvp,
           motivo_no_pvp: !respetaPvp ? motivoNoPvp.map((m) => m.trim()).filter(Boolean).join('\n') || null : null,
+          compra_comerco: compraComerco,
         },
       });
 
@@ -404,6 +407,21 @@ export default function RutaPreventista() {
                   color="#1D4ED8"
                 />
               </View>
+
+              {/* Toggle: Le compra a COMERCO */}
+              <TouchableOpacity
+                style={[styles.toggleRow, compraComerco && styles.toggleRowComerco]}
+                onPress={() => setCompraComerco((v) => !v)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.toggleEmoji}>🛒</Text>
+                <Text style={[styles.toggleLabel, compraComerco && { color: COLORS.success, fontWeight: '700' }]}>
+                  ¿Le compra a COMERCO?
+                </Text>
+                <View style={[styles.toggleBubble, compraComerco && styles.toggleBubbleSi]}>
+                  <Text style={styles.toggleBubbleTexto}>{compraComerco ? 'SÍ' : 'NO'}</Text>
+                </View>
+              </TouchableOpacity>
 
               {/* Nota */}
               <View style={styles.formGroup}>
@@ -640,6 +658,7 @@ const styles = StyleSheet.create({
   toggleBubbleTexto: { fontSize: 11, fontWeight: '800', color: '#fff' },
   toggleRowAccion: { borderColor: COLORS.secondary, backgroundColor: '#EFF6FF' },
   toggleRowPvp: { borderColor: '#F59E0B', backgroundColor: '#FFFBEB' },
+  toggleRowComerco: { borderColor: COLORS.success, backgroundColor: '#F0FDF4' },
 
   subForm: {
     backgroundColor: COLORS.background,

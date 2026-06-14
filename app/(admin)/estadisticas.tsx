@@ -22,6 +22,7 @@ interface TopCliente {
 }
 interface VisitaPorDia { fecha: string; total: number; }
 interface VisitaPorCategoria { categoria: string; total: number; }
+interface ComercoStats { si: number; no: number; sinDato: number; }
 
 export default function EstadisticasAdmin() {
   const [cargando, setCargando] = useState(true);
@@ -29,6 +30,7 @@ export default function EstadisticasAdmin() {
   const [topClientes, setTopClientes] = useState<TopCliente[]>([]);
   const [visitasPorDia, setVisitasPorDia] = useState<VisitaPorDia[]>([]);
   const [visitasPorCategoria, setVisitasPorCategoria] = useState<VisitaPorCategoria[]>([]);
+  const [comerco, setComerco] = useState<ComercoStats | null>(null);
 
   useEffect(() => {
     cargar();
@@ -42,6 +44,7 @@ export default function EstadisticasAdmin() {
       setTopClientes(res.data.topClientes ?? []);
       setVisitasPorDia(res.data.visitasPorDia ?? []);
       setVisitasPorCategoria(res.data.visitasPorCategoria ?? []);
+      setComerco(res.data.comerco ?? null);
     } catch {}
     setCargando(false);
   };
@@ -125,7 +128,7 @@ export default function EstadisticasAdmin() {
         ))}
       </View>
 
-      <View style={[styles.seccion, styles.ultimaSeccion]}>
+      <View style={styles.seccion}>
         <Text style={styles.seccionTitulo}>Visitas por categoría</Text>
         {visitasPorCategoria.length === 0 && <Text style={styles.vacio}>Sin datos todavía</Text>}
         {visitasPorCategoria.map((c) => {
@@ -142,6 +145,31 @@ export default function EstadisticasAdmin() {
             </View>
           );
         })}
+      </View>
+
+      <View style={[styles.seccion, styles.ultimaSeccion]}>
+        <Text style={styles.seccionTitulo}>¿Le compra a COMERCO?</Text>
+        {!comerco || (comerco.si === 0 && comerco.no === 0 && comerco.sinDato === 0) ? (
+          <Text style={styles.vacio}>Sin datos todavía</Text>
+        ) : (
+          <>
+            {[
+              { label: 'Sí', total: comerco.si, color: COLORS.success },
+              { label: 'No', total: comerco.no, color: COLORS.danger },
+              { label: 'Sin dato', total: comerco.sinDato, color: COLORS.textLight },
+            ].map((c) => (
+              <View key={c.label} style={styles.categoriaRow}>
+                <View style={[styles.categoriaBadge, { backgroundColor: c.color }]}>
+                  <Text style={styles.categoriaBadgeTexto}>{c.label}</Text>
+                </View>
+                <View style={styles.categoriaBarraTrack}>
+                  <View style={[styles.categoriaBarraFill, { width: `${(c.total / Math.max(1, comerco.si + comerco.no + comerco.sinDato)) * 100}%`, backgroundColor: c.color }]} />
+                </View>
+                <Text style={styles.categoriaTotal}>{c.total}</Text>
+              </View>
+            ))}
+          </>
+        )}
       </View>
     </ScrollView>
   );

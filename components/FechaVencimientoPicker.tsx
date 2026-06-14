@@ -32,7 +32,6 @@ export default function FechaVencimientoPicker({ value, onChange }: Props) {
         <input
           type="date"
           value={value ? formatearISO(value) : ''}
-          min={formatearISO(new Date())}
           onChange={(e: any) => {
             const v = e.target.value;
             if (!v) return;
@@ -71,7 +70,6 @@ export default function FechaVencimientoPicker({ value, onChange }: Props) {
           value={fecha}
           mode="date"
           display="calendar"
-          minimumDate={new Date()}
           onChange={onCambio}
         />
       )}
@@ -91,7 +89,6 @@ export default function FechaVencimientoPicker({ value, onChange }: Props) {
                 value={fecha}
                 mode="date"
                 display="inline"
-                minimumDate={new Date()}
                 onChange={onCambio}
                 style={{ width: '100%' }}
                 locale="es-AR"

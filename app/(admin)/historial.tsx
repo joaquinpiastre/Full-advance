@@ -320,6 +320,7 @@ export default function HistorialAdmin() {
                       <Text style={styles.vcVencText}>
                         📦 {v.mercaderia_vencida}
                         {v.fecha_vencimiento ? ` · ${v.fecha_vencimiento === 'Vencida' ? 'Ya vencida' : v.fecha_vencimiento}` : ''}
+                        {v.nota_vencido ? ` · 📝 ${v.nota_vencido}` : ''}
                       </Text>
                     )}
                     {v.nota ? <Text style={styles.nota}>📝 {v.nota}</Text> : null}
@@ -349,6 +350,7 @@ export default function HistorialAdmin() {
                   <Text style={styles.vcVencText}>
                     📦 Mercadería vencida{p.mercaderia_vencida ? `: ${p.mercaderia_vencida}` : ''}
                     {p.fecha_vencimiento ? ` · ${p.fecha_vencimiento === 'Vencida' ? 'Ya vencida' : p.fecha_vencimiento}` : ''}
+                    {p.nota_vencido ? ` · 📝 ${p.nota_vencido}` : ''}
                   </Text>
                 )}
                 {p.accion_requerida && (
@@ -356,10 +358,9 @@ export default function HistorialAdmin() {
                     <Text style={styles.accionTexto}>🔧 Acción requerida: {p.accion_requerida}</Text>
                   </View>
                 )}
-                {p.producto_informe && (
+                {p.oportunidades && (
                   <Text style={styles.informeTexto}>
-                    💰 Producto informado: {p.producto_informe}
-                    {p.precio_informe ? ` — $${p.precio_informe}` : ''}
+                    💡 Oportunidades: {p.oportunidades}
                   </Text>
                 )}
                 {p.nota ? <Text style={styles.nota}>📝 {p.nota}</Text> : null}

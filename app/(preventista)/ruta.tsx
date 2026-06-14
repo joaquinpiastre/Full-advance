@@ -18,8 +18,10 @@ import {
 } from '../../services/offlineVisitas';
 import CartillaModal from '../../components/CartillaModal';
 import NuevoClienteModal from '../../components/NuevoClienteModal';
-import FechaVencimientoPicker from '../../components/FechaVencimientoPicker';
+import MercaderiaVencidaForm from '../../components/MercaderiaVencidaForm';
+import { calcularFechaVencimiento } from '../../utils/vencimiento';
 import FotoReferenciaCliente from '../../components/FotoReferenciaCliente';
+import AccionesList from '../../components/AccionesList';
 import { COLORS } from '../../constants';
 import { Cliente } from '../../types';
 
@@ -45,14 +47,13 @@ export default function RutaPreventista() {
   const [nota, setNota] = useState('');
   const [tieneVencidos, setTieneVencidos] = useState(false);
   const [mercaderiaVencida, setMercaderiaVencida] = useState('');
-  const [tipoVenc, setTipoVenc] = useState<'vencida' | 'fecha'>('fecha');
   const [fechaVencimiento, setFechaVencimiento] = useState<Date | null>(null);
+  const [notaVencido, setNotaVencido] = useState('');
   const [urgente, setUrgente] = useState(false);
   const [urgenciaDesc, setUrgenciaDesc] = useState('');
   const [accionRequerida, setAccionRequerida] = useState(false);
-  const [accionDesc, setAccionDesc] = useState('');
-  const [productoInforme, setProductoInforme] = useState('');
-  const [precioInforme, setPrecioInforme] = useState('');
+  const [accionDesc, setAccionDesc] = useState<string[]>(['']);
+  const [oportunidades, setOportunidades] = useState<string[]>(['']);
   const [pendientes, setPendientes] = useState<VisitaPendiente[]>([]);
   const enviandoRef = useRef(false);
 
@@ -113,10 +114,10 @@ export default function RutaPreventista() {
       setClienteActual(cliente);
       setFotos([null, null, null, null, null]);
       setNota('');
-      setTieneVencidos(false); setMercaderiaVencida(''); setTipoVenc('fecha'); setFechaVencimiento(null);
+      setTieneVencidos(false); setMercaderiaVencida(''); setFechaVencimiento(null); setNotaVencido('');
       setUrgente(false); setUrgenciaDesc('');
-      setAccionRequerida(false); setAccionDesc('');
-      setProductoInforme(''); setPrecioInforme('');
+      setAccionRequerida(false); setAccionDesc(['']);
+      setOportunidades(['']);
       setEstadoVisita('formulario');
     } catch (e: any) {
       Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo registrar la visita');
@@ -176,16 +177,12 @@ export default function RutaPreventista() {
           nota: nota.trim() || undefined,
           tiene_vencidos: tieneVencidos,
           mercaderia_vencida: tieneVencidos ? mercaderiaVencida.trim() || null : null,
-          fecha_vencimiento: tieneVencidos
-            ? (tipoVenc === 'vencida' ? 'Vencida' : fechaVencimiento
-                ? `${String(fechaVencimiento.getDate()).padStart(2,'0')}/${String(fechaVencimiento.getMonth()+1).padStart(2,'0')}/${fechaVencimiento.getFullYear()}`
-                : null)
-            : null,
+          fecha_vencimiento: tieneVencidos ? calcularFechaVencimiento(fechaVencimiento) : null,
+          nota_vencido: tieneVencidos ? notaVencido.trim() || null : null,
           urgente,
           urgencia_descripcion: urgente ? urgenciaDesc.trim() || null : null,
-          accion_requerida: accionRequerida ? accionDesc.trim() || null : null,
-          producto_informe: productoInforme.trim() || null,
-          precio_informe: precioInforme.trim() || null,
+          accion_requerida: accionRequerida ? accionDesc.map((a) => a.trim()).filter(Boolean).join('\n') || null : null,
+          oportunidades: oportunidades.map((o) => o.trim()).filter(Boolean).join('\n') || null,
         },
       });
 
@@ -292,7 +289,7 @@ export default function RutaPreventista() {
                 activeOpacity={0.7}
               >
                 <Text style={styles.toggleEmoji}>📦</Text>
-                <Text style={styles.toggleLabel}>Mercadería vencida / por vencer</Text>
+                <Text style={styles.toggleLabel}>Mercadería vencida</Text>
                 <View style={[styles.toggleBubble, tieneVencidos && styles.toggleBubbleOn]}>
                   <Text style={styles.toggleBubbleTexto}>{tieneVencidos ? 'SÍ' : 'NO'}</Text>
                 </View>
@@ -300,34 +297,14 @@ export default function RutaPreventista() {
 
               {tieneVencidos && (
                 <View style={styles.subForm}>
-                  <Text style={styles.subLabel}>¿Qué mercadería?</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Ej: yogur marca X, galletitas..."
-                    placeholderTextColor={COLORS.textLight}
-                    value={mercaderiaVencida}
-                    onChangeText={setMercaderiaVencida}
+                  <MercaderiaVencidaForm
+                    mercaderia={mercaderiaVencida}
+                    onMercaderiaChange={setMercaderiaVencida}
+                    fecha={fechaVencimiento}
+                    onFechaChange={setFechaVencimiento}
+                    nota={notaVencido}
+                    onNotaChange={setNotaVencido}
                   />
-                  <Text style={[styles.subLabel, { marginTop: 10 }]}>Estado</Text>
-                  <View style={styles.chipsRow}>
-                    {(['vencida', 'fecha'] as const).map((op) => (
-                      <TouchableOpacity
-                        key={op}
-                        style={[styles.chip, tipoVenc === op && styles.chipActivo]}
-                        onPress={() => setTipoVenc(op)}
-                      >
-                        <Text style={[styles.chipTexto, tipoVenc === op && styles.chipTextoActivo]}>
-                          {op === 'vencida' ? 'Ya vencida' : 'Próximo vencimiento'}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  {tipoVenc === 'fecha' && (
-                    <FechaVencimientoPicker
-                      value={fechaVencimiento}
-                      onChange={setFechaVencimiento}
-                    />
-                  )}
                 </View>
               )}
 
@@ -368,7 +345,7 @@ export default function RutaPreventista() {
               >
                 <Text style={styles.toggleEmoji}>📋</Text>
                 <Text style={[styles.toggleLabel, accionRequerida && { color: COLORS.secondary, fontWeight: '700' }]}>
-                  Acción para administración / supervisor
+                  Acciones
                 </Text>
                 <View style={[styles.toggleBubble, accionRequerida && styles.toggleBubbleAccion]}>
                   <Text style={styles.toggleBubbleTexto}>{accionRequerida ? 'SÍ' : 'NO'}</Text>
@@ -377,36 +354,21 @@ export default function RutaPreventista() {
 
               {accionRequerida && (
                 <View style={[styles.subForm, styles.subFormAccion]}>
-                  <Text style={styles.subLabel}>¿Qué acción tiene que hacer?</Text>
-                  <TextInput
-                    style={[styles.input, styles.inputMultiline]}
-                    placeholder="Ej: contactar al cliente, revisar precio, gestionar pedido..."
-                    placeholderTextColor={COLORS.textLight}
-                    value={accionDesc}
-                    onChangeText={setAccionDesc}
-                    multiline
-                  />
+                  <AccionesList acciones={accionDesc} onChange={setAccionDesc} />
                 </View>
               )}
 
-              {/* Informe de producto/precio */}
+              {/* Oportunidades */}
               <View style={styles.informeBox}>
-                <Text style={styles.informeTitulo}>💰 Informe de precio (opcional)</Text>
-                <Text style={styles.informeDesc}>Registrá qué producto compró y a qué precio</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Nombre del producto"
-                  placeholderTextColor={COLORS.textLight}
-                  value={productoInforme}
-                  onChangeText={setProductoInforme}
-                />
-                <TextInput
-                  style={[styles.input, { marginTop: 6 }]}
-                  placeholder="Precio (ej: $1500)"
-                  placeholderTextColor={COLORS.textLight}
-                  keyboardType="decimal-pad"
-                  value={precioInforme}
-                  onChangeText={setPrecioInforme}
+                <Text style={styles.informeTitulo}>💡 Oportunidades</Text>
+                <Text style={styles.informeDesc}>Registrá oportunidades de venta u otras observaciones</Text>
+                <AccionesList
+                  acciones={oportunidades}
+                  onChange={setOportunidades}
+                  label=""
+                  placeholder="Ej: cliente interesado en nueva línea de productos..."
+                  agregarTexto="+ Agregar oportunidad"
+                  color="#1D4ED8"
                 />
               </View>
 

@@ -11,7 +11,9 @@ import {
 } from '../services/api';
 import { obtenerUbicacionRapida } from '../services/gps';
 import { useAuthStore } from '../store/authStore';
-import FechaVencimientoPicker from './FechaVencimientoPicker';
+import MercaderiaVencidaForm from './MercaderiaVencidaForm';
+import AccionesList from './AccionesList';
+import { calcularFechaVencimiento } from '../utils/vencimiento';
 import { COLORS } from '../constants';
 import { Cliente } from '../types';
 
@@ -38,12 +40,11 @@ export default function VentaCalienteScreen() {
   const [nota, setNota] = useState('');
   const [tieneVencidos, setTieneVencidos] = useState(false);
   const [mercaderiaVencida, setMercaderiaVencida] = useState('');
-  const [tipoVenc, setTipoVenc] = useState<'vencida' | 'fecha'>('fecha');
   const [fechaVencimiento, setFechaVencimiento] = useState<Date | null>(null);
+  const [notaVencido, setNotaVencido] = useState('');
   const [urgente, setUrgente] = useState(false);
   const [urgenciaDesc, setUrgenciaDesc] = useState('');
-  const [productoInforme, setProductoInforme] = useState('');
-  const [precioInforme, setPrecioInforme] = useState('');
+  const [oportunidades, setOportunidades] = useState<string[]>(['']);
 
   const cargarSesion = useCallback(async (silent = false) => {
     try {
@@ -146,9 +147,9 @@ export default function VentaCalienteScreen() {
   const resetFormulario = () => {
     setNota('');
     setTieneVencidos(false); setMercaderiaVencida('');
-    setTipoVenc('fecha'); setFechaVencimiento(null);
+    setFechaVencimiento(null); setNotaVencido('');
     setUrgente(false); setUrgenciaDesc('');
-    setProductoInforme(''); setPrecioInforme('');
+    setOportunidades(['']);
   };
 
   // ── Fotos ──
@@ -201,15 +202,11 @@ export default function VentaCalienteScreen() {
         nota: nota.trim() || undefined,
         tiene_vencidos: tieneVencidos,
         mercaderia_vencida: tieneVencidos ? mercaderiaVencida.trim() || null : null,
-        fecha_vencimiento: tieneVencidos
-          ? (tipoVenc === 'vencida' ? 'Vencida' : fechaVencimiento
-              ? `${String(fechaVencimiento.getDate()).padStart(2,'0')}/${String(fechaVencimiento.getMonth()+1).padStart(2,'0')}/${fechaVencimiento.getFullYear()}`
-              : null)
-          : null,
+        fecha_vencimiento: tieneVencidos ? calcularFechaVencimiento(fechaVencimiento) : null,
+        nota_vencido: tieneVencidos ? notaVencido.trim() || null : null,
         urgente,
         urgencia_descripcion: urgente ? urgenciaDesc.trim() || null : null,
-        producto_informe: productoInforme.trim() || null,
-        precio_informe: precioInforme.trim() || null,
+        oportunidades: oportunidades.map((o) => o.trim()).filter(Boolean).join('\n') || null,
       });
       setClienteActual(null);
       setParadaActual(null);
@@ -532,41 +529,21 @@ export default function VentaCalienteScreen() {
             activeOpacity={0.7}
           >
             <Text style={s.toggleEmoji}>📦</Text>
-            <Text style={s.toggleLabel}>Mercadería vencida / por vencer</Text>
+            <Text style={s.toggleLabel}>Mercadería vencida</Text>
             <View style={[s.toggleBubble, tieneVencidos && { backgroundColor: '#F59E0B' }]}>
               <Text style={s.toggleBubbleTexto}>{tieneVencidos ? 'SÍ' : 'NO'}</Text>
             </View>
           </TouchableOpacity>
           {tieneVencidos && (
             <View style={s.subForm}>
-              <Text style={s.subLabel}>¿Qué mercadería?</Text>
-              <TextInput
-                style={s.input}
-                placeholder="Ej: yogur, galletitas..."
-                placeholderTextColor={COLORS.textLight}
-                value={mercaderiaVencida}
-                onChangeText={setMercaderiaVencida}
+              <MercaderiaVencidaForm
+                mercaderia={mercaderiaVencida}
+                onMercaderiaChange={setMercaderiaVencida}
+                fecha={fechaVencimiento}
+                onFechaChange={setFechaVencimiento}
+                nota={notaVencido}
+                onNotaChange={setNotaVencido}
               />
-              <Text style={[s.subLabel, { marginTop: 8 }]}>Estado</Text>
-              <View style={s.chipsRow}>
-                {(['vencida', 'fecha'] as const).map((op) => (
-                  <TouchableOpacity
-                    key={op}
-                    style={[s.chip, tipoVenc === op && { backgroundColor: VC, borderColor: VC }]}
-                    onPress={() => setTipoVenc(op)}
-                  >
-                    <Text style={[s.chipTexto, tipoVenc === op && { color: '#fff' }]}>
-                      {op === 'vencida' ? 'Ya vencida' : 'Próximo vencimiento'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {tipoVenc === 'fecha' && (
-                <FechaVencimientoPicker
-                  value={fechaVencimiento}
-                  onChange={setFechaVencimiento}
-                />
-              )}
             </View>
           )}
 
@@ -598,24 +575,17 @@ export default function VentaCalienteScreen() {
             </View>
           )}
 
-          {/* Informe de producto/precio */}
+          {/* Oportunidades */}
           <View style={s.informeBox}>
-            <Text style={s.informeTitulo}>💰 Informe de precio (opcional)</Text>
-            <Text style={s.informeDesc}>Registrá qué producto compró y a qué precio</Text>
-            <TextInput
-              style={s.input}
-              placeholder="Nombre del producto"
-              placeholderTextColor={COLORS.textLight}
-              value={productoInforme}
-              onChangeText={setProductoInforme}
-            />
-            <TextInput
-              style={[s.input, { marginTop: 6 }]}
-              placeholder="Precio (ej: $1500)"
-              placeholderTextColor={COLORS.textLight}
-              keyboardType="decimal-pad"
-              value={precioInforme}
-              onChangeText={setPrecioInforme}
+            <Text style={s.informeTitulo}>💡 Oportunidades</Text>
+            <Text style={s.informeDesc}>Registrá oportunidades de venta u otras observaciones</Text>
+            <AccionesList
+              acciones={oportunidades}
+              onChange={setOportunidades}
+              label=""
+              placeholder="Ej: cliente interesado en nueva línea de productos..."
+              agregarTexto="+ Agregar oportunidad"
+              color="#1D4ED8"
             />
           </View>
 

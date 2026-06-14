@@ -67,7 +67,8 @@ const filaParada = (p: any, index: number) => {
   if (p.tiene_vencidos) {
     detalles.push(
       `⚠️ Mercadería vencida${p.mercaderia_vencida ? `: ${p.mercaderia_vencida}` : ''}` +
-      (p.fecha_vencimiento ? ` (${p.fecha_vencimiento === 'Vencida' ? 'ya vencida' : `vence ${p.fecha_vencimiento}`})` : '')
+      (p.fecha_vencimiento ? ` (${p.fecha_vencimiento === 'Vencida' ? 'ya vencida' : `vence ${p.fecha_vencimiento}`})` : '') +
+      (p.nota_vencido ? ` - Nota: ${p.nota_vencido}` : '')
     );
   }
   if (p.urgente) {
@@ -76,8 +77,8 @@ const filaParada = (p: any, index: number) => {
   if (p.accion_requerida) {
     detalles.push(`🔧 Acción requerida: ${p.accion_requerida}`);
   }
-  if (p.producto_informe) {
-    detalles.push(`📦 Producto informado: ${p.producto_informe}${p.precio_informe ? ` — $${p.precio_informe}` : ''}`);
+  if (p.oportunidades) {
+    detalles.push(`💡 Oportunidades: ${p.oportunidades}`);
   }
 
   return `

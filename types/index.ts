@@ -111,9 +111,11 @@ export interface Parada {
   tiene_vencidos?: boolean;
   mercaderia_vencida?: string;
   fecha_vencimiento?: string;
+  nota_vencido?: string;
   urgente?: boolean;
   urgencia_descripcion?: string;
   accion_requerida?: string;
+  oportunidades?: string;
 }
 
 export interface Alerta {
@@ -123,6 +125,7 @@ export interface Alerta {
   tiene_vencidos: boolean;
   mercaderia_vencida?: string;
   fecha_vencimiento?: string;
+  nota_vencido?: string;
   accion_requerida?: string;
   timestamp_salida: string;
   nota?: string;

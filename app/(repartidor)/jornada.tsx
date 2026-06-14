@@ -16,6 +16,7 @@ import {
 import CartillaModal from '../../components/CartillaModal';
 import NuevoClienteModal from '../../components/NuevoClienteModal';
 import FotoReferenciaCliente from '../../components/FotoReferenciaCliente';
+import AccionesList from '../../components/AccionesList';
 import { COLORS, urlFoto } from '../../constants';
 import { Parada, Cliente } from '../../types';
 import { format } from 'date-fns';
@@ -32,9 +33,8 @@ export default function JornadaRepartidor() {
   const [fotos, setFotos] = useState<(string | null)[]>([null, null, null, null, null]);
   const [nota, setNota] = useState('');
   const [accionRequerida, setAccionRequerida] = useState(false);
-  const [accionDesc, setAccionDesc] = useState('');
-  const [productoInforme, setProductoInforme] = useState('');
-  const [precioInforme, setPrecioInforme] = useState('');
+  const [accionDesc, setAccionDesc] = useState<string[]>(['']);
+  const [oportunidades, setOportunidades] = useState<string[]>(['']);
   const [procesando, setProcesando] = useState(false);
   const [clientesModal, setClientesModal] = useState(false);
   const [clienteCartilla, setClienteCartilla] = useState<Cliente | null>(null);
@@ -102,7 +102,8 @@ export default function JornadaRepartidor() {
       setFotos([null, null, null, null, null]);
       setNota('');
       setAccionRequerida(false);
-      setAccionDesc('');
+      setAccionDesc(['']);
+      setOportunidades(['']);
     } catch (e: any) {
       Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo registrar la parada');
     }
@@ -159,9 +160,8 @@ export default function JornadaRepartidor() {
         fotos: fotosPendientes,
         finalizar: {
           nota: nota.trim() || undefined,
-          accion_requerida: accionRequerida ? accionDesc.trim() || null : null,
-          producto_informe: productoInforme.trim() || null,
-          precio_informe: precioInforme.trim() || null,
+          accion_requerida: accionRequerida ? accionDesc.map((a) => a.trim()).filter(Boolean).join('\n') || null : null,
+          oportunidades: oportunidades.map((o) => o.trim()).filter(Boolean).join('\n') || null,
         },
       });
 
@@ -170,9 +170,8 @@ export default function JornadaRepartidor() {
       setFotos([null, null, null, null, null]);
       setNota('');
       setAccionRequerida(false);
-      setAccionDesc('');
-      setProductoInforme('');
-      setPrecioInforme('');
+      setAccionDesc(['']);
+      setOportunidades(['']);
 
       procesarVisitasPendientes().then(() => { cargarDatos(); verificarJornadaCerrada(); });
     } catch {
@@ -265,24 +264,17 @@ export default function JornadaRepartidor() {
                 ))}
               </View>
 
-              {/* Informe de producto/precio */}
+              {/* Oportunidades */}
               <View style={styles.informeBox}>
-                <Text style={styles.informeTitulo}>💰 Informe de precio (opcional)</Text>
-                <Text style={styles.informeDesc}>Registrá qué producto compró y a qué precio</Text>
-                <TextInput
-                  style={styles.notaInput}
-                  placeholder="Nombre del producto"
-                  placeholderTextColor={COLORS.textLight}
-                  value={productoInforme}
-                  onChangeText={setProductoInforme}
-                />
-                <TextInput
-                  style={[styles.notaInput, { marginTop: 8 }]}
-                  placeholder="Precio (ej: $1500)"
-                  placeholderTextColor={COLORS.textLight}
-                  keyboardType="decimal-pad"
-                  value={precioInforme}
-                  onChangeText={setPrecioInforme}
+                <Text style={styles.informeTitulo}>💡 Oportunidades</Text>
+                <Text style={styles.informeDesc}>Registrá oportunidades de venta u otras observaciones</Text>
+                <AccionesList
+                  acciones={oportunidades}
+                  onChange={setOportunidades}
+                  label=""
+                  placeholder="Ej: cliente interesado en nueva línea de productos..."
+                  agregarTexto="+ Agregar oportunidad"
+                  color="#1D4ED8"
                 />
               </View>
               <TextInput
@@ -302,7 +294,7 @@ export default function JornadaRepartidor() {
               >
                 <Text style={styles.toggleEmoji}>📋</Text>
                 <Text style={[styles.toggleLabel, accionRequerida && { color: COLORS.secondary, fontWeight: '700' }]}>
-                  Acción para administración / supervisor
+                  Acciones
                 </Text>
                 <View style={[styles.toggleBubble, accionRequerida && styles.toggleBubbleAccion]}>
                   <Text style={styles.toggleBubbleTexto}>{accionRequerida ? 'SÍ' : 'NO'}</Text>
@@ -311,15 +303,7 @@ export default function JornadaRepartidor() {
 
               {accionRequerida && (
                 <View style={[styles.subFormAccion]}>
-                  <Text style={styles.subLabel}>¿Qué acción tiene que hacer?</Text>
-                  <TextInput
-                    style={[styles.notaInput, { minHeight: 60 }]}
-                    placeholder="Ej: contactar al cliente, revisar precio, gestionar pedido..."
-                    placeholderTextColor={COLORS.textLight}
-                    value={accionDesc}
-                    onChangeText={setAccionDesc}
-                    multiline
-                  />
+                  <AccionesList acciones={accionDesc} onChange={setAccionDesc} />
                 </View>
               )}
 

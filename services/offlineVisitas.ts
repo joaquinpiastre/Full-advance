@@ -10,11 +10,11 @@ export interface FinalizarDataPendiente {
   tiene_vencidos?: boolean;
   mercaderia_vencida?: string | null;
   fecha_vencimiento?: string | null;
+  nota_vencido?: string | null;
   urgente?: boolean;
   urgencia_descripcion?: string | null;
   accion_requerida?: string | null;
-  producto_informe?: string | null;
-  precio_informe?: string | null;
+  oportunidades?: string | null;
 }
 
 export interface FotoPendiente {

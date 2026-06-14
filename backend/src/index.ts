@@ -111,6 +111,16 @@ pool.query(`
   ALTER TABLE clientes ADD COLUMN IF NOT EXISTS foto_referencia_uri VARCHAR(500)
 `).catch(() => {});
 
+// Nota adicional sobre la mercadería vencida / por vencer
+pool.query(`
+  ALTER TABLE paradas ADD COLUMN IF NOT EXISTS nota_vencido TEXT
+`).catch(() => {});
+
+// Oportunidades detectadas durante la visita (reemplaza al informe de precio)
+pool.query(`
+  ALTER TABLE paradas ADD COLUMN IF NOT EXISTS oportunidades TEXT
+`).catch(() => {});
+
 pool.query(`
   ALTER TABLE paradas
     ADD COLUMN IF NOT EXISTS tiene_vencidos BOOLEAN DEFAULT false,

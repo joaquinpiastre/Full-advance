@@ -70,10 +70,10 @@ export const finalizarParada = (parada_id: number, data?: {
   tiene_vencidos?: boolean;
   mercaderia_vencida?: string | null;
   fecha_vencimiento?: string | null;
+  nota_vencido?: string | null;
   urgente?: boolean;
   urgencia_descripcion?: string | null;
-  producto_informe?: string | null;
-  precio_informe?: string | null;
+  oportunidades?: string | null;
   accion_requerida?: string | null;
 }) => api.post(`/paradas/${parada_id}/finalizar`, data ?? {});
 

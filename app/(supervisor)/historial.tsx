@@ -117,11 +117,12 @@ export default function HistorialSupervisor() {
                   <Text style={styles.vencText}>
                     📦 {p.mercaderia_vencida}
                     {p.fecha_vencimiento ? ` · ${p.fecha_vencimiento === 'Vencida' ? 'Ya vencida' : p.fecha_vencimiento}` : ''}
+                    {p.nota_vencido ? ` · 📝 ${p.nota_vencido}` : ''}
                   </Text>
                 )}
-                {p.producto_informe && (
+                {p.oportunidades && (
                   <Text style={styles.informeText}>
-                    💰 {p.producto_informe}{p.precio_informe ? ` — ${p.precio_informe}` : ''}
+                    💡 {p.oportunidades}
                   </Text>
                 )}
                 {p.nota ? <Text style={styles.nota}>📝 {p.nota}</Text> : null}

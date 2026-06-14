@@ -118,6 +118,9 @@ function CardAlerta({ item }: { item: Alerta }) {
                   {item.fecha_vencimiento === 'Vencida' ? '🔴 Ya vencida' : `📅 Vence: ${item.fecha_vencimiento}`}
                 </Text>
               ) : null}
+              {item.nota_vencido ? (
+                <Text style={styles.cajaVencNota}>📝 {item.nota_vencido}</Text>
+              ) : null}
             </View>
           )}
 
@@ -422,6 +425,7 @@ const styles = StyleSheet.create({
   cajaVenc: { backgroundColor: '#FFFBEB', gap: 4 },
   cajaVencMercaderia: { fontSize: 13, fontWeight: '700', color: COLORS.text },
   cajaVencFecha: { fontSize: 13, fontWeight: '600', color: COLORS.success },
+  cajaVencNota: { fontSize: 13, color: COLORS.text },
   cajaAccion: { backgroundColor: 'rgba(0,48,135,0.07)' },
   cajaAccionTexto: { fontSize: 13, color: COLORS.secondary, fontWeight: '600' },
   cajaBaja: { backgroundColor: 'rgba(220,38,38,0.08)' },

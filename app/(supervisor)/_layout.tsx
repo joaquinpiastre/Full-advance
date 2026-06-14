@@ -1,23 +1,38 @@
 import { Tabs } from 'expo-router';
 import { COLORS } from '../../constants';
-import { Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+
+type IconName = keyof typeof Ionicons.glyphMap;
+
+const tabIcon = (active: IconName, inactive: IconName) =>
+  ({ color, focused, size }: { color: string; focused: boolean; size: number }) => (
+    <Ionicons name={focused ? active : inactive} size={size ?? 22} color={color} />
+  );
 
 export default function SupervisorLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: COLORS.supervisor },
+        headerStyle: { backgroundColor: COLORS.supervisor, elevation: 0, shadowOpacity: 0 },
         headerTintColor: '#fff',
+        headerTitleStyle: { fontWeight: '700', fontSize: 17 },
         tabBarActiveTintColor: COLORS.supervisor,
-        tabBarInactiveTintColor: COLORS.textLight,
-        tabBarStyle: { backgroundColor: '#fff', borderTopColor: COLORS.border },
+        tabBarInactiveTintColor: COLORS.textMuted,
+        tabBarStyle: {
+          backgroundColor: '#fff',
+          borderTopColor: COLORS.divider,
+          height: 62,
+          paddingTop: 6,
+          paddingBottom: 8,
+        },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Inicio',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🏠</Text>,
+          tabBarIcon: tabIcon('home', 'home-outline'),
           headerTitle: 'Full Advance — Supervisor',
         }}
       />
@@ -25,7 +40,7 @@ export default function SupervisorLayout() {
         name="ruta"
         options={{
           title: 'Equipo',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📡</Text>,
+          tabBarIcon: tabIcon('radio', 'radio-outline'),
           headerTitle: 'Seguimiento en vivo',
         }}
       />
@@ -33,7 +48,7 @@ export default function SupervisorLayout() {
         name="historial"
         options={{
           title: 'Historial',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📋</Text>,
+          tabBarIcon: tabIcon('time', 'time-outline'),
           headerTitle: 'Mi Historial',
         }}
       />
@@ -41,7 +56,7 @@ export default function SupervisorLayout() {
         name="alertas"
         options={{
           title: 'Alertas',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🚨</Text>,
+          tabBarIcon: tabIcon('alert-circle', 'alert-circle-outline'),
           headerTitle: 'Alertas y Acciones',
         }}
       />
@@ -49,7 +64,7 @@ export default function SupervisorLayout() {
         name="noticias"
         options={{
           title: 'Noticias',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📰</Text>,
+          tabBarIcon: tabIcon('newspaper', 'newspaper-outline'),
           headerTitle: 'Noticias',
         }}
       />

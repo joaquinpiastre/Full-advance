@@ -121,6 +121,14 @@ pool.query(`
   ALTER TABLE paradas ADD COLUMN IF NOT EXISTS oportunidades TEXT
 `).catch(() => {});
 
+// Si el cliente respeta el PVP (precio de venta público) y, si no, por qué
+pool.query(`
+  ALTER TABLE paradas ADD COLUMN IF NOT EXISTS respeta_pvp BOOLEAN
+`).catch(() => {});
+pool.query(`
+  ALTER TABLE paradas ADD COLUMN IF NOT EXISTS motivo_no_pvp TEXT
+`).catch(() => {});
+
 pool.query(`
   ALTER TABLE paradas
     ADD COLUMN IF NOT EXISTS tiene_vencidos BOOLEAN DEFAULT false,

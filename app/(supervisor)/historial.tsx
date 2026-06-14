@@ -125,6 +125,11 @@ export default function HistorialSupervisor() {
                     💡 {p.oportunidades}
                   </Text>
                 )}
+                {p.respeta_pvp === false && (
+                  <Text style={styles.informeText}>
+                    🏷️ No respeta PVP{p.motivo_no_pvp ? `: ${p.motivo_no_pvp}` : ''}
+                  </Text>
+                )}
                 {p.nota ? <Text style={styles.nota}>📝 {p.nota}</Text> : null}
               </View>
             ))}

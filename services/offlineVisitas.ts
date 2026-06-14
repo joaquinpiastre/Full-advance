@@ -15,6 +15,8 @@ export interface FinalizarDataPendiente {
   urgencia_descripcion?: string | null;
   accion_requerida?: string | null;
   oportunidades?: string | null;
+  respeta_pvp?: boolean | null;
+  motivo_no_pvp?: string | null;
 }
 
 export interface FotoPendiente {

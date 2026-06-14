@@ -1,7 +1,15 @@
 import { Tabs, router } from 'expo-router';
 import { COLORS } from '../../constants';
 import { Text, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/authStore';
+
+type IconName = keyof typeof Ionicons.glyphMap;
+
+const tabIcon = (active: IconName, inactive: IconName) =>
+  ({ color, focused, size }: { color: string; focused: boolean; size: number }) => (
+    <Ionicons name={focused ? active : inactive} size={size ?? 22} color={color} />
+  );
 
 export default function AdminLayout() {
   const { logout } = useAuthStore();
@@ -9,16 +17,25 @@ export default function AdminLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: COLORS.primary },
+        headerStyle: { backgroundColor: COLORS.primary, elevation: 0, shadowOpacity: 0 },
         headerTintColor: '#fff',
+        headerTitleStyle: { fontWeight: '700', fontSize: 17 },
         tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: COLORS.textLight,
-        tabBarStyle: { backgroundColor: '#fff', borderTopColor: COLORS.border },
+        tabBarInactiveTintColor: COLORS.textMuted,
+        tabBarStyle: {
+          backgroundColor: '#fff',
+          borderTopColor: COLORS.divider,
+          height: 62,
+          paddingTop: 6,
+          paddingBottom: 8,
+        },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
         headerRight: () => (
           <TouchableOpacity
             onPress={() => { logout(); router.replace('/(auth)/login'); }}
-            style={{ marginRight: 16 }}
+            style={{ marginRight: 16, flexDirection: 'row', alignItems: 'center', gap: 4 }}
           >
+            <Ionicons name="log-out-outline" size={18} color="#fff" />
             <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>Salir</Text>
           </TouchableOpacity>
         ),
@@ -28,7 +45,7 @@ export default function AdminLayout() {
         name="index"
         options={{
           title: 'Mapa',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🗺️</Text>,
+          tabBarIcon: tabIcon('map', 'map-outline'),
           headerTitle: 'Mapa de Clientes',
         }}
       />
@@ -36,7 +53,7 @@ export default function AdminLayout() {
         name="usuarios"
         options={{
           title: 'Usuarios',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🧑‍🤝‍🧑</Text>,
+          tabBarIcon: tabIcon('people', 'people-outline'),
           headerTitle: 'Repartidores y Preventistas',
         }}
       />
@@ -44,7 +61,7 @@ export default function AdminLayout() {
         name="asignaciones"
         options={{
           title: 'Asignaciones',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📋</Text>,
+          tabBarIcon: tabIcon('clipboard', 'clipboard-outline'),
           headerTitle: 'Asignaciones',
         }}
       />
@@ -52,7 +69,7 @@ export default function AdminLayout() {
         name="clientes"
         options={{
           title: 'Clientes',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>👥</Text>,
+          tabBarIcon: tabIcon('business', 'business-outline'),
           headerTitle: 'Clientes',
         }}
       />
@@ -60,7 +77,7 @@ export default function AdminLayout() {
         name="rutas"
         options={{
           title: 'Rutas',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🛣️</Text>,
+          tabBarIcon: tabIcon('trail-sign', 'trail-sign-outline'),
           headerTitle: 'Rutas',
         }}
       />
@@ -68,7 +85,7 @@ export default function AdminLayout() {
         name="estadisticas"
         options={{
           title: 'Estadísticas',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📈</Text>,
+          tabBarIcon: tabIcon('stats-chart', 'stats-chart-outline'),
           headerTitle: 'Estadísticas de Clientes',
         }}
       />
@@ -76,7 +93,7 @@ export default function AdminLayout() {
         name="historial"
         options={{
           title: 'Historial',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📊</Text>,
+          tabBarIcon: tabIcon('time', 'time-outline'),
           headerTitle: 'Historial',
         }}
       />
@@ -84,7 +101,7 @@ export default function AdminLayout() {
         name="alertas"
         options={{
           title: 'Alertas',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🚨</Text>,
+          tabBarIcon: tabIcon('alert-circle', 'alert-circle-outline'),
           headerTitle: 'Alertas — Urgentes y Vencimientos',
         }}
       />
@@ -92,7 +109,7 @@ export default function AdminLayout() {
         name="noticias"
         options={{
           title: 'Noticias',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📰</Text>,
+          tabBarIcon: tabIcon('newspaper', 'newspaper-outline'),
           headerTitle: 'Noticias',
         }}
       />

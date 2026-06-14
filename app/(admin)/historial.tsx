@@ -363,6 +363,13 @@ export default function HistorialAdmin() {
                     💡 Oportunidades: {p.oportunidades}
                   </Text>
                 )}
+                {p.respeta_pvp === false && (
+                  <View style={styles.accionCaja}>
+                    <Text style={styles.accionTexto}>
+                      🏷️ No respeta PVP{p.motivo_no_pvp ? `: ${p.motivo_no_pvp}` : ''}
+                    </Text>
+                  </View>
+                )}
                 {p.nota ? <Text style={styles.nota}>📝 {p.nota}</Text> : null}
               </View>
             ))}

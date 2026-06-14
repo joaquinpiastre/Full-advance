@@ -54,6 +54,8 @@ export default function RutaPreventista() {
   const [accionRequerida, setAccionRequerida] = useState(false);
   const [accionDesc, setAccionDesc] = useState<string[]>(['']);
   const [oportunidades, setOportunidades] = useState<string[]>(['']);
+  const [respetaPvp, setRespetaPvp] = useState(true);
+  const [motivoNoPvp, setMotivoNoPvp] = useState<string[]>(['']);
   const [pendientes, setPendientes] = useState<VisitaPendiente[]>([]);
   const enviandoRef = useRef(false);
 
@@ -118,6 +120,7 @@ export default function RutaPreventista() {
       setUrgente(false); setUrgenciaDesc('');
       setAccionRequerida(false); setAccionDesc(['']);
       setOportunidades(['']);
+      setRespetaPvp(true); setMotivoNoPvp(['']);
       setEstadoVisita('formulario');
     } catch (e: any) {
       Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo registrar la visita');
@@ -183,6 +186,8 @@ export default function RutaPreventista() {
           urgencia_descripcion: urgente ? urgenciaDesc.trim() || null : null,
           accion_requerida: accionRequerida ? accionDesc.map((a) => a.trim()).filter(Boolean).join('\n') || null : null,
           oportunidades: oportunidades.map((o) => o.trim()).filter(Boolean).join('\n') || null,
+          respeta_pvp: respetaPvp,
+          motivo_no_pvp: !respetaPvp ? motivoNoPvp.map((m) => m.trim()).filter(Boolean).join('\n') || null : null,
         },
       });
 
@@ -281,6 +286,34 @@ export default function RutaPreventista() {
                   </TouchableOpacity>
                 ))}
               </View>
+
+              {/* Toggle: Respeta PVP */}
+              <TouchableOpacity
+                style={[styles.toggleRow, !respetaPvp && styles.toggleRowPvp]}
+                onPress={() => setRespetaPvp((v) => !v)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.toggleEmoji}>🏷️</Text>
+                <Text style={[styles.toggleLabel, !respetaPvp && { color: '#F59E0B', fontWeight: '700' }]}>
+                  Respeta PVP
+                </Text>
+                <View style={[styles.toggleBubble, respetaPvp ? styles.toggleBubbleSi : styles.toggleBubblePvp]}>
+                  <Text style={styles.toggleBubbleTexto}>{respetaPvp ? 'SÍ' : 'NO'}</Text>
+                </View>
+              </TouchableOpacity>
+
+              {!respetaPvp && (
+                <View style={[styles.subForm, styles.subFormPvp]}>
+                  <AccionesList
+                    acciones={motivoNoPvp}
+                    onChange={setMotivoNoPvp}
+                    label="¿Por qué no respeta el PVP?"
+                    placeholder="Ej: vende más caro / más barato que el precio sugerido..."
+                    agregarTexto="+ Agregar motivo"
+                    color="#F59E0B"
+                  />
+                </View>
+              )}
 
               {/* Toggle: Mercadería vencida */}
               <TouchableOpacity
@@ -602,8 +635,11 @@ const styles = StyleSheet.create({
   toggleBubbleOn: { backgroundColor: '#F59E0B' },
   toggleBubbleUrgente: { backgroundColor: COLORS.danger },
   toggleBubbleAccion: { backgroundColor: COLORS.secondary },
+  toggleBubbleSi: { backgroundColor: COLORS.success },
+  toggleBubblePvp: { backgroundColor: '#F59E0B' },
   toggleBubbleTexto: { fontSize: 11, fontWeight: '800', color: '#fff' },
   toggleRowAccion: { borderColor: COLORS.secondary, backgroundColor: '#EFF6FF' },
+  toggleRowPvp: { borderColor: '#F59E0B', backgroundColor: '#FFFBEB' },
 
   subForm: {
     backgroundColor: COLORS.background,
@@ -615,6 +651,7 @@ const styles = StyleSheet.create({
   },
   subFormUrgente: { borderColor: COLORS.danger },
   subFormAccion: { borderColor: COLORS.secondary },
+  subFormPvp: { borderColor: '#F59E0B' },
 
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {

@@ -80,6 +80,9 @@ const filaParada = (p: any, index: number) => {
   if (p.oportunidades) {
     detalles.push(`💡 Oportunidades: ${p.oportunidades}`);
   }
+  if (p.respeta_pvp === false) {
+    detalles.push(`🏷️ No respeta PVP${p.motivo_no_pvp ? `: ${p.motivo_no_pvp}` : ''}`);
+  }
 
   return `
     <div class="parada">

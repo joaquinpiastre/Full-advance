@@ -116,6 +116,8 @@ export interface Parada {
   urgencia_descripcion?: string;
   accion_requerida?: string;
   oportunidades?: string;
+  respeta_pvp?: boolean;
+  motivo_no_pvp?: string;
 }
 
 export interface Alerta {

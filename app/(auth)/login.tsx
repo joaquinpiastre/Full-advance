@@ -4,6 +4,7 @@ import {
   StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, Image,
 } from 'react-native';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { login } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import { COLORS } from '../../constants';
@@ -48,7 +49,7 @@ export default function Login() {
       {/* Logo */}
       <View style={styles.logoContainer}>
         <Image
-          source={require('../../assets/bimbo-logo.jpg')}
+          source={require('../../assets/full-advance-logo.png')}
           style={styles.logo}
           resizeMode="contain"
         />
@@ -59,32 +60,41 @@ export default function Login() {
         <Text style={styles.titulo}>Bienvenido</Text>
         <Text style={styles.subtitulo}>Ingresá a tu cuenta para continuar</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor={COLORS.textLight}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-        />
-        <View style={styles.passwordWrapper}>
+        <View style={styles.inputWrapper}>
+          <Ionicons name="mail-outline" size={18} color={COLORS.textLight} style={styles.inputIcon} />
           <TextInput
-            style={styles.passwordInput}
+            style={styles.input}
+            placeholder="Email"
+            placeholderTextColor={COLORS.textMuted}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            value={email}
+            onChangeText={setEmail}
+          />
+        </View>
+        <View style={styles.inputWrapper}>
+          <Ionicons name="lock-closed-outline" size={18} color={COLORS.textLight} style={styles.inputIcon} />
+          <TextInput
+            style={styles.input}
             placeholder="Contraseña"
-            placeholderTextColor={COLORS.textLight}
+            placeholderTextColor={COLORS.textMuted}
             secureTextEntry={!verPassword}
             value={password}
             onChangeText={setPassword}
           />
           <TouchableOpacity style={styles.ojito} onPress={() => setVerPassword((v) => !v)}>
-            <Text style={styles.ojitoTexto}>{verPassword ? '🙈' : '👁️'}</Text>
+            <Ionicons name={verPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={COLORS.textLight} />
           </TouchableOpacity>
         </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? (
+          <View style={styles.errorBox}>
+            <Ionicons name="alert-circle-outline" size={16} color={COLORS.danger} />
+            <Text style={styles.error}>{error}</Text>
+          </View>
+        ) : null}
 
-        <TouchableOpacity style={styles.btn} onPress={handleLogin} disabled={cargando}>
+        <TouchableOpacity style={styles.btn} onPress={handleLogin} disabled={cargando} activeOpacity={0.85}>
           {cargando
             ? <ActivityIndicator color="#fff" />
             : <Text style={styles.btnText}>Ingresar</Text>}
@@ -125,8 +135,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logo: {
-    width: 200,
-    height: 120,
+    width: 220,
+    height: 145,
   },
   card: {
     width: '88%',
@@ -154,17 +164,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 24,
   },
-  input: {
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 15,
-    color: COLORS.text,
-    marginBottom: 12,
-    backgroundColor: COLORS.background,
-  },
-  passwordWrapper: {
+  inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.5,
@@ -172,18 +172,20 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 12,
     backgroundColor: COLORS.background,
+    paddingLeft: 14,
   },
-  passwordInput: {
+  inputIcon: {
+    marginRight: 8,
+  },
+  input: {
     flex: 1,
-    padding: 14,
+    paddingVertical: 14,
+    paddingRight: 14,
     fontSize: 15,
     color: COLORS.text,
   },
   ojito: {
     paddingHorizontal: 14,
-  },
-  ojitoTexto: {
-    fontSize: 18,
   },
   btn: {
     backgroundColor: COLORS.primary,
@@ -191,6 +193,11 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
     marginTop: 8,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 4,
   },
   btnText: {
     color: '#fff',
@@ -198,10 +205,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     letterSpacing: 0.3,
   },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
   error: {
     color: COLORS.danger,
     fontSize: 13,
     textAlign: 'center',
-    marginBottom: 8,
   },
 });

@@ -1,23 +1,38 @@
 import { Tabs } from 'expo-router';
 import { COLORS } from '../../constants';
-import { Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+
+type IconName = keyof typeof Ionicons.glyphMap;
+
+const tabIcon = (active: IconName, inactive: IconName) =>
+  ({ color, focused, size }: { color: string; focused: boolean; size: number }) => (
+    <Ionicons name={focused ? active : inactive} size={size ?? 22} color={color} />
+  );
 
 export default function PreventistaLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: COLORS.preventista },
+        headerStyle: { backgroundColor: COLORS.preventista, elevation: 0, shadowOpacity: 0 },
         headerTintColor: '#fff',
+        headerTitleStyle: { fontWeight: '700', fontSize: 17 },
         tabBarActiveTintColor: COLORS.preventista,
-        tabBarInactiveTintColor: COLORS.textLight,
-        tabBarStyle: { backgroundColor: '#fff', borderTopColor: COLORS.border },
+        tabBarInactiveTintColor: COLORS.textMuted,
+        tabBarStyle: {
+          backgroundColor: '#fff',
+          borderTopColor: COLORS.divider,
+          height: 62,
+          paddingTop: 6,
+          paddingBottom: 8,
+        },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Inicio',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🏠</Text>,
+          tabBarIcon: tabIcon('home', 'home-outline'),
           headerTitle: 'Full Advance — Preventista',
         }}
       />
@@ -25,7 +40,7 @@ export default function PreventistaLayout() {
         name="ruta"
         options={{
           title: 'Mi Ruta',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🗺️</Text>,
+          tabBarIcon: tabIcon('list', 'list-outline'),
           headerTitle: 'Ruta del Día',
         }}
       />
@@ -33,7 +48,7 @@ export default function PreventistaLayout() {
         name="mapa"
         options={{
           title: 'Mapa',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📍</Text>,
+          tabBarIcon: tabIcon('location', 'location-outline'),
           headerTitle: 'Mapa de la Ruta',
         }}
       />
@@ -41,7 +56,7 @@ export default function PreventistaLayout() {
         name="historial"
         options={{
           title: 'Historial',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📋</Text>,
+          tabBarIcon: tabIcon('time', 'time-outline'),
           headerTitle: 'Mi Historial',
         }}
       />
@@ -49,16 +64,16 @@ export default function PreventistaLayout() {
         name="ventas"
         options={{
           title: 'Ventas',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🔥</Text>,
+          tabBarIcon: tabIcon('flame', 'flame-outline'),
           headerTitle: 'Venta Caliente',
-          tabBarActiveTintColor: '#EA580C',
+          tabBarActiveTintColor: COLORS.ventaCaliente,
         }}
       />
       <Tabs.Screen
         name="noticias"
         options={{
           title: 'Noticias',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📰</Text>,
+          tabBarIcon: tabIcon('newspaper', 'newspaper-outline'),
           headerTitle: 'Noticias',
         }}
       />

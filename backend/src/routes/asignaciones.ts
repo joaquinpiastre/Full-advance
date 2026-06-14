@@ -4,11 +4,21 @@ import { authMiddleware, soloAdmin, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
+// El servidor corre en UTC, pero "el día de hoy" para esta app es el día en
+// Argentina (UTC-3, sin horario de verano). Sin este ajuste, cerca de la
+// medianoche el backend calcula "hoy" o "esta semana" un día distinto al que
+// ve el usuario en su celular, y las asignaciones manuales/elegidas no matchean.
+const TZ_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+function hoyArgentina(): string {
+  return new Date(Date.now() - TZ_OFFSET_MS).toISOString().split('T')[0];
+}
+
 // Lunes (00:00) de la semana que contiene `fecha`. Las semanas van de lunes a
 // domingo, por lo que el reseteo ocurre el domingo a la noche al pasar a una
 // nueva semana_inicio.
 function inicioSemana(fecha: Date): string {
-  const d = new Date(fecha);
+  const d = new Date(fecha.getTime() - TZ_OFFSET_MS);
   const dia = d.getUTCDay(); // 0=domingo ... 6=sábado
   const diff = dia === 0 ? -6 : 1 - dia;
   d.setUTCDate(d.getUTCDate() + diff);
@@ -72,7 +82,7 @@ async function obtenerTodasLasRutas() {
 router.get('/hoy', authMiddleware, async (req: AuthRequest, res: Response) => {
   const usuario_id = req.usuario!.id;
   const ahora = new Date();
-  const hoy = ahora.toISOString().split('T')[0];
+  const hoy = hoyArgentina();
   const semana = inicioSemana(ahora);
   try {
     const { rows: manual } = await pool.query(
@@ -83,19 +93,6 @@ router.get('/hoy', authMiddleware, async (req: AuthRequest, res: Response) => {
     );
     if (manual.length) return res.json(await fetchAsignacionCompleta(manual[0]));
 
-    const { rows: seleccion } = await pool.query(
-      `SELECT sr.ruta_id, r.nombre as ruta_nombre, r.descripcion as ruta_desc
-       FROM selecciones_ruta sr JOIN rutas r ON r.id=sr.ruta_id
-       WHERE sr.usuario_id=$1 AND sr.semana_inicio=$2`,
-      [usuario_id, semana]
-    );
-    if (seleccion.length) {
-      return res.json(await fetchAsignacionCompleta({
-        usuario_id, ruta_id: seleccion[0].ruta_id, fecha: hoy,
-        ruta_nombre: seleccion[0].ruta_nombre, ruta_desc: seleccion[0].ruta_desc,
-      }));
-    }
-
     const { rows: fijas } = await pool.query(
       `SELECT af.ruta_id, r.nombre as ruta_nombre, r.descripcion as ruta_desc,
               (SELECT COUNT(*) FROM ruta_clientes WHERE ruta_id=af.ruta_id)::int as clientes_count
@@ -103,6 +100,23 @@ router.get('/hoy', authMiddleware, async (req: AuthRequest, res: Response) => {
        WHERE af.usuario_id=$1 AND af.activo=true ORDER BY r.nombre`,
       [usuario_id]
     );
+
+    const { rows: seleccion } = await pool.query(
+      `SELECT sr.ruta_id, r.nombre as ruta_nombre, r.descripcion as ruta_desc
+       FROM selecciones_ruta sr JOIN rutas r ON r.id=sr.ruta_id
+       WHERE sr.usuario_id=$1 AND sr.semana_inicio=$2`,
+      [usuario_id, semana]
+    );
+    // Solo se respeta la elección guardada si sigue siendo válida: o el admin
+    // no restringió rutas, o la ruta elegida sigue entre las habilitadas.
+    // Así, si el admin habilita una ruta nueva, no queda "tapada" por una
+    // elección vieja de cuando el usuario no tenía ninguna ruta habilitada.
+    if (seleccion.length && (fijas.length === 0 || fijas.some((f) => f.ruta_id === seleccion[0].ruta_id))) {
+      return res.json(await fetchAsignacionCompleta({
+        usuario_id, ruta_id: seleccion[0].ruta_id, fecha: hoy,
+        ruta_nombre: seleccion[0].ruta_nombre, ruta_desc: seleccion[0].ruta_desc,
+      }));
+    }
 
     if (fijas.length === 1) {
       await pool.query(
@@ -246,7 +260,7 @@ router.delete('/fijas/:usuario_id/:ruta_id', authMiddleware, soloAdmin, async (r
 
 // Todas las asignaciones recientes + lista de usuarios (admin)
 router.get('/', authMiddleware, soloAdmin, async (_req: AuthRequest, res: Response) => {
-  const hoy = new Date().toISOString().split('T')[0];
+  const hoy = hoyArgentina();
   try {
     const { rows: asignaciones } = await pool.query(
       `SELECT a.*, u.nombre as usuario_nombre, u.rol as usuario_rol, r.nombre as ruta_nombre

@@ -122,7 +122,7 @@ export default function Asignaciones() {
   // ── Filtros ────────────────────────────────────────────────────────────────
   const asignacionesFiltradas = useMemo(() => {
     return asignaciones.filter((a) => {
-      const fechaOk = format(new Date(a.fecha), 'yyyy-MM-dd') === fechaFiltro;
+      const fechaOk = String(a.fecha).slice(0, 10) === fechaFiltro;
       const usuarioOk = usuarioFiltro === null || a.usuario?.id === usuarioFiltro;
       return fechaOk && usuarioOk;
     });
@@ -222,7 +222,12 @@ export default function Asignaciones() {
               </Text>
             </View>
             <Text style={styles.cardRuta}>📍 {item.ruta?.nombre}</Text>
-            <Text style={styles.cardFecha}>{format(new Date(item.fecha), 'dd/MM/yyyy')}</Text>
+            <Text style={styles.cardFecha}>
+              {(() => {
+                const [y, m, d] = String(item.fecha).slice(0, 10).split('-');
+                return `${d}/${m}/${y}`;
+              })()}
+            </Text>
           </View>
         ))}
 

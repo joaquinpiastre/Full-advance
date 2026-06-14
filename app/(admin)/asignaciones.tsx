@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Modal, ScrollView, Alert,
 } from 'react-native';
 import {
-  obtenerAsignaciones, asignarRuta, obtenerRutas,
+  obtenerAsignaciones, asignarRuta, eliminarAsignacion, obtenerRutas,
   obtenerAsignacionesFijas, guardarAsignacionFija, eliminarAsignacionFija,
 } from '../../services/api';
 import { COLORS } from '../../constants';
@@ -101,6 +101,22 @@ export default function Asignaciones() {
     } catch (e: any) {
       Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo guardar');
     }
+  };
+
+  const handleEliminarAsignacion = (id: number) => {
+    Alert.alert('Quitar asignación', '¿Querés quitar esta ruta asignada para ese día?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Quitar', style: 'destructive', onPress: async () => {
+          try {
+            await eliminarAsignacion(id);
+            cargar();
+          } catch {
+            Alert.alert('Error', 'No se pudo quitar la asignación');
+          }
+        }
+      }
+    ]);
   };
 
   const handleEliminarFija = async (usuario_id: number, ruta_id: number) => {
@@ -217,9 +233,14 @@ export default function Asignaciones() {
           ]}>
             <View style={styles.cardHeader}>
               <Text style={styles.cardNombre}>{item.usuario?.nombre}</Text>
-              <Text style={styles.cardRol}>
-                {item.usuario?.rol === 'repartidor' ? '🚚' : item.usuario?.rol === 'supervisor' ? '🛡️' : '👔'} {item.usuario?.rol}
-              </Text>
+              <View style={styles.cardHeaderDerecha}>
+                <Text style={styles.cardRol}>
+                  {item.usuario?.rol === 'repartidor' ? '🚚' : item.usuario?.rol === 'supervisor' ? '🛡️' : '👔'} {item.usuario?.rol}
+                </Text>
+                <TouchableOpacity onPress={() => handleEliminarAsignacion(item.id)}>
+                  <Text style={styles.btnFijaQuitarTexto}>✕</Text>
+                </TouchableOpacity>
+              </View>
             </View>
             <Text style={styles.cardRuta}>📍 {item.ruta?.nombre}</Text>
             <Text style={styles.cardFecha}>
@@ -372,6 +393,7 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 2, marginHorizontal: 16, marginBottom: 10,
   },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  cardHeaderDerecha: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   cardNombre: { fontSize: 15, fontWeight: '700', color: COLORS.text },
   cardRol: { fontSize: 12, color: COLORS.textLight },
   cardRuta: { fontSize: 14, color: COLORS.text },

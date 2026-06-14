@@ -295,9 +295,27 @@ router.post('/', authMiddleware, soloAdmin, async (req: AuthRequest, res: Respon
        ON CONFLICT (usuario_id, fecha) DO UPDATE SET ruta_id=$2 RETURNING *`,
       [usuario_id, ruta_id, fecha]
     );
+    // La ruta asignada para ese día queda también habilitada para el resto de
+    // la semana, para que el usuario pueda elegirla al iniciar jornada otros días.
+    await pool.query(
+      `INSERT INTO asignaciones_fijas (usuario_id, ruta_id, activo) VALUES ($1,$2,true)
+       ON CONFLICT (usuario_id, ruta_id) DO UPDATE SET activo=true`,
+      [usuario_id, ruta_id]
+    );
     res.status(201).json(rows[0]);
   } catch {
     res.status(500).json({ error: 'Error al asignar' });
+  }
+});
+
+// Eliminar una asignación manual de un día
+router.delete('/:id', authMiddleware, soloAdmin, async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  try {
+    await pool.query('DELETE FROM asignaciones WHERE id=$1', [id]);
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: 'Error al eliminar' });
   }
 });
 

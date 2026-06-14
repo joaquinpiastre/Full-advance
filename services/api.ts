@@ -138,6 +138,9 @@ export const asignarRuta = (data: { usuario_id: number; ruta_id: number; fecha: 
 export const obtenerAsignaciones = () =>
   api.get('/asignaciones');
 
+export const eliminarAsignacion = (id: number) =>
+  api.delete(`/asignaciones/${id}`);
+
 // Rutas fijas (rutas habilitadas para un usuario, puede tener varias)
 export const obtenerAsignacionesFijas = () =>
   api.get('/asignaciones/fijas');

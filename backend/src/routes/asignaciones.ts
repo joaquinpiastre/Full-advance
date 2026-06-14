@@ -25,6 +25,38 @@ function inicioSemana(fecha: Date): string {
   return d.toISOString().split('T')[0];
 }
 
+// Determina la ruta asignada hoy a un usuario (misma prioridad que /hoy, sin
+// efectos secundarios). Se usa para saber a qué ruta pertenecen las paradas
+// de la jornada en curso y poder cerrarla automáticamente cuando se completan
+// todos sus clientes.
+export async function obtenerRutaIdHoy(usuario_id: number): Promise<number | null> {
+  const hoy = hoyArgentina();
+  const semana = inicioSemana(new Date());
+
+  const { rows: manual } = await pool.query(
+    `SELECT ruta_id FROM asignaciones WHERE usuario_id=$1 AND fecha=$2 LIMIT 1`,
+    [usuario_id, hoy]
+  );
+  if (manual.length) return manual[0].ruta_id;
+
+  const { rows: fijas } = await pool.query(
+    `SELECT ruta_id FROM asignaciones_fijas WHERE usuario_id=$1 AND activo=true`,
+    [usuario_id]
+  );
+
+  const { rows: seleccion } = await pool.query(
+    `SELECT ruta_id FROM selecciones_ruta WHERE usuario_id=$1 AND semana_inicio=$2`,
+    [usuario_id, semana]
+  );
+  if (seleccion.length && (fijas.length === 0 || fijas.some((f) => f.ruta_id === seleccion[0].ruta_id))) {
+    return seleccion[0].ruta_id;
+  }
+
+  if (fijas.length === 1) return fijas[0].ruta_id;
+
+  return null;
+}
+
 // Helper: arma el objeto completo de asignación (ruta + clientes)
 async function fetchAsignacionCompleta(asig: any) {
   const { rows: rc } = await pool.query(

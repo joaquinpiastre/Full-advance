@@ -220,6 +220,7 @@ export default function HistorialAdmin() {
                 <Text style={styles.cardFecha}>
                   {format(new Date(item.fecha_inicio), "EEEE d 'de' MMMM", { locale: es })}
                 </Text>
+                <Text style={styles.cardDato}>🗺️ {item.ruta?.nombre ?? 'Sin ruta detectada'}</Text>
                 <View style={styles.cardRow}>
                   <Text style={styles.cardDato}>
                     🕐 {format(new Date(item.fecha_inicio), 'HH:mm')}
@@ -255,6 +256,7 @@ export default function HistorialAdmin() {
                   <Text style={styles.modalTitulo}>{detalle?.usuario?.nombre}</Text>
                   <Text style={styles.modalSub}>
                     {detalle?.fecha_inicio && format(new Date(detalle.fecha_inicio), "d 'de' MMMM yyyy", { locale: es })}
+                    {detalle?.ruta ? ` · ${detalle.ruta.nombre}` : ''}
                   </Text>
                 </>
               )}

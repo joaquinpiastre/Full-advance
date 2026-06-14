@@ -5,12 +5,13 @@ import {
 } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import * as ImagePicker from 'expo-image-picker';
+import { router } from 'expo-router';
 import { useJornadaStore } from '../../store/jornadaStore';
 import {
-  obtenerAsignacionHoy, obtenerParadas,
+  obtenerAsignacionHoy, obtenerParadas, obtenerJornadaActiva,
   registrarParada, actualizarOrdenRuta,
 } from '../../services/api';
-import { obtenerUbicacionRapida } from '../../services/gps';
+import { obtenerUbicacionRapida, detenerGps } from '../../services/gps';
 import {
   agregarVisitaPendiente, obtenerVisitasPendientes,
   procesarVisitasPendientes, suscribirVisitasPendientes, VisitaPendiente,
@@ -18,13 +19,14 @@ import {
 import CartillaModal from '../../components/CartillaModal';
 import NuevoClienteModal from '../../components/NuevoClienteModal';
 import FechaVencimientoPicker from '../../components/FechaVencimientoPicker';
+import FotoReferenciaCliente from '../../components/FotoReferenciaCliente';
 import { COLORS } from '../../constants';
 import { Cliente } from '../../types';
 
 type EstadoVisita = 'esperando' | 'formulario';
 
 export default function RutaPreventista() {
-  const { jornada } = useJornadaStore();
+  const { jornada, setJornada } = useJornadaStore();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [rutaId, setRutaId] = useState<number | null>(null);
   const [paradas, setParadas] = useState<any[]>([]);
@@ -191,13 +193,28 @@ export default function RutaPreventista() {
       setClienteActual(null);
       setParadaActual(null);
 
-      procesarVisitasPendientes().then(cargar);
+      procesarVisitasPendientes().then(() => { cargar(); verificarJornadaCerrada(); });
     } catch {
       Alert.alert('Error', 'No se pudo guardar la visita. Probá de nuevo.');
     } finally {
       setProcesando(false);
       enviandoRef.current = false;
     }
+  };
+
+  // Si al sincronizar la visita el backend cerró la jornada automáticamente
+  // (porque ya se visitaron todos los clientes de la ruta), refleja eso en
+  // la app: corta el GPS y vuelve a Inicio.
+  const verificarJornadaCerrada = async () => {
+    try {
+      const res = await obtenerJornadaActiva();
+      if (!res.data) {
+        await detenerGps();
+        setJornada(null);
+        Alert.alert('Jornada finalizada', 'Completaste todas las visitas de la ruta. La jornada se cerró automáticamente.');
+        router.replace('/(preventista)');
+      }
+    } catch {}
   };
 
   const handleReordenar = (nuevos: Cliente[]) => {
@@ -218,6 +235,14 @@ export default function RutaPreventista() {
       {estadoVisita !== 'esperando' && clienteActual && (
         <View style={styles.panel}>
           <View style={styles.panelHeader}>
+            <FotoReferenciaCliente
+              cliente={clienteActual}
+              color={COLORS.preventista}
+              onActualizado={(uri) => {
+                setClienteActual((prev) => (prev ? { ...prev, foto_referencia_uri: uri } : prev));
+                setClientes((prev) => prev.map((c) => (c.id === clienteActual.id ? { ...c, foto_referencia_uri: uri } : c)));
+              }}
+            />
             <View style={{ flex: 1 }}>
               <Text style={styles.panelCliente}>{clienteActual.nombre}</Text>
               <Text style={styles.panelDir}>{clienteActual.direccion}</Text>

@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { pool } from '../db/client';
 import { authMiddleware, adminOSupervisor, AuthRequest } from '../middleware/auth';
+import { obtenerRutaIdHoy } from './asignaciones';
 
 const router = Router();
 
@@ -72,11 +73,54 @@ router.post('/:id/finalizar', authMiddleware, async (req: AuthRequest, res: Resp
        producto_informe ?? null, precio_informe ?? null, accion_requerida ?? null, id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Parada no encontrada' });
-    res.json(rows[0]);
+    const parada = rows[0];
+
+    const jornada_cerrada = await cerrarJornadaSiCompleta(parada.jornada_id);
+
+    res.json({ ...parada, jornada_cerrada });
   } catch {
     res.status(500).json({ error: 'Error al finalizar parada' });
   }
 });
+
+// Si la jornada tiene una ruta asignada y ya se completaron todos sus
+// clientes, la cierra automáticamente (no debe quedar abierta esperando que
+// el usuario la finalice a mano).
+async function cerrarJornadaSiCompleta(jornada_id: number): Promise<boolean> {
+  const { rows: jornadaRows } = await pool.query(
+    'SELECT usuario_id FROM jornadas WHERE id=$1 AND activa=true',
+    [jornada_id]
+  );
+  if (!jornadaRows.length) return false;
+  const { usuario_id } = jornadaRows[0];
+
+  const ruta_id = await obtenerRutaIdHoy(usuario_id);
+  if (!ruta_id) return false;
+
+  const { rows: totalRows } = await pool.query(
+    'SELECT COUNT(*)::int as total FROM ruta_clientes WHERE ruta_id=$1',
+    [ruta_id]
+  );
+  const total = totalRows[0].total;
+  if (!total) return false;
+
+  const { rows: visitadosRows } = await pool.query(
+    `SELECT COUNT(DISTINCT p.cliente_id)::int as visitados
+     FROM paradas p
+     JOIN ruta_clientes rc ON rc.cliente_id = p.cliente_id AND rc.ruta_id = $1
+     WHERE p.jornada_id = $2 AND p.completada = true`,
+    [ruta_id, jornada_id]
+  );
+  const visitados = visitadosRows[0].visitados;
+  if (visitados < total) return false;
+
+  await pool.query(
+    `UPDATE jornadas SET activa=false, fecha_fin=NOW() WHERE id=$1 AND activa=true`,
+    [jornada_id]
+  );
+  await pool.query('DELETE FROM gps_live WHERE usuario_id=$1', [usuario_id]);
+  return true;
+}
 
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { jornada_id } = req.query;

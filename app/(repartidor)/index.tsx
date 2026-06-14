@@ -120,7 +120,7 @@ export default function InicioRepartidor() {
           )}
           {puedeCambiarRuta && (
             <TouchableOpacity style={styles.btnCambiar} onPress={() => setModalEleccionVisible(true)}>
-              <Text style={styles.btnCambiarTexto}>Cambiar ruta de la semana</Text>
+              <Text style={styles.btnCambiarTexto}>Cambiar ruta del día</Text>
             </TouchableOpacity>
           )}
         </View>

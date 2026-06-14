@@ -59,6 +59,12 @@ export const subirFoto = (parada_id: number, foto: FormData) =>
     timeout: 30000,
   });
 
+export const subirFotoReferenciaCliente = (cliente_id: number, foto: FormData) =>
+  api.post(`/clientes/${cliente_id}/foto-referencia`, foto, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 30000,
+  });
+
 export const finalizarParada = (parada_id: number, data?: {
   nota?: string;
   tiene_vencidos?: boolean;

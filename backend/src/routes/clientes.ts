@@ -1,8 +1,22 @@
 import { Router, Request, Response } from 'express';
+import multer from 'multer';
+import fs from 'fs';
 import { pool } from '../db/client';
 import { authMiddleware, soloAdmin, AuthRequest } from '../middleware/auth';
 
 const router = Router();
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = process.env.UPLOADS_DIR ?? './uploads';
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  },
+});
+const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
 router.get('/', authMiddleware, async (req: Request, res: Response) => {
   const { estado } = req.query;
@@ -161,6 +175,23 @@ router.delete('/:id', authMiddleware, soloAdmin, async (req: AuthRequest, res: R
     res.json({ ok: true });
   } catch {
     res.status(500).json({ error: 'Error' });
+  }
+});
+
+// Foto de referencia del local (para guiar a quien visite al cliente)
+router.post('/:id/foto-referencia', authMiddleware, upload.single('foto'), async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  if (!req.file) return res.status(400).json({ error: 'Foto requerida' });
+  const uri = `/uploads/${req.file.filename}`;
+  try {
+    const { rows } = await pool.query(
+      'UPDATE clientes SET foto_referencia_uri=$1 WHERE id=$2 RETURNING id',
+      [uri, id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Cliente no encontrado' });
+    res.json({ uri });
+  } catch {
+    res.status(500).json({ error: 'Error al guardar la foto' });
   }
 });
 

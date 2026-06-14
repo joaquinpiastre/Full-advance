@@ -106,6 +106,11 @@ pool.query(`
   ALTER TABLE clientes ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT true
 `).catch(() => {});
 
+// Foto de referencia del local, para guiar a quien visite al cliente
+pool.query(`
+  ALTER TABLE clientes ADD COLUMN IF NOT EXISTS foto_referencia_uri VARCHAR(500)
+`).catch(() => {});
+
 pool.query(`
   ALTER TABLE paradas
     ADD COLUMN IF NOT EXISTS tiene_vencidos BOOLEAN DEFAULT false,

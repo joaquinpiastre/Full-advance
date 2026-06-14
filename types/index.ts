@@ -40,6 +40,7 @@ export interface Cliente {
   marcas?: string[];
   ruta_id?: number;
   activo?: boolean;
+  foto_referencia_uri?: string;
 }
 
 export interface Zona {

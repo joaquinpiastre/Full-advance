@@ -5,15 +5,17 @@ import {
 } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import * as ImagePicker from 'expo-image-picker';
+import { router } from 'expo-router';
 import { useJornadaStore } from '../../store/jornadaStore';
-import { registrarParada, obtenerParadas, obtenerAsignacionHoy, actualizarOrdenRuta } from '../../services/api';
-import { obtenerUbicacionRapida } from '../../services/gps';
+import { registrarParada, obtenerParadas, obtenerAsignacionHoy, obtenerJornadaActiva, actualizarOrdenRuta } from '../../services/api';
+import { obtenerUbicacionRapida, detenerGps } from '../../services/gps';
 import {
   agregarVisitaPendiente, obtenerVisitasPendientes,
   procesarVisitasPendientes, suscribirVisitasPendientes, VisitaPendiente,
 } from '../../services/offlineVisitas';
 import CartillaModal from '../../components/CartillaModal';
 import NuevoClienteModal from '../../components/NuevoClienteModal';
+import FotoReferenciaCliente from '../../components/FotoReferenciaCliente';
 import { COLORS, urlFoto } from '../../constants';
 import { Parada, Cliente } from '../../types';
 import { format } from 'date-fns';
@@ -22,7 +24,7 @@ import { es } from 'date-fns/locale';
 type EstadoFotos = 'esperando' | 'visita';
 
 export default function JornadaRepartidor() {
-  const { jornada, paradaActual, setParadaActual } = useJornadaStore();
+  const { jornada, paradaActual, setParadaActual, setJornada } = useJornadaStore();
   const [paradas, setParadas] = useState<Parada[]>([]);
   const [asignacion, setAsignacion] = useState<any>(null);
   const [cargando, setCargando] = useState(true);
@@ -172,13 +174,28 @@ export default function JornadaRepartidor() {
       setProductoInforme('');
       setPrecioInforme('');
 
-      procesarVisitasPendientes().then(cargarDatos);
+      procesarVisitasPendientes().then(() => { cargarDatos(); verificarJornadaCerrada(); });
     } catch {
       Alert.alert('Error', 'No se pudo guardar la visita. Probá de nuevo.');
     } finally {
       setProcesando(false);
       enviandoRef.current = false;
     }
+  };
+
+  // Si al sincronizar la visita el backend cerró la jornada automáticamente
+  // (porque ya se visitaron todos los clientes de la ruta), refleja eso en
+  // la app: corta el GPS y vuelve a Inicio.
+  const verificarJornadaCerrada = async () => {
+    try {
+      const res = await obtenerJornadaActiva();
+      if (!res.data) {
+        await detenerGps();
+        setJornada(null);
+        Alert.alert('Jornada finalizada', 'Completaste todas las visitas de la ruta. La jornada se cerró automáticamente.');
+        router.replace('/(repartidor)');
+      }
+    } catch {}
   };
 
   if (!jornada) {
@@ -207,9 +224,25 @@ export default function JornadaRepartidor() {
       {/* Panel de flujo de fotos */}
       {estadoFotos !== 'esperando' && paradaActual && (
         <View style={styles.fotoPanel}>
-          <Text style={styles.fotoPanelCliente}>
-            {paradaActual.cliente?.nombre ?? 'Cliente'}
-          </Text>
+          <View style={styles.fotoPanelHeader}>
+            {paradaActual.cliente && (
+              <FotoReferenciaCliente
+                cliente={paradaActual.cliente}
+                color={COLORS.repartidor}
+                onActualizado={(uri) => {
+                  const cliente = paradaActual.cliente;
+                  if (!cliente) return;
+                  setParadaActual({
+                    ...paradaActual,
+                    cliente: { ...cliente, foto_referencia_uri: uri },
+                  });
+                }}
+              />
+            )}
+            <Text style={styles.fotoPanelCliente}>
+              {paradaActual.cliente?.nombre ?? 'Cliente'}
+            </Text>
+          </View>
 
           {estadoFotos === 'visita' && (
             <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ gap: 10 }}>
@@ -453,6 +486,7 @@ const styles = StyleSheet.create({
     elevation: 4,
     gap: 12,
   },
+  fotoPanelHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   fotoPanelCliente: { fontSize: 13, color: COLORS.textLight, fontWeight: '600' },
   fotoPanelTitulo: { fontSize: 20, fontWeight: '800', color: COLORS.primary },
   fotoPanelDesc: { fontSize: 14, color: COLORS.textLight },

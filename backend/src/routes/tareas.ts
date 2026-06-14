@@ -1,8 +1,22 @@
 import { Router, Response } from 'express';
+import multer from 'multer';
+import fs from 'fs';
 import { pool } from '../db/client';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 
 const router = Router();
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = process.env.UPLOADS_DIR ?? './uploads';
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  },
+});
+const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
 // Usuarios a los que se les puede asignar una tarea (repartidores y preventistas).
 router.get('/usuarios', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -97,14 +111,17 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// Marcar una tarea propia como realizada.
-router.patch('/:id/completar', authMiddleware, async (req: AuthRequest, res: Response) => {
+// Marcar una tarea propia como realizada, con foto y nota opcionales como evidencia.
+router.patch('/:id/completar', authMiddleware, upload.single('foto'), async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
+  const { nota } = req.body;
+  const foto_uri = req.file ? `/uploads/${req.file.filename}` : null;
   try {
     const { rows } = await pool.query(
-      `UPDATE tareas SET completada=true, completada_at=NOW()
-       WHERE id=$1 AND asignado_id=$2 RETURNING *`,
-      [id, req.usuario!.id]
+      `UPDATE tareas SET completada=true, completada_at=NOW(),
+        nota_completada=$1, foto_uri=COALESCE($2, foto_uri)
+       WHERE id=$3 AND asignado_id=$4 RETURNING *`,
+      [nota?.trim() || null, foto_uri, id, req.usuario!.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Tarea no encontrada' });
     res.json(rows[0]);

@@ -223,8 +223,11 @@ export const obtenerTareas = () =>
 export const crearTarea = (data: { asignado_id: number; mensaje: string }) =>
   api.post('/tareas', data);
 
-export const completarTarea = (id: number) =>
-  api.patch(`/tareas/${id}/completar`);
+export const completarTarea = (id: number, data: FormData) =>
+  api.patch(`/tareas/${id}/completar`, data, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 30000,
+  });
 
 // Calificaciones de visitas de control del supervisor
 export const obtenerEquipoRuta = (ruta_id: number) =>

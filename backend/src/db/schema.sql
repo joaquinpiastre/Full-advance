@@ -94,6 +94,8 @@ CREATE TABLE IF NOT EXISTS tareas (
   mensaje TEXT NOT NULL,
   completada BOOLEAN DEFAULT false,
   completada_at TIMESTAMPTZ,
+  nota_completada TEXT,
+  foto_uri VARCHAR(255),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

@@ -143,6 +143,13 @@ pool.query(`
   ALTER TABLE paradas ADD COLUMN IF NOT EXISTS compra_comerco BOOLEAN
 `).catch(() => {});
 
+// Foto y nota opcionales al marcar una tarea como realizada
+pool.query(`
+  ALTER TABLE tareas
+    ADD COLUMN IF NOT EXISTS nota_completada TEXT,
+    ADD COLUMN IF NOT EXISTS foto_uri VARCHAR(255)
+`).catch(() => {});
+
 pool.query(`
   ALTER TABLE paradas
     ADD COLUMN IF NOT EXISTS tiene_vencidos BOOLEAN DEFAULT false,

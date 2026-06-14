@@ -1,16 +1,17 @@
 import { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity,
-  ActivityIndicator, RefreshControl, Alert,
+  ActivityIndicator, RefreshControl, Alert, Image, Platform,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import {
   obtenerUsuariosAsignables, obtenerTareasAsignadas, obtenerTareasCreadas,
   crearTarea, completarTarea,
 } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { Tarea } from '../types';
-import { COLORS } from '../constants';
+import { COLORS, urlFoto } from '../constants';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -37,6 +38,9 @@ export default function TareasScreen({ color = COLORS.primary }: Props) {
   const [mensaje, setMensaje] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [marcando, setMarcando] = useState<number | null>(null);
+  const [completando, setCompletando] = useState<number | null>(null);
+  const [notaCompletar, setNotaCompletar] = useState('');
+  const [fotoCompletar, setFotoCompletar] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     try {
@@ -74,11 +78,55 @@ export default function TareasScreen({ color = COLORS.primary }: Props) {
     setEnviando(false);
   };
 
+  const abrirCompletar = (tarea: Tarea) => {
+    setCompletando(tarea.id);
+    setNotaCompletar('');
+    setFotoCompletar(null);
+  };
+
+  const cancelarCompletar = () => {
+    setCompletando(null);
+    setNotaCompletar('');
+    setFotoCompletar(null);
+  };
+
+  const tomarFotoCompletar = async () => {
+    try {
+      const permiso = await ImagePicker.requestCameraPermissionsAsync();
+      if (permiso.status !== 'granted') {
+        Alert.alert(
+          'Permiso de cámara',
+          permiso.canAskAgain
+            ? 'Necesitás permitir el acceso a la cámara.'
+            : 'El permiso fue denegado permanentemente. Habilitalo en Ajustes → Aplicaciones → Permisos → Cámara.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({ quality: 0.3, allowsEditing: false });
+      if (result.canceled) return;
+      setFotoCompletar(result.assets[0].uri);
+    } catch {
+      Alert.alert('Error', 'No se pudo abrir la cámara. Verificá que la app tiene permiso.');
+    }
+  };
+
   const marcarRealizada = async (tarea: Tarea) => {
     setMarcando(tarea.id);
     try {
-      await completarTarea(tarea.id);
-      setAsignadas((prev) => prev.map((t) => (t.id === tarea.id ? { ...t, completada: true, completada_at: new Date().toISOString() } : t)));
+      const form = new FormData();
+      if (notaCompletar.trim()) form.append('nota', notaCompletar.trim());
+      if (fotoCompletar) {
+        if (Platform.OS === 'web') {
+          const blob = await (await fetch(fotoCompletar)).blob();
+          form.append('foto', blob, 'foto.jpg');
+        } else {
+          form.append('foto', { uri: fotoCompletar, type: 'image/jpeg', name: 'foto.jpg' } as any);
+        }
+      }
+      const res = await completarTarea(tarea.id, form);
+      setAsignadas((prev) => prev.map((t) => (t.id === tarea.id ? res.data : t)));
+      cancelarCompletar();
     } catch {
       Alert.alert('Error', 'No se pudo marcar la tarea como realizada');
     }
@@ -158,6 +206,8 @@ export default function TareasScreen({ color = COLORS.primary }: Props) {
                       {format(new Date(t.created_at), "d MMM, HH:mm", { locale: es })}
                       {t.completada && t.completada_at ? ` · Realizada ${format(new Date(t.completada_at), "d MMM, HH:mm", { locale: es })}` : ''}
                     </Text>
+                    {t.nota_completada && <Text style={styles.cardEvidenciaNota}>📝 {t.nota_completada}</Text>}
+                    {t.foto_uri && <Image source={{ uri: urlFoto(t.foto_uri) }} style={styles.cardEvidenciaFoto} />}
                   </View>
                 ))}
               </View>
@@ -172,13 +222,49 @@ export default function TareasScreen({ color = COLORS.primary }: Props) {
           <Text style={styles.cardDestino}>De: {item.autor_nombre} · {ROL_LABEL[item.autor_rol ?? ''] ?? item.autor_rol}</Text>
           <Text style={styles.cardMensaje}>{item.mensaje}</Text>
           <Text style={styles.cardFooter}>{format(new Date(item.created_at), "d MMM, HH:mm", { locale: es })}</Text>
-          <TouchableOpacity
-            style={[styles.btnRealizada, { backgroundColor: COLORS.success }]}
-            onPress={() => marcarRealizada(item)}
-            disabled={marcando === item.id}
-          >
-            {marcando === item.id ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnEnviarTexto}>✓ Marcar como realizada</Text>}
-          </TouchableOpacity>
+
+          {completando === item.id ? (
+            <View style={styles.completarForm}>
+              <Text style={styles.subLabel}>Foto (opcional)</Text>
+              {fotoCompletar ? (
+                <TouchableOpacity onPress={tomarFotoCompletar}>
+                  <Image source={{ uri: fotoCompletar }} style={styles.fotoPreview} />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={styles.btnFoto} onPress={tomarFotoCompletar}>
+                  <Text style={styles.btnFotoTexto}>📷 Sacar foto</Text>
+                </TouchableOpacity>
+              )}
+              <Text style={styles.subLabel}>Nota (opcional)</Text>
+              <TextInput
+                style={[styles.input, styles.inputMultiline]}
+                placeholder="Comentario sobre la tarea realizada..."
+                placeholderTextColor={COLORS.textLight}
+                multiline
+                value={notaCompletar}
+                onChangeText={setNotaCompletar}
+              />
+              <View style={styles.completarBotones}>
+                <TouchableOpacity style={styles.btnCancelar} onPress={cancelarCompletar} disabled={marcando === item.id}>
+                  <Text style={styles.btnCancelarTexto}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.btnRealizada, { backgroundColor: COLORS.success, flex: 1 }]}
+                  onPress={() => marcarRealizada(item)}
+                  disabled={marcando === item.id}
+                >
+                  {marcando === item.id ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnEnviarTexto}>✓ Confirmar</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.btnRealizada, { backgroundColor: COLORS.success }]}
+              onPress={() => abrirCompletar(item)}
+            >
+              <Text style={styles.btnEnviarTexto}>✓ Marcar como realizada</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
       ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
@@ -201,6 +287,8 @@ export default function TareasScreen({ color = COLORS.primary }: Props) {
                 <Text style={styles.cardFooter}>
                   Realizada {t.completada_at ? format(new Date(t.completada_at), "d MMM, HH:mm", { locale: es }) : ''}
                 </Text>
+                {t.nota_completada && <Text style={styles.cardEvidenciaNota}>📝 {t.nota_completada}</Text>}
+                {t.foto_uri && <Image source={{ uri: urlFoto(t.foto_uri) }} style={styles.cardEvidenciaFoto} />}
               </View>
             ))}
           </View>
@@ -251,6 +339,23 @@ const styles = StyleSheet.create({
   pillTexto: { color: '#fff', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
 
   btnRealizada: { borderRadius: 10, padding: 10, alignItems: 'center', marginTop: 4 },
+
+  completarForm: { gap: 8, marginTop: 4 },
+  subLabel: { fontSize: 12, fontWeight: '700', color: COLORS.textLight, textTransform: 'uppercase' },
+  btnFoto: {
+    borderWidth: 1.5, borderColor: COLORS.border, borderStyle: 'dashed',
+    borderRadius: 10, padding: 12, alignItems: 'center', backgroundColor: COLORS.background,
+  },
+  btnFotoTexto: { fontSize: 13, fontWeight: '600', color: COLORS.textLight },
+  fotoPreview: { width: 90, height: 90, borderRadius: 10 },
+  completarBotones: { flexDirection: 'row', gap: 8 },
+  btnCancelar: {
+    borderRadius: 10, padding: 10, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 16, borderWidth: 1, borderColor: COLORS.border,
+  },
+  btnCancelarTexto: { color: COLORS.textLight, fontWeight: '700', fontSize: 13 },
+  cardEvidenciaNota: { fontSize: 12, color: COLORS.text, fontStyle: 'italic', marginTop: 2 },
+  cardEvidenciaFoto: { width: 100, height: 100, borderRadius: 8, marginTop: 4 },
 
   vacio: { alignItems: 'center', paddingTop: 40, gap: 10 },
   vacioEmoji: { fontSize: 40 },

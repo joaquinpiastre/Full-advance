@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, ScrollView,
+  View, Text, StyleSheet, FlatList, ScrollView, Image,
   ActivityIndicator, TouchableOpacity, RefreshControl, LayoutAnimation,
 } from 'react-native';
 import { obtenerAlertas, obtenerEliminacionesRuta, obtenerTareas, obtenerCalificaciones } from '../../services/api';
 import { Alerta, EliminacionRuta, Tarea, CalificacionVisita, CALIFICACION_LABEL, CALIFICACION_COLOR } from '../../types';
-import { COLORS } from '../../constants';
+import { COLORS, urlFoto } from '../../constants';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -47,6 +47,8 @@ function CardTarea({ item }: { item: Tarea }) {
             Realizada: {format(new Date(item.completada_at), "d MMM, HH:mm", { locale: es })}
           </Text>
         ) : null}
+        {item.nota_completada ? <Text style={styles.detallleNota}>📝 {item.nota_completada}</Text> : null}
+        {item.foto_uri ? <Image source={{ uri: urlFoto(item.foto_uri) }} style={styles.tareaFoto} /> : null}
       </View>
     </View>
   );
@@ -505,6 +507,7 @@ const styles = StyleSheet.create({
   cardBaja: { borderLeftColor: COLORS.danger, backgroundColor: '#FEF2F2' },
   cardTareaPendiente: { borderLeftColor: '#F59E0B', backgroundColor: '#FFFBEB' },
   cardTareaRealizada: { borderLeftColor: COLORS.success },
+  tareaFoto: { width: 100, height: 100, borderRadius: 8, marginTop: 6 },
 
   cardRow: {
     flexDirection: 'row',

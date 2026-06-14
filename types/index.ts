@@ -164,6 +164,8 @@ export interface Tarea {
   mensaje: string;
   completada: boolean;
   completada_at?: string;
+  nota_completada?: string;
+  foto_uri?: string;
   created_at: string;
   autor_nombre?: string;
   autor_rol?: Rol;

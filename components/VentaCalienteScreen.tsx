@@ -7,7 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import {
   obtenerVentaCalienteActiva, crearVentaCaliente, unirseVentaCaliente,
   obtenerVentaCaliente, iniciarVisitaVC, subirFoto, finalizarParada,
-  finalizarVentaCaliente, obtenerRutas,
+  finalizarVentaCaliente, obtenerRutas, obtenerEncuestasActivas,
 } from '../services/api';
 import { obtenerUbicacionRapida } from '../services/gps';
 import { useAuthStore } from '../store/authStore';
@@ -15,11 +15,11 @@ import MercaderiaVencidaForm from './MercaderiaVencidaForm';
 import AccionesList from './AccionesList';
 import { calcularFechaVencimiento } from '../utils/vencimiento';
 import { COLORS } from '../constants';
-import { Cliente } from '../types';
+import { Cliente, Encuesta } from '../types';
 
 const VC = COLORS.ventaCaliente;
 
-type Pantalla = 'cargando' | 'inicio' | 'creando' | 'uniendo' | 'sesion' | 'foto1' | 'foto2' | 'formulario';
+type Pantalla = 'cargando' | 'inicio' | 'creando' | 'uniendo' | 'sesion' | 'formulario';
 
 export default function VentaCalienteScreen() {
   const { usuario } = useAuthStore();
@@ -34,8 +34,7 @@ export default function VentaCalienteScreen() {
   // Flujo de visita
   const [clienteActual, setClienteActual] = useState<any>(null);
   const [paradaActual, setParadaActual] = useState<any>(null);
-  const [foto1, setFoto1] = useState<string | null>(null);
-  const [foto2, setFoto2] = useState<string | null>(null);
+  const [fotos, setFotos] = useState<(string | null)[]>([null, null, null, null, null]);
   // Formulario
   const [nota, setNota] = useState('');
   const [tieneVencidos, setTieneVencidos] = useState(false);
@@ -44,7 +43,13 @@ export default function VentaCalienteScreen() {
   const [notaVencido, setNotaVencido] = useState('');
   const [urgente, setUrgente] = useState(false);
   const [urgenciaDesc, setUrgenciaDesc] = useState('');
+  const [accionRequerida, setAccionRequerida] = useState(false);
+  const [accionDesc, setAccionDesc] = useState<string[]>(['']);
   const [oportunidades, setOportunidades] = useState<string[]>(['']);
+  const [respetaPvp, setRespetaPvp] = useState(true);
+  const [motivoNoPvp, setMotivoNoPvp] = useState<string[]>(['']);
+  const [encuestasActivas, setEncuestasActivas] = useState<Encuesta[]>([]);
+  const [respuestasEncuestas, setRespuestasEncuestas] = useState<Record<number, boolean>>({});
 
   const cargarSesion = useCallback(async (silent = false) => {
     try {
@@ -125,6 +130,7 @@ export default function VentaCalienteScreen() {
       setClienteActual(cliente);
       setParadaActual(visitaExistente);
       resetFormulario();
+      cargarEncuestas(cliente);
       setPantalla('formulario');
       return;
     }
@@ -136,12 +142,19 @@ export default function VentaCalienteScreen() {
       setParadaActual(res.data);
       setClienteActual(cliente);
       resetFormulario();
-      setFoto1(null); setFoto2(null);
-      setPantalla('foto1');
+      cargarEncuestas(cliente);
+      setPantalla('formulario');
     } catch (e: any) {
       Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo iniciar la visita');
     }
     setProcesando(false);
+  };
+
+  const cargarEncuestas = (cliente: any) => {
+    setEncuestasActivas([]);
+    obtenerEncuestasActivas(cliente?.departamento)
+      .then((res) => setEncuestasActivas(res.data ?? []))
+      .catch(() => setEncuestasActivas([]));
   };
 
   const resetFormulario = () => {
@@ -149,11 +162,15 @@ export default function VentaCalienteScreen() {
     setTieneVencidos(false); setMercaderiaVencida('');
     setFechaVencimiento(null); setNotaVencido('');
     setUrgente(false); setUrgenciaDesc('');
+    setAccionRequerida(false); setAccionDesc(['']);
     setOportunidades(['']);
+    setRespetaPvp(true); setMotivoNoPvp(['']);
+    setRespuestasEncuestas({});
+    setFotos([null, null, null, null, null]);
   };
 
   // ── Fotos ──
-  const tomarFoto = async (numero: 1 | 2) => {
+  const tomarFoto = async (index: number) => {
     try {
       const permiso = await ImagePicker.requestCameraPermissionsAsync();
       if (permiso.status !== 'granted') {
@@ -169,8 +186,11 @@ export default function VentaCalienteScreen() {
       const result = await ImagePicker.launchCameraAsync({ quality: 0.3, allowsEditing: false });
       if (result.canceled) return;
       const uri = result.assets[0].uri;
-      if (numero === 1) { setFoto1(uri); setPantalla('foto2'); }
-      else { setFoto2(uri); setPantalla('formulario'); }
+      setFotos((prev) => {
+        const next = [...prev];
+        next[index] = uri;
+        return next;
+      });
     } catch {
       Alert.alert('Error', 'No se pudo abrir la cámara. Verificá los permisos.');
     }
@@ -186,16 +206,12 @@ export default function VentaCalienteScreen() {
     enviandoRef.current = true;
     setProcesando(true);
     try {
-      if (foto1) {
+      for (let i = 0; i < fotos.length; i++) {
+        const uri = fotos[i];
+        if (!uri) continue;
         const f = new FormData();
-        f.append('foto', { uri: foto1, type: 'image/jpeg', name: 'foto1.jpg' } as any);
-        f.append('numero', '1');
-        await subirFoto(paradaActual.id, f);
-      }
-      if (foto2) {
-        const f = new FormData();
-        f.append('foto', { uri: foto2, type: 'image/jpeg', name: 'foto2.jpg' } as any);
-        f.append('numero', '2');
+        f.append('foto', { uri, type: 'image/jpeg', name: `foto${i + 1}.jpg` } as any);
+        f.append('numero', String(i + 1));
         await subirFoto(paradaActual.id, f);
       }
       await finalizarParada(paradaActual.id, {
@@ -206,7 +222,11 @@ export default function VentaCalienteScreen() {
         nota_vencido: tieneVencidos ? notaVencido.trim() || null : null,
         urgente,
         urgencia_descripcion: urgente ? urgenciaDesc.trim() || null : null,
+        accion_requerida: accionRequerida ? accionDesc.map((a) => a.trim()).filter(Boolean).join('\n') || null : null,
         oportunidades: oportunidades.map((o) => o.trim()).filter(Boolean).join('\n') || null,
+        respeta_pvp: respetaPvp,
+        motivo_no_pvp: !respetaPvp ? motivoNoPvp.map((m) => m.trim()).filter(Boolean).join('\n') || null : null,
+        encuesta_respuestas: encuestasActivas.map((e) => ({ encuesta_id: e.id, respuesta: !!respuestasEncuestas[e.id] })),
       });
       setClienteActual(null);
       setParadaActual(null);
@@ -443,7 +463,7 @@ export default function VentaCalienteScreen() {
     );
   }
 
-  // ── Flujo de visita (foto1 / foto2 / formulario) ──
+  // ── Flujo de visita (formulario) ──
   return (
     <View style={s.container}>
       {/* Header del cliente */}
@@ -467,58 +487,53 @@ export default function VentaCalienteScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Paso Foto 1 */}
-      {pantalla === 'foto1' && (
-        <View style={s.pasoContainer}>
-          <Text style={s.pasoTitulo}>📷 Foto 1 de 2</Text>
-          {foto1 ? (
-            <>
-              <Image source={{ uri: foto1 }} style={s.fotoPreview} />
-              <TouchableOpacity style={s.btnRetomar} onPress={() => tomarFoto(1)}>
-                <Text style={s.btnRetomarTexto}>🔄 Retomar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[s.btnPaso, { backgroundColor: VC }]} onPress={() => setPantalla('foto2')}>
-                <Text style={s.btnPasoTexto}>Siguiente →</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <TouchableOpacity style={[s.btnFoto, { backgroundColor: VC }]} onPress={() => tomarFoto(1)}>
-                <Text style={s.btnFotoIcono}>📷</Text>
-                <Text style={s.btnFotoTexto}>Tomar Foto 1</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.btnSaltear} onPress={() => setPantalla('formulario')}>
-                <Text style={s.btnSaltearTexto}>Saltear fotos e ir al formulario</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      )}
-
-      {/* Paso Foto 2 */}
-      {pantalla === 'foto2' && (
-        <View style={s.pasoContainer}>
-          <Text style={s.pasoTitulo}>📷 Foto 2 de 2</Text>
-          <View style={s.fotosRow}>
-            {foto1 && <Image source={{ uri: foto1 }} style={s.fotoMini} />}
-            <TouchableOpacity style={[s.btnFoto, { backgroundColor: VC, flex: 1 }]} onPress={() => tomarFoto(2)}>
-              <Text style={s.btnFotoIcono}>📷</Text>
-              <Text style={s.btnFotoTexto}>Tomar Foto 2</Text>
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity style={s.btnSaltear} onPress={() => setPantalla('formulario')}>
-            <Text style={s.btnSaltearTexto}>Saltear foto 2</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
       {/* Paso Formulario */}
       {pantalla === 'formulario' && (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={s.formularioContent} showsVerticalScrollIndicator={false}>
-          {(foto1 || foto2) && (
-            <View style={s.fotosRow}>
-              {foto1 && <Image source={{ uri: foto1 }} style={s.fotoMini} />}
-              {foto2 && <Image source={{ uri: foto2 }} style={s.fotoMini} />}
+          {/* Fotos */}
+          <Text style={s.pasoTitulo}>📷 Fotos (opcional)</Text>
+          <Text style={s.informeDesc}>
+            Tocá un casillero para sacar esa foto. Podés sacarlas en el orden que quieras, incluso al final.
+          </Text>
+          <View style={s.fotosGrid}>
+            {fotos.map((f, i) => (
+              <TouchableOpacity key={i} style={s.fotoSlot} onPress={() => tomarFoto(i)}>
+                {f ? (
+                  <Image source={{ uri: f }} style={s.fotoSlotImg} />
+                ) : (
+                  <Text style={s.fotoSlotIcono}>📷</Text>
+                )}
+                <View style={s.fotoSlotBadge}>
+                  <Text style={s.fotoSlotBadgeTexto}>{i + 1}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Respeta PVP */}
+          <TouchableOpacity
+            style={[s.toggleRow, !respetaPvp && s.toggleRowPvp]}
+            onPress={() => setRespetaPvp((v) => !v)}
+            activeOpacity={0.7}
+          >
+            <Text style={s.toggleEmoji}>🏷️</Text>
+            <Text style={[s.toggleLabel, !respetaPvp && { color: '#F59E0B', fontWeight: '700' }]}>
+              Respeta PVP
+            </Text>
+            <View style={[s.toggleBubble, respetaPvp ? s.toggleBubbleSi : s.toggleBubblePvp]}>
+              <Text style={s.toggleBubbleTexto}>{respetaPvp ? 'SÍ' : 'NO'}</Text>
+            </View>
+          </TouchableOpacity>
+          {!respetaPvp && (
+            <View style={[s.subForm, s.subFormPvp]}>
+              <AccionesList
+                acciones={motivoNoPvp}
+                onChange={setMotivoNoPvp}
+                label="¿Por qué no respeta el PVP?"
+                placeholder="Ej: vende más caro / más barato que el precio sugerido..."
+                agregarTexto="+ Agregar motivo"
+                color="#F59E0B"
+              />
             </View>
           )}
 
@@ -575,6 +590,26 @@ export default function VentaCalienteScreen() {
             </View>
           )}
 
+          {/* Acciones para administración/supervisor */}
+          <TouchableOpacity
+            style={[s.toggleRow, accionRequerida && s.toggleRowAccion]}
+            onPress={() => setAccionRequerida((v) => !v)}
+            activeOpacity={0.7}
+          >
+            <Text style={s.toggleEmoji}>📋</Text>
+            <Text style={[s.toggleLabel, accionRequerida && { color: COLORS.secondary, fontWeight: '700' }]}>
+              Acciones
+            </Text>
+            <View style={[s.toggleBubble, accionRequerida && s.toggleBubbleAccion]}>
+              <Text style={s.toggleBubbleTexto}>{accionRequerida ? 'SÍ' : 'NO'}</Text>
+            </View>
+          </TouchableOpacity>
+          {accionRequerida && (
+            <View style={[s.subForm, s.subFormAccion]}>
+              <AccionesList acciones={accionDesc} onChange={setAccionDesc} />
+            </View>
+          )}
+
           {/* Oportunidades */}
           <View style={s.informeBox}>
             <Text style={s.informeTitulo}>💡 Oportunidades</Text>
@@ -588,6 +623,27 @@ export default function VentaCalienteScreen() {
               color="#1D4ED8"
             />
           </View>
+
+          {/* Encuestas configurables por el admin */}
+          {encuestasActivas.map((e) => {
+            const valor = !!respuestasEncuestas[e.id];
+            return (
+              <TouchableOpacity
+                key={e.id}
+                style={[s.toggleRow, valor && s.toggleRowComerco]}
+                onPress={() => setRespuestasEncuestas((prev) => ({ ...prev, [e.id]: !prev[e.id] }))}
+                activeOpacity={0.7}
+              >
+                <Text style={s.toggleEmoji}>📊</Text>
+                <Text style={[s.toggleLabel, valor && { color: COLORS.success, fontWeight: '700' }]}>
+                  {e.pregunta}
+                </Text>
+                <View style={[s.toggleBubble, valor && s.toggleBubbleSi]}>
+                  <Text style={s.toggleBubbleTexto}>{valor ? 'SÍ' : 'NO'}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
 
           {/* Nota */}
           <View>
@@ -793,22 +849,7 @@ const s = StyleSheet.create({
   visitaCliente: { fontSize: 16, fontWeight: '800', color: '#fff' },
   visitaDir: { fontSize: 12, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
   visitaCerrar: { fontSize: 22, color: '#fff', fontWeight: '700', padding: 4 },
-  pasoContainer: { flex: 1, padding: 20, gap: 14 },
   pasoTitulo: { fontSize: 18, fontWeight: '800', color: VC },
-  fotoPreview: { width: '100%', height: 200, borderRadius: 10 },
-  fotosRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  fotoMini: { width: 90, height: 90, borderRadius: 8 },
-  btnFoto: {
-    borderRadius: 12, padding: 20, alignItems: 'center', gap: 6,
-  },
-  btnFotoIcono: { fontSize: 36 },
-  btnFotoTexto: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  btnRetomar: { alignItems: 'center', paddingVertical: 6 },
-  btnRetomarTexto: { color: COLORS.textLight, fontSize: 13 },
-  btnSaltear: { alignItems: 'center', paddingVertical: 10 },
-  btnSaltearTexto: { color: COLORS.textLight, fontSize: 13, textDecorationLine: 'underline' },
-  btnPaso: { borderRadius: 12, padding: 14, alignItems: 'center' },
-  btnPasoTexto: { color: '#fff', fontWeight: '700', fontSize: 15 },
   formularioContent: { padding: 16, gap: 12 },
 
   // Formulario toggles
@@ -820,17 +861,40 @@ const s = StyleSheet.create({
   },
   toggleRowVenc: { borderColor: '#F59E0B', backgroundColor: '#FFFBEB' },
   toggleRowUrgente: { borderColor: COLORS.danger, backgroundColor: '#FEF2F2' },
+  toggleRowPvp: { borderColor: '#F59E0B', backgroundColor: '#FFFBEB' },
+  toggleRowAccion: { borderColor: COLORS.secondary, backgroundColor: '#EFF6FF' },
+  toggleRowComerco: { borderColor: COLORS.success, backgroundColor: '#F0FDF4' },
   toggleEmoji: { fontSize: 22 },
   toggleLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: COLORS.text },
   toggleBubble: {
     backgroundColor: COLORS.border, borderRadius: 12,
     paddingHorizontal: 10, paddingVertical: 4,
   },
+  toggleBubbleSi: { backgroundColor: COLORS.success },
+  toggleBubblePvp: { backgroundColor: '#F59E0B' },
+  toggleBubbleAccion: { backgroundColor: COLORS.secondary },
   toggleBubbleTexto: { fontSize: 11, fontWeight: '800', color: '#fff' },
   subForm: {
     backgroundColor: COLORS.background, borderRadius: 10,
     padding: 12, gap: 6, borderWidth: 1, borderColor: '#F59E0B',
   },
+  subFormPvp: { borderColor: '#F59E0B' },
+  subFormAccion: { borderColor: COLORS.secondary },
+  fotosGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  fotoSlot: {
+    width: 70, height: 70, borderRadius: 10,
+    backgroundColor: COLORS.background,
+    borderWidth: 1.5, borderColor: COLORS.border, borderStyle: 'dashed',
+    justifyContent: 'center', alignItems: 'center', overflow: 'hidden',
+  },
+  fotoSlotImg: { width: '100%', height: '100%' },
+  fotoSlotIcono: { fontSize: 24 },
+  fotoSlotBadge: {
+    position: 'absolute', top: 2, left: 2,
+    backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 8,
+    width: 16, height: 16, justifyContent: 'center', alignItems: 'center',
+  },
+  fotoSlotBadgeTexto: { color: '#fff', fontSize: 10, fontWeight: '700' },
   subLabel: { fontSize: 11, fontWeight: '700', color: COLORS.textLight, textTransform: 'uppercase' },
   input: {
     borderWidth: 1, borderColor: COLORS.border, borderRadius: 10,

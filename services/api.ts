@@ -82,6 +82,7 @@ export const finalizarParada = (parada_id: number, data?: {
   accion_requerida?: string | null;
   respeta_pvp?: boolean | null;
   motivo_no_pvp?: string | null;
+  encuesta_respuestas?: { encuesta_id: number; respuesta: boolean }[];
 }) => api.post(`/paradas/${parada_id}/finalizar`, data ?? {});
 
 export const obtenerParadas = (jornada_id: number) =>

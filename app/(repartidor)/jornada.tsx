@@ -32,6 +32,8 @@ export default function JornadaRepartidor() {
   const [estadoFotos, setEstadoFotos] = useState<EstadoFotos>('esperando');
   const [fotos, setFotos] = useState<(string | null)[]>([null, null, null, null, null]);
   const [nota, setNota] = useState('');
+  const [incidente, setIncidente] = useState(false);
+  const [incidenteDesc, setIncidenteDesc] = useState('');
   const [accionRequerida, setAccionRequerida] = useState(false);
   const [accionDesc, setAccionDesc] = useState<string[]>(['']);
   const [oportunidades, setOportunidades] = useState<string[]>(['']);
@@ -101,6 +103,8 @@ export default function JornadaRepartidor() {
       setEstadoFotos('visita');
       setFotos([null, null, null, null, null]);
       setNota('');
+      setIncidente(false);
+      setIncidenteDesc('');
       setAccionRequerida(false);
       setAccionDesc(['']);
       setOportunidades(['']);
@@ -160,6 +164,8 @@ export default function JornadaRepartidor() {
         fotos: fotosPendientes,
         finalizar: {
           nota: nota.trim() || undefined,
+          urgente: incidente,
+          urgencia_descripcion: incidente ? incidenteDesc.trim() || null : null,
           accion_requerida: accionRequerida ? accionDesc.map((a) => a.trim()).filter(Boolean).join('\n') || null : null,
           oportunidades: oportunidades.map((o) => o.trim()).filter(Boolean).join('\n') || null,
         },
@@ -169,6 +175,8 @@ export default function JornadaRepartidor() {
       setParadaActual(null);
       setFotos([null, null, null, null, null]);
       setNota('');
+      setIncidente(false);
+      setIncidenteDesc('');
       setAccionRequerida(false);
       setAccionDesc(['']);
       setOportunidades(['']);
@@ -285,6 +293,35 @@ export default function JornadaRepartidor() {
                 value={nota}
                 onChangeText={setNota}
               />
+
+              {/* Toggle: Incidente */}
+              <TouchableOpacity
+                style={[styles.toggleRow, incidente && styles.toggleRowIncidente]}
+                onPress={() => setIncidente((v) => !v)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.toggleEmoji}>⚠️</Text>
+                <Text style={[styles.toggleLabel, incidente && { color: COLORS.danger, fontWeight: '700' }]}>
+                  Incidente
+                </Text>
+                <View style={[styles.toggleBubble, incidente && styles.toggleBubbleIncidente]}>
+                  <Text style={styles.toggleBubbleTexto}>{incidente ? 'SÍ' : 'NO'}</Text>
+                </View>
+              </TouchableOpacity>
+
+              {incidente && (
+                <View style={styles.subFormIncidente}>
+                  <Text style={styles.subLabel}>¿Qué pasó?</Text>
+                  <TextInput
+                    style={[styles.notaInput, { minHeight: 70 }]}
+                    placeholder="Describí el incidente..."
+                    placeholderTextColor={COLORS.textLight}
+                    multiline
+                    value={incidenteDesc}
+                    onChangeText={setIncidenteDesc}
+                  />
+                </View>
+              )}
 
               {/* Toggle: Acciones para administración/supervisor */}
               <TouchableOpacity
@@ -533,6 +570,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   toggleRowAccion: { borderColor: COLORS.secondary, backgroundColor: '#EFF6FF' },
+  toggleRowIncidente: { borderColor: COLORS.danger, backgroundColor: '#FEF2F2' },
   toggleEmoji: { fontSize: 22 },
   toggleLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: COLORS.text },
   toggleBubble: {
@@ -542,6 +580,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   toggleBubbleAccion: { backgroundColor: COLORS.secondary },
+  toggleBubbleIncidente: { backgroundColor: COLORS.danger },
   toggleBubbleTexto: { fontSize: 11, fontWeight: '800', color: '#fff' },
   subLabel: { fontSize: 12, fontWeight: '700', color: COLORS.textLight, textTransform: 'uppercase' },
   subFormAccion: {
@@ -551,6 +590,14 @@ const styles = StyleSheet.create({
     gap: 6,
     borderWidth: 1,
     borderColor: COLORS.secondary,
+  },
+  subFormIncidente: {
+    backgroundColor: COLORS.background,
+    borderRadius: 10,
+    padding: 12,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: COLORS.danger,
   },
   btnConfirmar: {
     backgroundColor: COLORS.success,

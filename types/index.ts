@@ -40,6 +40,7 @@ export interface Cliente {
   tipo_comercio?: string;
   marcas?: string[];
   ruta_id?: number;
+  ruta_nombre?: string;
   activo?: boolean;
   foto_referencia_uri?: string;
 }

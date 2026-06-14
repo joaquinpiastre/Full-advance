@@ -25,7 +25,9 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
   else if (estado === 'todos') where = '1=1';
   try {
     const { rows } = await pool.query(
-      `SELECT c.*, (SELECT rc.ruta_id FROM ruta_clientes rc WHERE rc.cliente_id=c.id LIMIT 1) as ruta_id
+      `SELECT c.*,
+        (SELECT rc.ruta_id FROM ruta_clientes rc WHERE rc.cliente_id=c.id LIMIT 1) as ruta_id,
+        (SELECT r.nombre FROM ruta_clientes rc JOIN rutas r ON r.id=rc.ruta_id WHERE rc.cliente_id=c.id LIMIT 1) as ruta_nombre
        FROM clientes c WHERE ${where} ORDER BY c.nombre`
     );
     res.json(rows);

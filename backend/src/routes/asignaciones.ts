@@ -88,6 +88,7 @@ async function fetchAsignacionCompleta(asig: any) {
           forma_pago: x.forma_pago, dia_visita_preferido: x.dia_visita_preferido,
           cartilla_actualizada_at: x.cartilla_actualizada_at,
           zona: x.zona, departamento: x.departamento,
+          ruta_id: asig.ruta_id, ruta_nombre: asig.ruta_nombre,
         },
       })),
     },

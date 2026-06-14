@@ -190,6 +190,9 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
           <View style={{ flex: 1 }}>
             <Text style={styles.headerTitulo}>{cliente.nombre}</Text>
             <Text style={styles.headerDireccion}>{cliente.direccion}</Text>
+            <Text style={styles.headerRuta}>
+              🛣️ {cliente.ruta_nombre ?? 'Sin ruta asignada'}
+            </Text>
           </View>
           {cliente.categoria && (
             <View style={[styles.badge, { backgroundColor: COLOR_CATEGORIA[cliente.categoria] }]}>
@@ -448,6 +451,7 @@ const styles = StyleSheet.create({
   },
   headerTitulo: { fontSize: 18, fontWeight: '800', color: '#fff' },
   headerDireccion: { fontSize: 13, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
+  headerRuta: { fontSize: 12, color: 'rgba(255,255,255,0.85)', marginTop: 4, fontWeight: '600' },
   badge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
   badgeTexto: { color: '#fff', fontWeight: '800', fontSize: 14 },
   btnCerrar: { marginLeft: 4, padding: 4 },

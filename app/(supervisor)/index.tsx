@@ -1,120 +1,72 @@
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, ActivityIndicator } from 'react-native';
-import { router } from 'expo-router';
+import { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
-import { useJornadaStore } from '../../store/jornadaStore';
-import { iniciarJornada, finalizarJornada, obtenerJornadaActiva, obtenerAsignacionHoy } from '../../services/api';
-import { iniciarGps, detenerGps } from '../../services/gps';
+import { obtenerJornadasActivas, obtenerAlertas } from '../../services/api';
 import { COLORS } from '../../constants';
+import { JornadaActiva, Alerta } from '../../types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 export default function InicioSupervisor() {
   const { usuario, logout } = useAuthStore();
-  const { jornada, setJornada } = useJornadaStore();
   const [cargando, setCargando] = useState(true);
-  const [asignacion, setAsignacion] = useState<any>(null);
+  const [equipo, setEquipo] = useState<JornadaActiva[]>([]);
+  const [alertas, setAlertas] = useState<Alerta[]>([]);
 
-  useEffect(() => {
-    cargarEstado();
-  }, []);
-
-  const cargarEstado = async () => {
+  const cargar = useCallback(async () => {
     setCargando(true);
     try {
-      const [jornadaRes, asigRes] = await Promise.allSettled([
-        obtenerJornadaActiva(),
-        obtenerAsignacionHoy(),
+      const [equipoRes, alertasRes] = await Promise.allSettled([
+        obtenerJornadasActivas(),
+        obtenerAlertas(),
       ]);
-      if (jornadaRes.status === 'fulfilled') setJornada(jornadaRes.value.data);
-      if (asigRes.status === 'fulfilled') setAsignacion(asigRes.value.data);
+      if (equipoRes.status === 'fulfilled') setEquipo(equipoRes.value.data);
+      if (alertasRes.status === 'fulfilled') setAlertas(alertasRes.value.data);
     } catch {}
     setCargando(false);
-  };
+  }, []);
 
-  const handleIniciar = async () => {
-    Alert.alert('Iniciar jornada', '¿Empezar el seguimiento GPS?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Iniciar', onPress: async () => {
-          try {
-            const res = await iniciarJornada();
-            setJornada(res.data);
-            await iniciarGps(res.data.id);
-            router.push('/(supervisor)/ruta');
-          } catch (e: any) {
-            Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo iniciar');
-          }
-        }
-      }
-    ]);
-  };
-
-  const handleFinalizar = async () => {
-    if (!jornada) return;
-    Alert.alert('Finalizar jornada', '¿Terminaste el recorrido del día?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Finalizar', style: 'destructive', onPress: async () => {
-          try {
-            await finalizarJornada(jornada.id);
-            await detenerGps();
-            setJornada(null);
-          } catch (e: any) {
-            Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo finalizar');
-          }
-        }
-      }
-    ]);
-  };
+  useFocusEffect(useCallback(() => { cargar(); }, [cargar]));
 
   if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.supervisor} size="large" /></View>;
 
   const hoy = format(new Date(), "EEEE d 'de' MMMM", { locale: es });
+  const repartidores = equipo.filter((e) => e.usuario_rol === 'repartidor');
+  const preventistas = equipo.filter((e) => e.usuario_rol === 'preventista');
+  const urgentes = alertas.filter((a) => a.urgente).length;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.bienvenida}>Hola, {usuario?.nombre} 👋</Text>
       <Text style={styles.fecha}>{hoy}</Text>
 
-      {asignacion ? (
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Ruta asignada hoy</Text>
-          <Text style={styles.cardTitulo}>{asignacion.ruta?.nombre}</Text>
-          <Text style={styles.cardDesc}>
-            {asignacion.ruta?.clientes?.length ?? 0} clientes en la ruta
-          </Text>
-        </View>
-      ) : (
-        <View style={[styles.card, styles.cardWarning]}>
-          <Text style={styles.cardLabel}>Sin asignación hoy</Text>
-          <Text style={styles.cardDesc}>El admin aún no asignó una ruta para hoy.</Text>
-        </View>
-      )}
+      <TouchableOpacity style={styles.card} onPress={() => router.push('/(supervisor)/ruta')}>
+        <Text style={styles.cardLabel}>Equipo en ruta ahora</Text>
+        <Text style={styles.cardTitulo}>{equipo.length} jornada{equipo.length === 1 ? '' : 's'} activa{equipo.length === 1 ? '' : 's'}</Text>
+        <Text style={styles.cardDesc}>
+          🚚 {repartidores.length} repartidor{repartidores.length === 1 ? '' : 'es'} · 👔 {preventistas.length} preventista{preventistas.length === 1 ? '' : 's'}
+        </Text>
+        <Text style={styles.cardLink}>Ver seguimiento en vivo →</Text>
+      </TouchableOpacity>
 
-      {jornada ? (
-        <>
-          <View style={[styles.card, styles.cardSuccess]}>
-            <Text style={styles.cardLabel}>Jornada en curso</Text>
-            <Text style={styles.cardTitulo}>
-              Iniciada: {format(new Date(jornada.fecha_inicio), 'HH:mm')}
-            </Text>
-            <Text style={styles.cardDesc}>GPS activo</Text>
-          </View>
+      <TouchableOpacity
+        style={[styles.card, urgentes > 0 && styles.cardWarning]}
+        onPress={() => router.push('/(supervisor)/alertas')}
+      >
+        <Text style={styles.cardLabel}>Alertas y novedades</Text>
+        <Text style={styles.cardTitulo}>
+          {urgentes > 0 ? `🚨 ${urgentes} urgente${urgentes === 1 ? '' : 's'}` : 'Sin urgencias'}
+        </Text>
+        <Text style={styles.cardDesc}>{alertas.length} novedades en los últimos 7 días</Text>
+        <Text style={styles.cardLink}>Ver alertas →</Text>
+      </TouchableOpacity>
 
-          <TouchableOpacity style={styles.btnPrimario} onPress={() => router.push('/(supervisor)/ruta')}>
-            <Text style={styles.btnTexto}>Ver mi ruta</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.btnDanger} onPress={handleFinalizar}>
-            <Text style={styles.btnTexto}>Finalizar jornada</Text>
-          </TouchableOpacity>
-        </>
-      ) : (
-        <TouchableOpacity style={styles.btnPrimario} onPress={handleIniciar}>
-          <Text style={styles.btnTexto}>Iniciar jornada</Text>
-        </TouchableOpacity>
-      )}
+      <TouchableOpacity style={styles.card} onPress={() => router.push('/(supervisor)/noticias')}>
+        <Text style={styles.cardLabel}>Comunicación al equipo</Text>
+        <Text style={styles.cardTitulo}>Noticias y anuncios</Text>
+        <Text style={styles.cardLink}>Publicar o ver noticias →</Text>
+      </TouchableOpacity>
 
       <TouchableOpacity style={styles.btnLogout} onPress={() => { logout(); router.replace('/(auth)/login'); }}>
         <Text style={styles.btnLogoutTexto}>Cerrar sesión</Text>
@@ -139,25 +91,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 6,
     elevation: 2,
+    gap: 4,
   },
-  cardWarning: { borderLeftColor: COLORS.warning },
-  cardSuccess: { borderLeftColor: COLORS.success },
-  cardLabel: { fontSize: 12, color: COLORS.textLight, fontWeight: '600', marginBottom: 4 },
+  cardWarning: { borderLeftColor: COLORS.danger },
+  cardLabel: { fontSize: 12, color: COLORS.textLight, fontWeight: '600' },
   cardTitulo: { fontSize: 17, fontWeight: '700', color: COLORS.text },
-  cardDesc: { fontSize: 13, color: COLORS.textLight, marginTop: 4 },
-  btnPrimario: {
-    backgroundColor: COLORS.supervisor,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-  },
-  btnDanger: {
-    backgroundColor: COLORS.danger,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-  },
+  cardDesc: { fontSize: 13, color: COLORS.textLight, marginTop: 2 },
+  cardLink: { fontSize: 13, fontWeight: '700', color: COLORS.supervisor, marginTop: 6 },
   btnLogout: { alignItems: 'center', padding: 12, marginTop: 8 },
   btnLogoutTexto: { color: COLORS.textLight, fontSize: 14 },
-  btnTexto: { color: '#fff', fontWeight: '700', fontSize: 16 },
 });

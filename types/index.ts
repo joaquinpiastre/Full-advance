@@ -162,3 +162,17 @@ export interface UbicacionLive {
   timestamp: string;
   activo: boolean;
 }
+
+export interface JornadaActiva {
+  jornada_id: number;
+  fecha_inicio: string;
+  usuario_id: number;
+  usuario_nombre: string;
+  usuario_rol: Rol;
+  paradas_completadas: number;
+  lat?: number;
+  lng?: number;
+  gps_timestamp?: string;
+  gps_activo: boolean;
+  ruta: { id: number; nombre: string; total: number } | null;
+}

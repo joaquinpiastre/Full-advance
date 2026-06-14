@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { pool } from '../db/client';
-import { authMiddleware, soloAdmin, AuthRequest } from '../middleware/auth';
+import { authMiddleware, soloAdmin, adminOSupervisor, AuthRequest } from '../middleware/auth';
+import { obtenerRutaIdHoy } from './asignaciones';
 
 const router = Router();
 
@@ -46,6 +47,42 @@ router.get('/activa', authMiddleware, async (req: AuthRequest, res: Response) =>
     res.json(rows[0] ?? null);
   } catch {
     res.status(500).json({ error: 'Error' });
+  }
+});
+
+// Jornadas en curso de repartidores y preventistas, con progreso de ruta y
+// última posición GPS. Para el panel de seguimiento en vivo del supervisor.
+router.get('/activas', authMiddleware, adminOSupervisor, async (_req: AuthRequest, res: Response) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT j.id as jornada_id, j.fecha_inicio,
+             u.id as usuario_id, u.nombre as usuario_nombre, u.rol as usuario_rol,
+             COUNT(p.id) FILTER (WHERE p.completada)::int as paradas_completadas,
+             gl.lat, gl.lng, gl.timestamp as gps_timestamp,
+             (gl.timestamp > NOW() - INTERVAL '5 minutes') as gps_activo
+      FROM jornadas j
+      JOIN usuarios u ON u.id = j.usuario_id
+      LEFT JOIN paradas p ON p.jornada_id = j.id
+      LEFT JOIN gps_live gl ON gl.usuario_id = j.usuario_id
+      WHERE j.activa = true AND u.rol IN ('repartidor', 'preventista')
+      GROUP BY j.id, j.fecha_inicio, u.id, u.nombre, u.rol, gl.lat, gl.lng, gl.timestamp
+      ORDER BY u.nombre
+    `);
+    const result = await Promise.all(rows.map(async (r) => {
+      const ruta_id = await obtenerRutaIdHoy(r.usuario_id);
+      let ruta = null;
+      if (ruta_id) {
+        const rutaRes = await pool.query(
+          `SELECT id, nombre, (SELECT COUNT(*) FROM ruta_clientes WHERE ruta_id=$1)::int as total FROM rutas WHERE id=$1`,
+          [ruta_id]
+        );
+        ruta = rutaRes.rows[0] ?? null;
+      }
+      return { ...r, ruta };
+    }));
+    res.json(result);
+  } catch {
+    res.status(500).json({ error: 'Error al obtener jornadas activas' });
   }
 });
 

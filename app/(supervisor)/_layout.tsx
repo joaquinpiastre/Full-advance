@@ -24,9 +24,9 @@ export default function SupervisorLayout() {
       <Tabs.Screen
         name="ruta"
         options={{
-          title: 'Mi Ruta',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🗺️</Text>,
-          headerTitle: 'Ruta del Día',
+          title: 'Equipo',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📡</Text>,
+          headerTitle: 'Seguimiento en vivo',
         }}
       />
       <Tabs.Screen

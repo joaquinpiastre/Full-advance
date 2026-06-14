@@ -45,6 +45,11 @@ export const finalizarJornada = (jornada_id: number) =>
 export const obtenerJornadaActiva = () =>
   api.get('/jornadas/activa');
 
+// Jornadas activas del equipo (repartidores/preventistas), para el panel
+// de seguimiento en vivo del supervisor
+export const obtenerJornadasActivas = () =>
+  api.get('/jornadas/activas');
+
 // Paradas
 export const registrarParada = (data: {
   jornada_id: number;

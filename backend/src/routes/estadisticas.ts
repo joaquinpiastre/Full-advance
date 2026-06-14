@@ -8,7 +8,7 @@ const router = Router();
 // por categoría. Solo el admin necesita esta vista global.
 router.get('/clientes', authMiddleware, soloAdmin, async (_req: AuthRequest, res: Response) => {
   try {
-    const [resumenRes, topRes, porDiaRes, porCategoriaRes, comercoRes] = await Promise.all([
+    const [resumenRes, topRes, porDiaRes, porCategoriaRes] = await Promise.all([
       pool.query(`
         SELECT
           (SELECT COUNT(*) FROM paradas
@@ -43,23 +43,9 @@ router.get('/clientes', authMiddleware, soloAdmin, async (_req: AuthRequest, res
         GROUP BY c.categoria
         ORDER BY c.categoria NULLS LAST
       `),
-      // Última respuesta (por cliente) a "¿le compra a COMERCO?"
-      pool.query(`
-        SELECT compra_comerco, COUNT(*)::int AS total
-        FROM (
-          SELECT DISTINCT ON (cliente_id) cliente_id, compra_comerco
-          FROM paradas
-          WHERE completada = true AND cliente_id IS NOT NULL AND compra_comerco IS NOT NULL
-          ORDER BY cliente_id, timestamp_llegada DESC
-        ) ultimas
-        GROUP BY compra_comerco
-      `),
     ]);
 
     const totalVisitas30d = resumenRes.rows[0].total_visitas_30d;
-
-    const comercoSi = comercoRes.rows.find((r) => r.compra_comerco === true)?.total ?? 0;
-    const comercoNo = comercoRes.rows.find((r) => r.compra_comerco === false)?.total ?? 0;
 
     res.json({
       resumen: {
@@ -71,14 +57,56 @@ router.get('/clientes', authMiddleware, soloAdmin, async (_req: AuthRequest, res
       topClientes: topRes.rows,
       visitasPorDia: porDiaRes.rows,
       visitasPorCategoria: porCategoriaRes.rows,
-      comerco: {
-        si: comercoSi,
-        no: comercoNo,
-        sinDato: Math.max(0, resumenRes.rows[0].total_clientes - comercoSi - comercoNo),
-      },
     });
   } catch {
     res.status(500).json({ error: 'Error al obtener estadísticas' });
+  }
+});
+
+// Resultados de cada encuesta configurada: última respuesta por cliente
+// (sí/no/sin dato), acotado al universo de clientes de las zonas a las
+// que aplica la encuesta (o todos los clientes activos si no tiene zonas).
+router.get('/encuestas', authMiddleware, soloAdmin, async (_req: AuthRequest, res: Response) => {
+  try {
+    const { rows: encuestas } = await pool.query('SELECT * FROM encuestas ORDER BY created_at DESC');
+
+    const resultados = await Promise.all(encuestas.map(async (encuesta) => {
+      const tieneZonas = Array.isArray(encuesta.zonas) && encuesta.zonas.length > 0;
+
+      const [respuestasRes, totalRes] = await Promise.all([
+        pool.query(`
+          SELECT respuesta, COUNT(*)::int AS total
+          FROM (
+            SELECT DISTINCT ON (cliente_id) cliente_id, respuesta
+            FROM encuesta_respuestas
+            WHERE encuesta_id = $1 AND cliente_id IS NOT NULL
+            ORDER BY cliente_id, created_at DESC
+          ) ultimas
+          GROUP BY respuesta
+        `, [encuesta.id]),
+        tieneZonas
+          ? pool.query('SELECT COUNT(*)::int AS total FROM clientes WHERE activo=true AND departamento = ANY($1)', [encuesta.zonas])
+          : pool.query('SELECT COUNT(*)::int AS total FROM clientes WHERE activo=true'),
+      ]);
+
+      const si = respuestasRes.rows.find((r) => r.respuesta === true)?.total ?? 0;
+      const no = respuestasRes.rows.find((r) => r.respuesta === false)?.total ?? 0;
+      const total = totalRes.rows[0].total;
+
+      return {
+        id: encuesta.id,
+        pregunta: encuesta.pregunta,
+        activa: encuesta.activa,
+        zonas: encuesta.zonas,
+        si,
+        no,
+        sinDato: Math.max(0, total - si - no),
+      };
+    }));
+
+    res.json(resultados);
+  } catch {
+    res.status(500).json({ error: 'Error al obtener estadísticas de encuestas' });
   }
 });
 

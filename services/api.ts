@@ -251,6 +251,25 @@ export const obtenerVentasCalientesAdmin = (usuario_id?: number) =>
 export const obtenerEstadisticasClientes = () =>
   api.get('/estadisticas/clientes');
 
+export const obtenerEstadisticasEncuestas = () =>
+  api.get('/estadisticas/encuestas');
+
+// Encuestas configurables (admin) y respuestas (preventista/supervisor)
+export const obtenerEncuestas = () =>
+  api.get('/encuestas');
+
+export const obtenerEncuestasActivas = (departamento?: string) =>
+  api.get('/encuestas/activas', { params: departamento ? { departamento } : undefined });
+
+export const crearEncuesta = (data: { pregunta: string; zonas: string[] }) =>
+  api.post('/encuestas', data);
+
+export const actualizarEncuesta = (id: number, data: Partial<{ pregunta: string; zonas: string[]; activa: boolean }>) =>
+  api.put(`/encuestas/${id}`, data);
+
+export const eliminarEncuesta = (id: number) =>
+  api.delete(`/encuestas/${id}`);
+
 // Historial
 export const obtenerHistorialJornadas = (usuario_id?: number) =>
   api.get('/jornadas/historial', { params: { usuario_id } });

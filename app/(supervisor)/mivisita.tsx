@@ -10,6 +10,7 @@ import { useJornadaStore } from '../../store/jornadaStore';
 import {
   obtenerAsignacionHoy, obtenerParadas, obtenerJornadaActiva,
   registrarParada, actualizarOrdenRuta, obtenerEquipoRuta, crearCalificacion,
+  obtenerEncuestasActivas,
 } from '../../services/api';
 import { obtenerUbicacionRapida, detenerGps } from '../../services/gps';
 import {
@@ -22,7 +23,7 @@ import { calcularFechaVencimiento } from '../../utils/vencimiento';
 import FotoReferenciaCliente from '../../components/FotoReferenciaCliente';
 import AccionesList from '../../components/AccionesList';
 import { COLORS } from '../../constants';
-import { Cliente, Calificacion, CALIFICACION_LABEL, CALIFICACION_COLOR } from '../../types';
+import { Cliente, Calificacion, CALIFICACION_LABEL, CALIFICACION_COLOR, Encuesta } from '../../types';
 
 type EstadoVisita = 'esperando' | 'formulario';
 type EquipoRuta = { id: number; nombre: string; rol: string };
@@ -58,6 +59,8 @@ export default function MiVisitaSupervisor() {
   const [oportunidades, setOportunidades] = useState<string[]>(['']);
   const [respetaPvp, setRespetaPvp] = useState(true);
   const [motivoNoPvp, setMotivoNoPvp] = useState<string[]>(['']);
+  const [encuestasActivas, setEncuestasActivas] = useState<Encuesta[]>([]);
+  const [respuestasEncuestas, setRespuestasEncuestas] = useState<Record<number, boolean>>({});
   const [pendientes, setPendientes] = useState<VisitaPendiente[]>([]);
   const enviandoRef = useRef(false);
 
@@ -135,6 +138,11 @@ export default function MiVisitaSupervisor() {
       setEvaluadoId(equipoRuta.length === 1 ? equipoRuta[0].id : null);
       setCalificacion(null);
       setComentarioCalificacion('');
+      setRespuestasEncuestas({});
+      setEncuestasActivas([]);
+      obtenerEncuestasActivas(cliente.departamento)
+        .then((res) => setEncuestasActivas(res.data ?? []))
+        .catch(() => setEncuestasActivas([]));
       setEstadoVisita('formulario');
     } catch (e: any) {
       Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo registrar la visita');
@@ -212,6 +220,7 @@ export default function MiVisitaSupervisor() {
           oportunidades: oportunidades.map((o) => o.trim()).filter(Boolean).join('\n') || null,
           respeta_pvp: respetaPvp,
           motivo_no_pvp: !respetaPvp ? motivoNoPvp.map((m) => m.trim()).filter(Boolean).join('\n') || null : null,
+          encuesta_respuestas: encuestasActivas.map((e) => ({ encuesta_id: e.id, respuesta: !!respuestasEncuestas[e.id] })),
         },
       });
 
@@ -436,6 +445,27 @@ export default function MiVisitaSupervisor() {
                   color="#1D4ED8"
                 />
               </View>
+
+              {/* Encuestas configurables por el admin */}
+              {encuestasActivas.map((e) => {
+                const valor = !!respuestasEncuestas[e.id];
+                return (
+                  <TouchableOpacity
+                    key={e.id}
+                    style={[styles.toggleRow, valor && styles.toggleRowComerco]}
+                    onPress={() => setRespuestasEncuestas((prev) => ({ ...prev, [e.id]: !prev[e.id] }))}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.toggleEmoji}>📊</Text>
+                    <Text style={[styles.toggleLabel, valor && { color: COLORS.success, fontWeight: '700' }]}>
+                      {e.pregunta}
+                    </Text>
+                    <View style={[styles.toggleBubble, valor && styles.toggleBubbleSi]}>
+                      <Text style={styles.toggleBubbleTexto}>{valor ? 'SÍ' : 'NO'}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
 
               {/* Nota */}
               <View style={styles.formGroup}>
@@ -700,6 +730,7 @@ const styles = StyleSheet.create({
   toggleBubbleTexto: { fontSize: 11, fontWeight: '800', color: '#fff' },
   toggleRowAccion: { borderColor: COLORS.secondary, backgroundColor: '#EFF6FF' },
   toggleRowPvp: { borderColor: '#F59E0B', backgroundColor: '#FFFBEB' },
+  toggleRowComerco: { borderColor: COLORS.success, backgroundColor: '#F0FDF4' },
 
   subForm: {
     backgroundColor: COLORS.background,

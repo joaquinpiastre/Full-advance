@@ -99,6 +99,27 @@ CREATE TABLE IF NOT EXISTS tareas (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Encuestas configurables por el admin: pregunta sí/no, opcionalmente
+-- limitada a ciertas zonas (clientes.departamento). El preventista o
+-- supervisor las responde al finalizar una visita.
+CREATE TABLE IF NOT EXISTS encuestas (
+  id SERIAL PRIMARY KEY,
+  pregunta TEXT NOT NULL,
+  activa BOOLEAN DEFAULT true,
+  zonas TEXT[],
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS encuesta_respuestas (
+  id SERIAL PRIMARY KEY,
+  encuesta_id INTEGER NOT NULL REFERENCES encuestas(id) ON DELETE CASCADE,
+  parada_id INTEGER NOT NULL REFERENCES paradas(id) ON DELETE CASCADE,
+  cliente_id INTEGER REFERENCES clientes(id),
+  respuesta BOOLEAN NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(encuesta_id, parada_id)
+);
+
 CREATE TABLE IF NOT EXISTS rutas (
   id SERIAL PRIMARY KEY,
   nombre VARCHAR(150) NOT NULL,

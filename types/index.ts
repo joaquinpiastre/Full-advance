@@ -122,6 +122,20 @@ export interface Parada {
   motivo_no_pvp?: string;
 }
 
+export interface Encuesta {
+  id: number;
+  pregunta: string;
+  activa: boolean;
+  zonas: string[] | null;
+  created_at: string;
+}
+
+export interface EncuestaStats extends Encuesta {
+  si: number;
+  no: number;
+  sinDato: number;
+}
+
 export interface Alerta {
   id: number;
   urgente: boolean;

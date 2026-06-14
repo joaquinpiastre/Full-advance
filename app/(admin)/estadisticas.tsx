@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
-import { obtenerEstadisticasClientes } from '../../services/api';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { obtenerEstadisticasClientes, obtenerEstadisticasEncuestas } from '../../services/api';
 import { COLORS, COLOR_CATEGORIA } from '../../constants';
-import { CategoriaCliente } from '../../types';
+import { CategoriaCliente, EncuestaStats } from '../../types';
 import { format, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
+import EncuestasModal from '../../components/EncuestasModal';
 
 interface Resumen {
   totalVisitas30d: number;
@@ -22,7 +23,6 @@ interface TopCliente {
 }
 interface VisitaPorDia { fecha: string; total: number; }
 interface VisitaPorCategoria { categoria: string; total: number; }
-interface ComercoStats { si: number; no: number; sinDato: number; }
 
 export default function EstadisticasAdmin() {
   const [cargando, setCargando] = useState(true);
@@ -30,7 +30,8 @@ export default function EstadisticasAdmin() {
   const [topClientes, setTopClientes] = useState<TopCliente[]>([]);
   const [visitasPorDia, setVisitasPorDia] = useState<VisitaPorDia[]>([]);
   const [visitasPorCategoria, setVisitasPorCategoria] = useState<VisitaPorCategoria[]>([]);
-  const [comerco, setComerco] = useState<ComercoStats | null>(null);
+  const [encuestasStats, setEncuestasStats] = useState<EncuestaStats[]>([]);
+  const [modalEncuestasVisible, setModalEncuestasVisible] = useState(false);
 
   useEffect(() => {
     cargar();
@@ -39,12 +40,15 @@ export default function EstadisticasAdmin() {
   const cargar = async () => {
     setCargando(true);
     try {
-      const res = await obtenerEstadisticasClientes();
+      const [res, encuestasRes] = await Promise.all([
+        obtenerEstadisticasClientes(),
+        obtenerEstadisticasEncuestas(),
+      ]);
       setResumen(res.data.resumen);
       setTopClientes(res.data.topClientes ?? []);
       setVisitasPorDia(res.data.visitasPorDia ?? []);
       setVisitasPorCategoria(res.data.visitasPorCategoria ?? []);
-      setComerco(res.data.comerco ?? null);
+      setEncuestasStats(encuestasRes.data ?? []);
     } catch {}
     setCargando(false);
   };
@@ -147,30 +151,52 @@ export default function EstadisticasAdmin() {
         })}
       </View>
 
-      <View style={[styles.seccion, styles.ultimaSeccion]}>
-        <Text style={styles.seccionTitulo}>¿Le compra a COMERCO?</Text>
-        {!comerco || (comerco.si === 0 && comerco.no === 0 && comerco.sinDato === 0) ? (
-          <Text style={styles.vacio}>Sin datos todavía</Text>
-        ) : (
-          <>
-            {[
-              { label: 'Sí', total: comerco.si, color: COLORS.success },
-              { label: 'No', total: comerco.no, color: COLORS.danger },
-              { label: 'Sin dato', total: comerco.sinDato, color: COLORS.textLight },
-            ].map((c) => (
-              <View key={c.label} style={styles.categoriaRow}>
-                <View style={[styles.categoriaBadge, { backgroundColor: c.color }]}>
-                  <Text style={styles.categoriaBadgeTexto}>{c.label}</Text>
-                </View>
-                <View style={styles.categoriaBarraTrack}>
-                  <View style={[styles.categoriaBarraFill, { width: `${(c.total / Math.max(1, comerco.si + comerco.no + comerco.sinDato)) * 100}%`, backgroundColor: c.color }]} />
-                </View>
-                <Text style={styles.categoriaTotal}>{c.total}</Text>
-              </View>
-            ))}
-          </>
+      <View style={styles.seccion}>
+        <View style={styles.encuestasHeader}>
+          <Text style={styles.seccionTitulo}>Encuestas</Text>
+          <TouchableOpacity style={styles.btnGestionar} onPress={() => setModalEncuestasVisible(true)}>
+            <Text style={styles.btnGestionarTexto}>⚙️ Gestionar encuestas</Text>
+          </TouchableOpacity>
+        </View>
+
+        {encuestasStats.length === 0 && (
+          <Text style={styles.vacio}>No hay encuestas configuradas</Text>
         )}
+
+        {encuestasStats.map((encuesta) => {
+          const total = Math.max(1, encuesta.si + encuesta.no + encuesta.sinDato);
+          return (
+            <View key={encuesta.id} style={styles.encuestaStatsBox}>
+              <Text style={styles.encuestaStatsTitulo}>{encuesta.pregunta}</Text>
+              <Text style={styles.encuestaStatsZonas}>
+                {encuesta.zonas && encuesta.zonas.length ? encuesta.zonas.join(', ') : 'Todas las zonas'}
+                {!encuesta.activa ? ' · Inactiva' : ''}
+              </Text>
+              {[
+                { label: 'Sí', total: encuesta.si, color: COLORS.success },
+                { label: 'No', total: encuesta.no, color: COLORS.danger },
+                { label: 'Sin dato', total: encuesta.sinDato, color: COLORS.textLight },
+              ].map((c) => (
+                <View key={c.label} style={styles.categoriaRow}>
+                  <View style={[styles.categoriaBadge, { backgroundColor: c.color }]}>
+                    <Text style={styles.categoriaBadgeTexto}>{c.label}</Text>
+                  </View>
+                  <View style={styles.categoriaBarraTrack}>
+                    <View style={[styles.categoriaBarraFill, { width: `${(c.total / total) * 100}%`, backgroundColor: c.color }]} />
+                  </View>
+                  <Text style={styles.categoriaTotal}>{c.total}</Text>
+                </View>
+              ))}
+            </View>
+          );
+        })}
       </View>
+
+      <EncuestasModal
+        visible={modalEncuestasVisible}
+        onClose={() => setModalEncuestasVisible(false)}
+        onCambios={cargar}
+      />
     </ScrollView>
   );
 }
@@ -206,7 +232,6 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  ultimaSeccion: { marginBottom: 8 },
   seccionTitulo: { fontSize: 15, fontWeight: '800', color: COLORS.text },
   vacio: { fontSize: 13, color: COLORS.textLight, textAlign: 'center', paddingVertical: 12 },
 
@@ -241,6 +266,20 @@ const styles = StyleSheet.create({
   rankingDato: { fontSize: 11, color: COLORS.textLight },
   badge: { borderRadius: 7, paddingHorizontal: 8, paddingVertical: 2 },
   badgeTexto: { color: '#fff', fontWeight: '800', fontSize: 12 },
+
+  encuestasHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
+  btnGestionar: {
+    backgroundColor: COLORS.background,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  btnGestionarTexto: { fontSize: 12, fontWeight: '700', color: COLORS.text },
+  encuestaStatsBox: { gap: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: COLORS.background },
+  encuestaStatsTitulo: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  encuestaStatsZonas: { fontSize: 12, color: COLORS.textLight, marginBottom: 2 },
 
   categoriaRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   categoriaBadge: { width: 28, height: 28, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },

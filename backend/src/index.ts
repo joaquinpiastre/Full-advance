@@ -18,6 +18,7 @@ import zonasRouter from './routes/zonas';
 import anunciosRouter from './routes/anuncios';
 import tareasRouter from './routes/tareas';
 import calificacionesRouter from './routes/calificaciones';
+import encuestasRouter from './routes/encuestas';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -39,6 +40,7 @@ app.use('/zonas', zonasRouter);
 app.use('/anuncios', anunciosRouter);
 app.use('/tareas', tareasRouter);
 app.use('/calificaciones', calificacionesRouter);
+app.use('/encuestas', encuestasRouter);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', app: 'Full Advance' }));
 
@@ -138,9 +140,27 @@ pool.query(`
   ALTER TABLE paradas ADD COLUMN IF NOT EXISTS motivo_no_pvp TEXT
 `).catch(() => {});
 
-// Encuesta: si el cliente le compra a COMERCO (la pregunta el preventista al visitar).
+// Encuestas configurables por el admin (sí/no, por zona), respondidas por
+// el preventista o supervisor al finalizar una visita.
 pool.query(`
-  ALTER TABLE paradas ADD COLUMN IF NOT EXISTS compra_comerco BOOLEAN
+  CREATE TABLE IF NOT EXISTS encuestas (
+    id SERIAL PRIMARY KEY,
+    pregunta TEXT NOT NULL,
+    activa BOOLEAN DEFAULT true,
+    zonas TEXT[],
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )
+`).catch(() => {});
+pool.query(`
+  CREATE TABLE IF NOT EXISTS encuesta_respuestas (
+    id SERIAL PRIMARY KEY,
+    encuesta_id INTEGER NOT NULL REFERENCES encuestas(id) ON DELETE CASCADE,
+    parada_id INTEGER NOT NULL REFERENCES paradas(id) ON DELETE CASCADE,
+    cliente_id INTEGER REFERENCES clientes(id),
+    respuesta BOOLEAN NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(encuesta_id, parada_id)
+  )
 `).catch(() => {});
 
 // Foto y nota opcionales al marcar una tarea como realizada

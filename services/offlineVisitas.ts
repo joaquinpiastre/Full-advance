@@ -17,7 +17,7 @@ export interface FinalizarDataPendiente {
   oportunidades?: string | null;
   respeta_pvp?: boolean | null;
   motivo_no_pvp?: string | null;
-  compra_comerco?: boolean | null;
+  encuesta_respuestas?: { encuesta_id: number; respuesta: boolean }[];
 }
 
 export interface FotoPendiente {

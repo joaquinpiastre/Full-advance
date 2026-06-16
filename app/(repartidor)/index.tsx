@@ -18,7 +18,7 @@ export default function InicioRepartidor() {
   const { jornada, setJornada } = useJornadaStore();
   const [cargando, setCargando] = useState(true);
   const [asignacion, setAsignacion] = useState<any>(null);
-  const [rutasDisponibles, setRutasDisponibles] = useState<{ opciones: OpcionRuta[]; seleccion_actual: number | null }>({ opciones: [], seleccion_actual: null });
+  const [rutasDisponibles, setRutasDisponibles] = useState<{ opciones: OpcionRuta[]; selecciones_actuales: number[] }>({ opciones: [], selecciones_actuales: [] });
   const [modalEleccionVisible, setModalEleccionVisible] = useState(false);
 
   useEffect(() => {
@@ -35,23 +35,35 @@ export default function InicioRepartidor() {
       ]);
       if (jornadaRes.status === 'fulfilled') setJornada(jornadaRes.value.data);
       if (asigRes.status === 'fulfilled') setAsignacion(asigRes.value.data);
-      if (rutasRes.status === 'fulfilled') setRutasDisponibles(rutasRes.value.data);
+      if (rutasRes.status === 'fulfilled') {
+        const d = rutasRes.value.data;
+        setRutasDisponibles({
+          opciones: d.opciones ?? [],
+          selecciones_actuales: d.selecciones_actuales ?? [],
+        });
+      }
     } catch {}
     setCargando(false);
   };
 
-  const handleElegirRuta = async (ruta_id: number) => {
+  const handleToggleRuta = async (ruta_id: number) => {
     try {
-      await elegirRuta(ruta_id);
-      setModalEleccionVisible(false);
-      await cargarEstado();
+      const res = await elegirRuta(ruta_id);
+      const seleccionadas: number[] = res.data?.seleccionadas ?? [];
+      setRutasDisponibles((prev) => ({ ...prev, selecciones_actuales: seleccionadas }));
     } catch (e: any) {
       Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo elegir la ruta');
     }
   };
 
+  const handleConfirmarRutas = () => {
+    setModalEleccionVisible(false);
+    cargarEstado();
+  };
+
   const handleIniciar = async () => {
-    if (asignacion?.necesita_eleccion) {
+    const rutasSeleccionadas = asignacion?.rutas ?? [];
+    if (asignacion?.necesita_eleccion || rutasSeleccionadas.length === 0) {
       setModalEleccionVisible(true);
       return;
     }
@@ -93,8 +105,8 @@ export default function InicioRepartidor() {
   if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
 
   const hoy = format(new Date(), "EEEE d 'de' MMMM", { locale: es });
+  const rutasAsignadas: any[] = asignacion?.rutas ?? [];
   const puedeCambiarRuta = !jornada && rutasDisponibles.opciones.length > 0;
-  const puedeElegirSinAsignacion = !asignacion && rutasDisponibles.opciones.length > 0;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -103,24 +115,30 @@ export default function InicioRepartidor() {
 
       {asignacion?.necesita_eleccion ? (
         <View style={[styles.card, styles.cardWarning]}>
-          <Text style={styles.cardLabel}>Elegí tu ruta de la semana</Text>
+          <Text style={styles.cardLabel}>Elegí tus rutas de la semana</Text>
           <Text style={styles.cardDesc}>
-            Tenés {asignacion.opciones?.length ?? 0} rutas habilitadas. Elegí cuál vas a hacer esta semana.
+            Tenés {asignacion.opciones?.length ?? 0} rutas habilitadas. Podés elegir una o más.
           </Text>
           <TouchableOpacity style={styles.btnEleccion} onPress={() => setModalEleccionVisible(true)}>
-            <Text style={styles.btnEleccionTexto}>Elegir ruta</Text>
+            <Text style={styles.btnEleccionTexto}>Elegir rutas</Text>
           </TouchableOpacity>
         </View>
-      ) : asignacion ? (
+      ) : rutasAsignadas.length > 0 ? (
         <View style={styles.card}>
-          <Text style={styles.cardLabel}>Ruta asignada hoy</Text>
-          <Text style={styles.cardTitulo}>{asignacion.ruta?.nombre}</Text>
-          {asignacion.ruta?.descripcion && (
-            <Text style={styles.cardDesc}>{asignacion.ruta.descripcion}</Text>
+          <Text style={styles.cardLabel}>
+            {rutasAsignadas.length === 1 ? 'Ruta asignada hoy' : `${rutasAsignadas.length} rutas asignadas hoy`}
+          </Text>
+          {rutasAsignadas.map((r: any) => (
+            <Text key={r.id} style={styles.cardTitulo}>• {r.nombre}</Text>
+          ))}
+          {rutasAsignadas[0]?.descripcion && rutasAsignadas.length === 1 && (
+            <Text style={styles.cardDesc}>{rutasAsignadas[0].descripcion}</Text>
           )}
           {puedeCambiarRuta && (
             <TouchableOpacity style={styles.btnCambiar} onPress={() => setModalEleccionVisible(true)}>
-              <Text style={styles.btnCambiarTexto}>Cambiar ruta del día</Text>
+              <Text style={styles.btnCambiarTexto}>
+                {rutasAsignadas.length === 1 ? 'Cambiar ruta del día' : 'Cambiar rutas del día'}
+              </Text>
             </TouchableOpacity>
           )}
         </View>
@@ -128,11 +146,11 @@ export default function InicioRepartidor() {
         <View style={[styles.card, styles.cardWarning]}>
           <Text style={styles.cardLabel}>Sin asignación hoy</Text>
           <Text style={styles.cardDesc}>
-            {puedeElegirSinAsignacion ? 'Elegí qué ruta vas a hacer hoy.' : 'El admin aún no te habilitó una ruta.'}
+            {rutasDisponibles.opciones.length > 0 ? 'Elegí qué ruta/s vas a hacer hoy.' : 'El admin aún no te habilitó una ruta.'}
           </Text>
-          {puedeElegirSinAsignacion && (
+          {rutasDisponibles.opciones.length > 0 && (
             <TouchableOpacity style={styles.btnEleccion} onPress={() => setModalEleccionVisible(true)}>
-              <Text style={styles.btnEleccionTexto}>Elegir ruta</Text>
+              <Text style={styles.btnEleccionTexto}>Elegir rutas</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -169,9 +187,11 @@ export default function InicioRepartidor() {
       <EleccionRutaModal
         visible={modalEleccionVisible}
         opciones={asignacion?.necesita_eleccion ? asignacion.opciones : rutasDisponibles.opciones}
-        seleccionActual={rutasDisponibles.seleccion_actual}
         color={COLORS.primary}
-        onElegir={handleElegirRuta}
+        multiSelect
+        seleccionadas={rutasDisponibles.selecciones_actuales}
+        onElegir={handleToggleRuta}
+        onConfirmar={handleConfirmarRutas}
         onClose={!asignacion?.necesita_eleccion ? () => setModalEleccionVisible(false) : undefined}
       />
     </ScrollView>

@@ -72,8 +72,21 @@ export default function RutaPreventista() {
     setCargando(true);
     try {
       const asigRes = await obtenerAsignacionHoy();
-      setClientes(asigRes.data?.ruta?.clientes?.map((c: any) => c.cliente) ?? []);
-      setRutaId(asigRes.data?.ruta?.id ?? null);
+      const rutas: any[] = asigRes.data?.rutas ?? [];
+      // Merge clients from all selected routes, deduplicating by client id
+      const seen = new Set<number>();
+      const merged: Cliente[] = [];
+      for (const r of rutas) {
+        for (const rc of (r.clientes ?? [])) {
+          const c: Cliente = { ...rc.cliente, ruta_id: r.id, ruta_nombre: r.nombre };
+          if (!seen.has(c.id)) {
+            seen.add(c.id);
+            merged.push(c);
+          }
+        }
+      }
+      setClientes(merged);
+      setRutaId(rutas.length === 1 ? rutas[0].id : null);
       if (jornada) {
         const paradasRes = await obtenerParadas(jornada.id);
         setParadas(paradasRes.data);

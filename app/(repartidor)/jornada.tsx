@@ -28,6 +28,7 @@ export default function JornadaRepartidor() {
   const { jornada, paradaActual, setParadaActual, setJornada } = useJornadaStore();
   const [paradas, setParadas] = useState<Parada[]>([]);
   const [asignacion, setAsignacion] = useState<any>(null);
+  const [clientesRuta, setClientesRuta] = useState<any[]>([]);
   const [cargando, setCargando] = useState(true);
   const [estadoFotos, setEstadoFotos] = useState<EstadoFotos>('esperando');
   const [fotos, setFotos] = useState<(string | null)[]>([null, null, null, null, null]);
@@ -64,7 +65,22 @@ export default function JornadaRepartidor() {
         obtenerAsignacionHoy(),
       ]);
       if (paradasRes.status === 'fulfilled') setParadas(paradasRes.value.data);
-      if (asigRes.status === 'fulfilled') setAsignacion(asigRes.value.data);
+      if (asigRes.status === 'fulfilled') {
+        const data = asigRes.value.data;
+        setAsignacion(data);
+        // Merge clients from all selected routes, deduplicating by client id
+        const seen = new Set<number>();
+        const merged: any[] = [];
+        for (const r of (data.rutas ?? [])) {
+          for (const rc of (r.clientes ?? [])) {
+            if (!seen.has(rc.cliente.id)) {
+              seen.add(rc.cliente.id);
+              merged.push({ ...rc, ruta_id: r.id });
+            }
+          }
+        }
+        setClientesRuta(merged);
+      }
     } catch {}
     setCargando(false);
   };
@@ -219,10 +235,10 @@ export default function JornadaRepartidor() {
   const paradasCompletadas = paradas.filter((p) => p.completada);
 
   const handleReordenar = (nuevos: any[]) => {
-    setAsignacion({ ...asignacion, ruta: { ...asignacion.ruta, clientes: nuevos } });
-    const rutaId = asignacion.ruta.id;
-    if (rutaId) {
-      actualizarOrdenRuta(rutaId, nuevos.map((c: any) => c.cliente.id)).catch(() => {});
+    setClientesRuta(nuevos);
+    const rutas: any[] = asignacion?.rutas ?? [];
+    if (rutas.length === 1) {
+      actualizarOrdenRuta(rutas[0].id, nuevos.map((c: any) => c.cliente.id)).catch(() => {});
     }
   };
 
@@ -424,7 +440,7 @@ export default function JornadaRepartidor() {
           </View>
           <DraggableFlatList
             style={{ flex: 1 }}
-            data={asignacion?.ruta?.clientes ?? []}
+            data={clientesRuta}
             keyExtractor={(item: any) => String(item.cliente.id)}
             contentContainerStyle={{ padding: 16, gap: 10 }}
             onDragEnd={({ data }) => handleReordenar(data)}

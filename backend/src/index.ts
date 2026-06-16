@@ -83,6 +83,38 @@ pool.query(`
   )
 `).catch(() => {});
 
+// Permite seleccionar múltiples rutas por semana (antes: una por semana)
+pool.query(`ALTER TABLE selecciones_ruta DROP CONSTRAINT IF EXISTS selecciones_ruta_usuario_id_semana_inicio_key`)
+  .then(() => pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'selecciones_ruta_usuario_id_ruta_id_semana_inicio_key'
+      ) THEN
+        ALTER TABLE selecciones_ruta
+          ADD CONSTRAINT selecciones_ruta_usuario_id_ruta_id_semana_inicio_key
+          UNIQUE (usuario_id, ruta_id, semana_inicio);
+      END IF;
+    END $$;
+  `))
+  .catch(() => {});
+
+// Permite asignaciones manuales de múltiples rutas por día (antes: una por día)
+pool.query(`ALTER TABLE asignaciones DROP CONSTRAINT IF EXISTS asignaciones_usuario_id_fecha_key`)
+  .then(() => pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'asignaciones_usuario_id_ruta_id_fecha_key'
+      ) THEN
+        ALTER TABLE asignaciones
+          ADD CONSTRAINT asignaciones_usuario_id_ruta_id_fecha_key
+          UNIQUE (usuario_id, ruta_id, fecha);
+      END IF;
+    END $$;
+  `))
+  .catch(() => {});
+
 // Historial de clientes quitados de una ruta (para alertas del admin).
 pool.query(`
   CREATE TABLE IF NOT EXISTS eliminaciones_ruta_cliente (
@@ -376,6 +408,42 @@ pool.query(`ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_rol_check`)
       CHECK (rol IN ('admin', 'repartidor', 'preventista', 'supervisor'))
   `))
   .catch(() => {});
+
+// Auto-cierre de jornadas inactivas: si la última parada (o el inicio de jornada
+// si no hubo ninguna) fue hace más de 5 horas, la jornada se cierra sola.
+async function cerrarJornadasInactivas() {
+  try {
+    const { rows } = await pool.query(`
+      WITH stale AS (
+        SELECT j.id, j.usuario_id
+        FROM jornadas j
+        LEFT JOIN paradas p ON p.jornada_id = j.id
+        WHERE j.activa = true
+        GROUP BY j.id, j.usuario_id
+        HAVING GREATEST(
+          j.fecha_inicio,
+          COALESCE(MAX(p.timestamp_llegada), j.fecha_inicio)
+        ) < NOW() - INTERVAL '5 hours'
+      )
+      UPDATE jornadas
+      SET activa = false, fecha_fin = NOW()
+      WHERE id IN (SELECT id FROM stale)
+      RETURNING id, usuario_id
+    `);
+    for (const row of rows) {
+      await pool.query('DELETE FROM gps_live WHERE usuario_id=$1', [row.usuario_id]);
+    }
+    if (rows.length) {
+      console.log(`[auto-cierre] ${rows.length} jornada(s) cerrada(s) por inactividad (5 h)`);
+    }
+  } catch (err) {
+    console.error('[auto-cierre] Error:', err);
+  }
+}
+
+// Ejecutar al arrancar y luego cada 10 minutos.
+cerrarJornadasInactivas();
+setInterval(cerrarJornadasInactivas, 10 * 60 * 1000);
 
 app.listen(PORT, () => {
   console.log(`Full Advance backend corriendo en http://localhost:${PORT}`);

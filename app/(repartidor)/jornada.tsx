@@ -521,8 +521,8 @@ export default function JornadaRepartidor() {
                   || pendientes.some((p) => p.cliente_id === cliente.id);
                 return (
                   <View style={[styles.clienteRow, isActive && styles.clienteRowActiva]}>
-                    <TouchableOpacity onLongPress={drag} delayLongPress={150} style={styles.asa}>
-                      <Text style={styles.asaTexto}>☰</Text>
+                    <TouchableOpacity onPressIn={drag} style={styles.asa}>
+                      <Text selectable={false} style={styles.asaTexto}>☰</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.clienteItem, yaVisitado && styles.clienteItemVisitado]}

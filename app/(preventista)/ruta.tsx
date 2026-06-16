@@ -595,8 +595,8 @@ export default function RutaPreventista() {
                     <View style={styles.clienteOrden}>
                       <Text style={styles.clienteOrdenNum}>{index + 1}</Text>
                     </View>
-                    <TouchableOpacity onLongPress={drag} delayLongPress={150} style={styles.asa}>
-                      <Text style={styles.asaTexto}>☰</Text>
+                    <TouchableOpacity onPressIn={drag} style={styles.asa}>
+                      <Text selectable={false} style={styles.asaTexto}>☰</Text>
                     </TouchableOpacity>
                     <View style={styles.clienteInfo}>
                       <Text style={styles.clienteNombre}>{item.nombre}</Text>

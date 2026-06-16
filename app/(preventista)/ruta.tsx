@@ -463,7 +463,7 @@ export default function RutaPreventista() {
 
       {/* ── Lista de clientes ── */}
       {estadoVisita === 'esperando' && (
-        <>
+        <View style={{ flex: 1 }}>
           <View style={styles.resumen}>
             {pendientes.length > 0 && (
               <View style={styles.pendientesBanner}>
@@ -535,7 +535,7 @@ export default function RutaPreventista() {
             }}
             ListEmptyComponent={<Text style={styles.vacio}>No hay clientes en la ruta de hoy</Text>}
           />
-        </>
+        </View>
       )}
 
       <CartillaModal

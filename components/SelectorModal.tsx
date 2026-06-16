@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
   opcionRow: {
     flexDirection: 'row', alignItems: 'center',
     borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 10,
-    backgroundColor: COLORS.card, overflow: 'hidden',
+    backgroundColor: COLORS.card,
   },
   opcionToque: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

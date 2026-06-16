@@ -120,6 +120,12 @@ export const obtenerDistritos = (departamento_id?: number) =>
 export const crearDistrito = (nombre: string, departamento_id?: number | null) =>
   api.post('/zonas/distritos', { nombre, departamento_id: departamento_id ?? null });
 
+export const editarDistrito = (id: number, nombre: string) =>
+  api.put(`/zonas/distritos/${id}`, { nombre });
+
+export const eliminarDistrito = (id: number) =>
+  api.delete(`/zonas/distritos/${id}`);
+
 // Rutas
 export const obtenerRutas = () =>
   api.get('/rutas');

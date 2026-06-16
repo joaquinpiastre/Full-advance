@@ -61,4 +61,31 @@ router.post('/distritos', authMiddleware, adminOSupervisor, async (req: AuthRequ
   }
 });
 
+router.put('/distritos/:id', authMiddleware, adminOSupervisor, async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const nombre = req.body?.nombre?.trim();
+  if (!nombre) return res.status(400).json({ error: 'Nombre requerido' });
+  try {
+    const { rows } = await pool.query(
+      'UPDATE distritos SET nombre=$1 WHERE id=$2 RETURNING id, nombre, departamento_id',
+      [nombre, id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Distrito no encontrado' });
+    res.json(rows[0]);
+  } catch {
+    res.status(500).json({ error: 'Error al editar distrito' });
+  }
+});
+
+router.delete('/distritos/:id', authMiddleware, adminOSupervisor, async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  try {
+    const { rows } = await pool.query('DELETE FROM distritos WHERE id=$1 RETURNING id', [id]);
+    if (!rows.length) return res.status(404).json({ error: 'Distrito no encontrado' });
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: 'Error al eliminar distrito' });
+  }
+});
+
 export default router;

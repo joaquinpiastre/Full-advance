@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, Modal, TextInput,
   ScrollView, Alert, ActivityIndicator,
 } from 'react-native';
-import { actualizarCliente, cambiarEstadoCliente, obtenerDepartamentos, crearDepartamento, obtenerDistritos, crearDistrito } from '../services/api';
+import { actualizarCliente, cambiarEstadoCliente, obtenerDepartamentos, crearDepartamento, obtenerDistritos, crearDistrito, eliminarDistrito, editarDistrito } from '../services/api';
 import { COLORS, COLOR_CATEGORIA } from '../constants';
 import { Cliente } from '../types';
 import { useAuthStore } from '../store/authStore';
@@ -335,6 +335,18 @@ export default function CartillaModal({ cliente, visible, color = COLORS.primary
                   const res = await crearDistrito(nombre, departamentoId);
                   setDistritos((prev) => [...prev, res.data]);
                 }}
+                onEditar={puedeAgregarZonas ? async (nombreAnterior, nombreNuevo) => {
+                  const d = distritos.find((x) => x.nombre === nombreAnterior && x.departamento_id === departamentoId);
+                  if (!d) return;
+                  const res = await editarDistrito(d.id, nombreNuevo);
+                  setDistritos((prev) => prev.map((x) => x.id === d.id ? res.data : x));
+                } : undefined}
+                onEliminar={puedeAgregarZonas ? async (nombre) => {
+                  const d = distritos.find((x) => x.nombre === nombre && x.departamento_id === departamentoId);
+                  if (!d) return;
+                  await eliminarDistrito(d.id);
+                  setDistritos((prev) => prev.filter((x) => x.id !== d.id));
+                } : undefined}
               />
             ) : (
               <Text style={styles.ayuda}>Elegí primero un departamento</Text>

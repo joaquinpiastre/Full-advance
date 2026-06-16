@@ -6,7 +6,7 @@ import {
 import {
   obtenerClientes, crearCliente, actualizarCliente, obtenerRutas,
   obtenerDepartamentos, crearDepartamento, obtenerDistritos, crearDistrito,
-  cambiarEstadoCliente, eliminarCliente,
+  cambiarEstadoCliente, eliminarCliente, eliminarDistrito, editarDistrito,
 } from '../../services/api';
 import { COLORS, COLOR_CATEGORIA } from '../../constants';
 import { Cliente, CategoriaCliente, Ruta } from '../../types';
@@ -438,6 +438,18 @@ export default function Clientes() {
                   onAgregar={async (nombre) => {
                     const res = await crearDistrito(nombre, departamentoId);
                     setDistritos((prev) => [...prev, res.data]);
+                  }}
+                  onEditar={async (nombreAnterior, nombreNuevo) => {
+                    const d = distritos.find((x) => x.nombre === nombreAnterior && x.departamento_id === departamentoId);
+                    if (!d) return;
+                    const res = await editarDistrito(d.id, nombreNuevo);
+                    setDistritos((prev) => prev.map((x) => x.id === d.id ? res.data : x));
+                  }}
+                  onEliminar={async (nombre) => {
+                    const d = distritos.find((x) => x.nombre === nombre && x.departamento_id === departamentoId);
+                    if (!d) return;
+                    await eliminarDistrito(d.id);
+                    setDistritos((prev) => prev.filter((x) => x.id !== d.id));
                   }}
                 />
               ) : (

@@ -242,6 +242,21 @@ export default function JornadaRepartidor() {
     }
   };
 
+  // Web drag state (unused on native)
+  const [dragSrcIdx, setDragSrcIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+
+  const webDrop = (toIndex: number) => {
+    if (dragSrcIdx !== null && dragSrcIdx !== toIndex) {
+      const nuevos = [...clientesRuta];
+      const [moved] = nuevos.splice(dragSrcIdx, 1);
+      nuevos.splice(toIndex, 0, moved);
+      handleReordenar(nuevos);
+    }
+    setDragSrcIdx(null);
+    setDragOverIdx(null);
+  };
+
   return (
     <View style={styles.container}>
       {/* Panel de flujo de fotos */}
@@ -449,7 +464,26 @@ export default function JornadaRepartidor() {
                 const yaVisitado = paradas.some((p) => p.cliente_id === cliente.id && p.completada)
                   || pendientes.some((p) => p.cliente_id === cliente.id);
                 return (
-                  <View style={styles.clienteRow}>
+                  // @ts-ignore — RNW passes drag events to the underlying div
+                  <View
+                    style={[
+                      styles.clienteRow,
+                      dragSrcIdx === index && { opacity: 0.4 },
+                      dragOverIdx === index && styles.clienteRowDragOver,
+                    ]}
+                    onDragOver={(e: any) => { e.preventDefault(); setDragOverIdx(index); }}
+                    onDrop={(e: any) => { e.preventDefault(); webDrop(index); }}
+                    onDragLeave={() => { if (dragOverIdx === index) setDragOverIdx(null); }}
+                  >
+                    {/* @ts-ignore */}
+                    <View
+                      style={styles.asaWeb}
+                      draggable
+                      onDragStart={() => setDragSrcIdx(index)}
+                      onDragEnd={() => { setDragSrcIdx(null); setDragOverIdx(null); }}
+                    >
+                      <Text style={styles.asaTexto}>☰</Text>
+                    </View>
                     <TouchableOpacity
                       style={[styles.clienteItem, yaVisitado && styles.clienteItemVisitado]}
                       onPress={() => iniciarParadaEnCliente(cliente)}
@@ -733,6 +767,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   asaTexto: { fontSize: 18, color: COLORS.textLight },
+  asaWeb: {
+    width: 34, borderRadius: 8,
+    justifyContent: 'center', alignItems: 'center',
+    // @ts-ignore web-only
+    cursor: 'grab',
+  },
+  clienteRowDragOver: {
+    borderTopWidth: 3,
+    borderTopColor: COLORS.primary,
+  },
   clienteItem: {
     flex: 1,
     backgroundColor: COLORS.card,

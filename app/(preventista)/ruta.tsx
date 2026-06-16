@@ -247,6 +247,21 @@ export default function RutaPreventista() {
     }
   };
 
+  // Web drag state (unused on native — no overhead)
+  const [dragSrcIdx, setDragSrcIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+
+  const webDrop = (toIndex: number) => {
+    if (dragSrcIdx !== null && dragSrcIdx !== toIndex) {
+      const nuevos = [...clientes];
+      const [moved] = nuevos.splice(dragSrcIdx, 1);
+      nuevos.splice(toIndex, 0, moved);
+      handleReordenar(nuevos);
+    }
+    setDragSrcIdx(null);
+    setDragOverIdx(null);
+  };
+
   if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.preventista} size="large" /></View>;
 
   const paradasCompletadas = paradas.filter((p) => p.completada);
@@ -511,9 +526,29 @@ export default function RutaPreventista() {
                 const visitado = paradas.some((p) => p.cliente_id === item.id && p.completada)
                   || pendientes.some((p) => p.cliente_id === item.id);
                 return (
-                  <View style={[styles.clienteCard, visitado && styles.clienteCardVisitado]}>
+                  // @ts-ignore — RNW passes drag events to the underlying div
+                  <View
+                    style={[
+                      styles.clienteCard,
+                      visitado && styles.clienteCardVisitado,
+                      dragSrcIdx === index && { opacity: 0.4 },
+                      dragOverIdx === index && styles.clienteCardDragOver,
+                    ]}
+                    onDragOver={(e: any) => { e.preventDefault(); setDragOverIdx(index); }}
+                    onDrop={(e: any) => { e.preventDefault(); webDrop(index); }}
+                    onDragLeave={() => { if (dragOverIdx === index) setDragOverIdx(null); }}
+                  >
                     <View style={styles.clienteOrden}>
                       <Text style={styles.clienteOrdenNum}>{index + 1}</Text>
+                    </View>
+                    {/* @ts-ignore */}
+                    <View
+                      style={styles.asaWeb}
+                      draggable
+                      onDragStart={() => setDragSrcIdx(index)}
+                      onDragEnd={() => { setDragSrcIdx(null); setDragOverIdx(null); }}
+                    >
+                      <Text style={styles.asaTexto}>☰</Text>
                     </View>
                     <View style={styles.clienteInfo}>
                       <Text style={styles.clienteNombre}>{item.nombre}</Text>
@@ -832,6 +867,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   asaTexto: { fontSize: 18, color: COLORS.textLight },
+  asaWeb: {
+    width: 34, borderRadius: 8,
+    justifyContent: 'center', alignItems: 'center',
+    // @ts-ignore web-only
+    cursor: 'grab',
+  },
+  clienteCardDragOver: {
+    borderTopWidth: 3,
+    borderTopColor: COLORS.preventista,
+  },
   clienteInfo: { flex: 1 },
   clienteNombre: { fontSize: 14, fontWeight: '700', color: COLORS.text },
   clienteDireccion: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },

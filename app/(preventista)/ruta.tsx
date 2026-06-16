@@ -20,6 +20,7 @@ import CartillaModal from '../../components/CartillaModal';
 import NuevoClienteModal from '../../components/NuevoClienteModal';
 import MercaderiaVencidaForm from '../../components/MercaderiaVencidaForm';
 import { calcularFechaVencimiento } from '../../utils/vencimiento';
+import { coincideBusqueda } from '../../utils/busqueda';
 import FotoReferenciaCliente from '../../components/FotoReferenciaCliente';
 import AccionesList from '../../components/AccionesList';
 import { COLORS } from '../../constants';
@@ -59,6 +60,7 @@ export default function RutaPreventista() {
   const [encuestasActivas, setEncuestasActivas] = useState<Encuesta[]>([]);
   const [respuestasEncuestas, setRespuestasEncuestas] = useState<Record<number, boolean>>({});
   const [pendientes, setPendientes] = useState<VisitaPendiente[]>([]);
+  const [busqueda, setBusqueda] = useState('');
   const enviandoRef = useRef(false);
 
   useEffect(() => {
@@ -241,6 +243,7 @@ export default function RutaPreventista() {
   };
 
   const handleReordenar = (nuevos: Cliente[]) => {
+    if (busqueda.trim()) return; // no reorder while filtered
     setClientes(nuevos);
     if (rutaId) {
       actualizarOrdenRuta(rutaId, nuevos.map((c) => c.id)).catch(() => {});
@@ -265,6 +268,9 @@ export default function RutaPreventista() {
   if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.preventista} size="large" /></View>;
 
   const paradasCompletadas = paradas.filter((p) => p.completada);
+  const clientesFiltrados = busqueda.trim()
+    ? clientes.filter((c) => coincideBusqueda(busqueda, c.nombre, c.direccion, c.rubro, c.razon_social))
+    : clientes;
 
   return (
     <View style={styles.container}>
@@ -516,10 +522,22 @@ export default function RutaPreventista() {
             </View>
           </View>
 
+          <View style={styles.buscadorCont}>
+            <TextInput
+              style={styles.buscadorInput}
+              placeholder="Buscar cliente..."
+              placeholderTextColor={COLORS.textLight}
+              value={busqueda}
+              onChangeText={setBusqueda}
+              autoCapitalize="none"
+              clearButtonMode="while-editing"
+            />
+          </View>
+
           {Platform.OS === 'web' ? (
             <FlatList
               style={{ flex: 1 }}
-              data={clientes}
+              data={clientesFiltrados}
               keyExtractor={(item) => String(item.id)}
               contentContainerStyle={{ padding: 16, gap: 10 }}
               renderItem={({ item, index }) => {
@@ -541,15 +559,17 @@ export default function RutaPreventista() {
                     <View style={styles.clienteOrden}>
                       <Text style={styles.clienteOrdenNum}>{index + 1}</Text>
                     </View>
-                    {/* @ts-ignore */}
-                    <View
-                      style={styles.asaWeb}
-                      draggable
-                      onDragStart={() => setDragSrcIdx(index)}
-                      onDragEnd={() => { setDragSrcIdx(null); setDragOverIdx(null); }}
-                    >
-                      <Text style={styles.asaTexto}>☰</Text>
-                    </View>
+                    {!busqueda.trim() && (
+                      // @ts-ignore
+                      <View
+                        style={styles.asaWeb}
+                        draggable
+                        onDragStart={() => setDragSrcIdx(index)}
+                        onDragEnd={() => { setDragSrcIdx(null); setDragOverIdx(null); }}
+                      >
+                        <Text style={styles.asaTexto}>☰</Text>
+                      </View>
+                    )}
                     <View style={styles.clienteInfo}>
                       <Text style={styles.clienteNombre}>{item.nombre}</Text>
                       <Text style={styles.clienteDireccion}>{item.direccion}</Text>
@@ -582,7 +602,7 @@ export default function RutaPreventista() {
           ) : (
             <DraggableFlatList
               style={{ flex: 1 }}
-              data={clientes}
+              data={clientesFiltrados}
               keyExtractor={(item) => String(item.id)}
               contentContainerStyle={{ padding: 16, gap: 10 }}
               onDragEnd={({ data }) => handleReordenar(data)}
@@ -595,9 +615,11 @@ export default function RutaPreventista() {
                     <View style={styles.clienteOrden}>
                       <Text style={styles.clienteOrdenNum}>{index + 1}</Text>
                     </View>
-                    <TouchableOpacity onPressIn={drag} style={styles.asa}>
-                      <Text selectable={false} style={styles.asaTexto}>☰</Text>
-                    </TouchableOpacity>
+                    {!busqueda.trim() && (
+                      <TouchableOpacity onPressIn={drag} style={styles.asa}>
+                        <Text selectable={false} style={styles.asaTexto}>☰</Text>
+                      </TouchableOpacity>
+                    )}
                     <View style={styles.clienteInfo}>
                       <Text style={styles.clienteNombre}>{item.nombre}</Text>
                       <Text style={styles.clienteDireccion}>{item.direccion}</Text>
@@ -810,6 +832,23 @@ const styles = StyleSheet.create({
   btnConfirmarTexto: { color: '#fff', fontWeight: '700', fontSize: 16 },
 
   // Lista de clientes
+  buscadorCont: {
+    backgroundColor: COLORS.card,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  buscadorInput: {
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    fontSize: 14,
+    color: COLORS.text,
+  },
   resumen: {
     backgroundColor: COLORS.card,
     padding: 16,

@@ -18,6 +18,7 @@ import NuevoClienteModal from '../../components/NuevoClienteModal';
 import FotoReferenciaCliente from '../../components/FotoReferenciaCliente';
 import AccionesList from '../../components/AccionesList';
 import { COLORS, urlFoto } from '../../constants';
+import { coincideBusqueda } from '../../utils/busqueda';
 import { Parada, Cliente } from '../../types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -29,6 +30,7 @@ export default function JornadaRepartidor() {
   const [paradas, setParadas] = useState<Parada[]>([]);
   const [asignacion, setAsignacion] = useState<any>(null);
   const [clientesRuta, setClientesRuta] = useState<any[]>([]);
+  const [busquedaClientes, setBusquedaClientes] = useState('');
   const [cargando, setCargando] = useState(true);
   const [estadoFotos, setEstadoFotos] = useState<EstadoFotos>('esperando');
   const [fotos, setFotos] = useState<(string | null)[]>([null, null, null, null, null]);
@@ -88,6 +90,7 @@ export default function JornadaRepartidor() {
   const iniciarParadaEnCliente = async (cliente: Cliente) => {
     if (!jornada) return;
     setClientesModal(false);
+    setBusquedaClientes('');
     setProcesando(true);
     try {
       // Si ya existe una parada sin completar para este cliente (quedó "trabada"
@@ -235,6 +238,7 @@ export default function JornadaRepartidor() {
   const paradasCompletadas = paradas.filter((p) => p.completada);
 
   const handleReordenar = (nuevos: any[]) => {
+    if (busquedaClientes.trim()) return; // no reorder while filtered
     setClientesRuta(nuevos);
     const rutas: any[] = asignacion?.rutas ?? [];
     if (rutas.length === 1) {
@@ -256,6 +260,12 @@ export default function JornadaRepartidor() {
     setDragSrcIdx(null);
     setDragOverIdx(null);
   };
+
+  const clientesRutaFiltrados = busquedaClientes.trim()
+    ? clientesRuta.filter((rc) =>
+        coincideBusqueda(busquedaClientes, rc.cliente.nombre, rc.cliente.direccion, rc.cliente.rubro, rc.cliente.razon_social)
+      )
+    : clientesRuta;
 
   return (
     <View style={styles.container}>
@@ -444,19 +454,31 @@ export default function JornadaRepartidor() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <TouchableOpacity style={styles.btnNuevoCliente} onPress={() => {
                 setClientesModal(false);
+                setBusquedaClientes('');
                 setNuevoClienteVisible(true);
               }}>
                 <Text style={styles.btnNuevoClienteTexto}>+ Nuevo cliente</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => setClientesModal(false)}>
+              <TouchableOpacity onPress={() => { setClientesModal(false); setBusquedaClientes(''); }}>
                 <Text style={styles.modalCerrar}>✕</Text>
               </TouchableOpacity>
             </View>
           </View>
+          <View style={styles.buscadorCont}>
+            <TextInput
+              style={styles.buscadorInput}
+              placeholder="Buscar cliente..."
+              placeholderTextColor={COLORS.textLight}
+              value={busquedaClientes}
+              onChangeText={setBusquedaClientes}
+              autoCorrect={false}
+              clearButtonMode="while-editing"
+            />
+          </View>
           {Platform.OS === 'web' ? (
             <FlatList
               style={{ flex: 1 }}
-              data={clientesRuta}
+              data={clientesRutaFiltrados}
               keyExtractor={(item: any) => String(item.cliente.id)}
               contentContainerStyle={{ padding: 16, gap: 10 }}
               renderItem={({ item, index }) => {
@@ -475,15 +497,17 @@ export default function JornadaRepartidor() {
                     onDrop={(e: any) => { e.preventDefault(); webDrop(index); }}
                     onDragLeave={() => { if (dragOverIdx === index) setDragOverIdx(null); }}
                   >
-                    {/* @ts-ignore */}
-                    <View
-                      style={styles.asaWeb}
-                      draggable
-                      onDragStart={() => setDragSrcIdx(index)}
-                      onDragEnd={() => { setDragSrcIdx(null); setDragOverIdx(null); }}
-                    >
-                      <Text style={styles.asaTexto}>☰</Text>
-                    </View>
+                    {!busquedaClientes.trim() && (
+                      // @ts-ignore
+                      <View
+                        style={styles.asaWeb}
+                        draggable
+                        onDragStart={() => setDragSrcIdx(index)}
+                        onDragEnd={() => { setDragSrcIdx(null); setDragOverIdx(null); }}
+                      >
+                        <Text style={styles.asaTexto}>☰</Text>
+                      </View>
+                    )}
                     <TouchableOpacity
                       style={[styles.clienteItem, yaVisitado && styles.clienteItemVisitado]}
                       onPress={() => iniciarParadaEnCliente(cliente)}
@@ -510,7 +534,7 @@ export default function JornadaRepartidor() {
           ) : (
             <DraggableFlatList
               style={{ flex: 1 }}
-              data={clientesRuta}
+              data={clientesRutaFiltrados}
               keyExtractor={(item: any) => String(item.cliente.id)}
               contentContainerStyle={{ padding: 16, gap: 10 }}
               onDragEnd={({ data }) => handleReordenar(data)}
@@ -521,9 +545,11 @@ export default function JornadaRepartidor() {
                   || pendientes.some((p) => p.cliente_id === cliente.id);
                 return (
                   <View style={[styles.clienteRow, isActive && styles.clienteRowActiva]}>
-                    <TouchableOpacity onPressIn={drag} style={styles.asa}>
-                      <Text selectable={false} style={styles.asaTexto}>☰</Text>
-                    </TouchableOpacity>
+                    {!busquedaClientes.trim() && (
+                      <TouchableOpacity onPressIn={drag} style={styles.asa}>
+                        <Text selectable={false} style={styles.asaTexto}>☰</Text>
+                      </TouchableOpacity>
+                    )}
                     <TouchableOpacity
                       style={[styles.clienteItem, yaVisitado && styles.clienteItemVisitado]}
                       onPress={() => iniciarParadaEnCliente(cliente)}
@@ -801,4 +827,21 @@ const styles = StyleSheet.create({
   clienteNombre: { fontSize: 15, fontWeight: '700', color: COLORS.text },
   clienteDireccion: { fontSize: 13, color: COLORS.textLight, marginTop: 2 },
   clienteVisitado: { fontSize: 12, color: COLORS.success, fontWeight: '600', marginTop: 4 },
+  buscadorCont: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: COLORS.card,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  buscadorInput: {
+    backgroundColor: COLORS.background,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    fontSize: 15,
+    color: COLORS.text,
+  },
 });

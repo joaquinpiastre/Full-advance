@@ -224,12 +224,17 @@ const DEPARTAMENTOS_INICIALES: { nombre: string; distritos: string[] }[] = [
     ],
   },
   {
-    nombre: 'Alvear',
-    distritos: ['Alvear', 'Ballofet'],
+    nombre: 'General Alvear',
+    distritos: [
+      'Alvear', 'Ballofet', 'Centro', 'Monte Comán', 'Real del Padre',
+      'Carmensa', 'Los Reyunos', 'Villa Atuel',
+    ],
   },
   {
     nombre: 'Malargüe',
-    distritos: ['Av. Moreno', 'Malargüe', 'Yrigoyen, Rivadavia, Iselin'],
+    distritos: [
+      'Av. Moreno', 'Centro', 'Malargüe', 'Yrigoyen, Rivadavia, Iselin',
+    ],
   },
 ];
 
@@ -285,6 +290,41 @@ pool.query(`
           [distrito, depRows[0].id]
         );
       }
+    }
+  })
+  .catch(() => {});
+
+// Migración: renombrar 'Alvear' → 'General Alvear' y agregar distritos faltantes.
+// Usa ON CONFLICT / WHERE para ser idempotente.
+pool.query(`UPDATE departamentos SET nombre='General Alvear' WHERE nombre='Alvear'`)
+  .then(() => pool.query(`UPDATE clientes SET departamento='General Alvear' WHERE departamento='Alvear'`))
+  .then(async () => {
+    // Asegurar que 'General Alvear' exista (por si el seed no corrió aún)
+    const { rows } = await pool.query(
+      `INSERT INTO departamentos (nombre) VALUES ('General Alvear')
+       ON CONFLICT (nombre) DO UPDATE SET nombre=EXCLUDED.nombre RETURNING id`
+    );
+    const depId = rows[0].id;
+    const distritos = ['Alvear', 'Ballofet', 'Centro', 'Monte Comán', 'Real del Padre', 'Carmensa', 'Los Reyunos', 'Villa Atuel'];
+    for (const d of distritos) {
+      await pool.query(
+        `INSERT INTO distritos (nombre, departamento_id) VALUES ($1,$2) ON CONFLICT (nombre, departamento_id) DO NOTHING`,
+        [d, depId]
+      );
+    }
+  })
+  .then(async () => {
+    const { rows } = await pool.query(
+      `INSERT INTO departamentos (nombre) VALUES ('Malargüe')
+       ON CONFLICT (nombre) DO UPDATE SET nombre=EXCLUDED.nombre RETURNING id`
+    );
+    const depId = rows[0].id;
+    const distritos = ['Av. Moreno', 'Centro', 'Malargüe', 'Yrigoyen, Rivadavia, Iselin'];
+    for (const d of distritos) {
+      await pool.query(
+        `INSERT INTO distritos (nombre, departamento_id) VALUES ($1,$2) ON CONFLICT (nombre, departamento_id) DO NOTHING`,
+        [d, depId]
+      );
     }
   })
   .catch(() => {});

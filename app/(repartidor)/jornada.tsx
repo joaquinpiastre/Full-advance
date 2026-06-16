@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert,
-  ScrollView, ActivityIndicator, Image, TextInput, Modal, FlatList,
+  ScrollView, ActivityIndicator, Image, TextInput, Modal, FlatList, Platform,
 } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import * as ImagePicker from 'expo-image-picker';
@@ -438,45 +438,82 @@ export default function JornadaRepartidor() {
               </TouchableOpacity>
             </View>
           </View>
-          <DraggableFlatList
-            style={{ flex: 1 }}
-            data={clientesRuta}
-            keyExtractor={(item: any) => String(item.cliente.id)}
-            contentContainerStyle={{ padding: 16, gap: 10 }}
-            onDragEnd={({ data }) => handleReordenar(data)}
-            renderItem={({ item, getIndex, drag, isActive }: RenderItemParams<any>) => {
-              const index = getIndex() ?? 0;
-              const cliente = item.cliente;
-              const yaVisitado = paradas.some((p) => p.cliente_id === cliente.id && p.completada)
-                || pendientes.some((p) => p.cliente_id === cliente.id);
-              return (
-                <View style={[styles.clienteRow, isActive && styles.clienteRowActiva]}>
-                  <TouchableOpacity onLongPress={drag} delayLongPress={150} style={styles.asa}>
-                    <Text style={styles.asaTexto}>☰</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.clienteItem, yaVisitado && styles.clienteItemVisitado]}
-                    onPress={() => iniciarParadaEnCliente(cliente)}
-                    disabled={yaVisitado}
-                  >
-                    <Text style={styles.clienteNombre}>{index + 1}. {cliente.nombre}</Text>
-                    <Text style={styles.clienteDireccion}>{cliente.direccion}</Text>
-                    {yaVisitado && <Text style={styles.clienteVisitado}>✓ Visitado</Text>}
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.btnCartilla} onPress={() => {
-                    setClientesModal(false);
-                    setClienteCartilla(cliente);
-                  }}>
-                    <Text style={styles.btnCartillaIcono}>📋</Text>
-                    <Text style={styles.btnCartillaTexto}>Cartilla</Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            }}
-            ListEmptyComponent={
-              <Text style={styles.sinParadas}>No hay clientes en la ruta de hoy</Text>
-            }
-          />
+          {Platform.OS === 'web' ? (
+            <FlatList
+              style={{ flex: 1 }}
+              data={clientesRuta}
+              keyExtractor={(item: any) => String(item.cliente.id)}
+              contentContainerStyle={{ padding: 16, gap: 10 }}
+              renderItem={({ item, index }) => {
+                const cliente = item.cliente;
+                const yaVisitado = paradas.some((p) => p.cliente_id === cliente.id && p.completada)
+                  || pendientes.some((p) => p.cliente_id === cliente.id);
+                return (
+                  <View style={styles.clienteRow}>
+                    <TouchableOpacity
+                      style={[styles.clienteItem, yaVisitado && styles.clienteItemVisitado]}
+                      onPress={() => iniciarParadaEnCliente(cliente)}
+                      disabled={yaVisitado}
+                    >
+                      <Text style={styles.clienteNombre}>{index + 1}. {cliente.nombre}</Text>
+                      <Text style={styles.clienteDireccion}>{cliente.direccion}</Text>
+                      {yaVisitado && <Text style={styles.clienteVisitado}>✓ Visitado</Text>}
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.btnCartilla} onPress={() => {
+                      setClientesModal(false);
+                      setClienteCartilla(cliente);
+                    }}>
+                      <Text style={styles.btnCartillaIcono}>📋</Text>
+                      <Text style={styles.btnCartillaTexto}>Cartilla</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              }}
+              ListEmptyComponent={
+                <Text style={styles.sinParadas}>No hay clientes en la ruta de hoy</Text>
+              }
+            />
+          ) : (
+            <DraggableFlatList
+              style={{ flex: 1 }}
+              data={clientesRuta}
+              keyExtractor={(item: any) => String(item.cliente.id)}
+              contentContainerStyle={{ padding: 16, gap: 10 }}
+              onDragEnd={({ data }) => handleReordenar(data)}
+              renderItem={({ item, getIndex, drag, isActive }: RenderItemParams<any>) => {
+                const index = getIndex() ?? 0;
+                const cliente = item.cliente;
+                const yaVisitado = paradas.some((p) => p.cliente_id === cliente.id && p.completada)
+                  || pendientes.some((p) => p.cliente_id === cliente.id);
+                return (
+                  <View style={[styles.clienteRow, isActive && styles.clienteRowActiva]}>
+                    <TouchableOpacity onLongPress={drag} delayLongPress={150} style={styles.asa}>
+                      <Text style={styles.asaTexto}>☰</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.clienteItem, yaVisitado && styles.clienteItemVisitado]}
+                      onPress={() => iniciarParadaEnCliente(cliente)}
+                      disabled={yaVisitado}
+                    >
+                      <Text style={styles.clienteNombre}>{index + 1}. {cliente.nombre}</Text>
+                      <Text style={styles.clienteDireccion}>{cliente.direccion}</Text>
+                      {yaVisitado && <Text style={styles.clienteVisitado}>✓ Visitado</Text>}
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.btnCartilla} onPress={() => {
+                      setClientesModal(false);
+                      setClienteCartilla(cliente);
+                    }}>
+                      <Text style={styles.btnCartillaIcono}>📋</Text>
+                      <Text style={styles.btnCartillaTexto}>Cartilla</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              }}
+              ListEmptyComponent={
+                <Text style={styles.sinParadas}>No hay clientes en la ruta de hoy</Text>
+              }
+            />
+          )}
         </View>
       </Modal>
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator, TouchableOpacity,
-  Alert, ScrollView, Image, TextInput,
+  Alert, ScrollView, Image, TextInput, FlatList, Platform,
 } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import * as ImagePicker from 'expo-image-picker';
@@ -501,53 +501,98 @@ export default function RutaPreventista() {
             </View>
           </View>
 
-          <DraggableFlatList
-            style={{ flex: 1 }}
-            data={clientes}
-            keyExtractor={(item) => String(item.id)}
-            contentContainerStyle={{ padding: 16, gap: 10 }}
-            onDragEnd={({ data }) => handleReordenar(data)}
-            renderItem={({ item, getIndex, drag, isActive }: RenderItemParams<Cliente>) => {
-              const index = getIndex() ?? 0;
-              const visitado = paradas.some((p) => p.cliente_id === item.id && p.completada)
-                || pendientes.some((p) => p.cliente_id === item.id);
-              return (
-                <View style={[styles.clienteCard, visitado && styles.clienteCardVisitado, isActive && styles.clienteCardActiva]}>
-                  <View style={styles.clienteOrden}>
-                    <Text style={styles.clienteOrdenNum}>{index + 1}</Text>
-                  </View>
-                  <TouchableOpacity onLongPress={drag} delayLongPress={150} style={styles.asa}>
-                    <Text style={styles.asaTexto}>☰</Text>
-                  </TouchableOpacity>
-                  <View style={styles.clienteInfo}>
-                    <Text style={styles.clienteNombre}>{item.nombre}</Text>
-                    <Text style={styles.clienteDireccion}>{item.direccion}</Text>
-                    {item.telefono && <Text style={styles.clienteTelefono}>📞 {item.telefono}</Text>}
-                  </View>
-                  <View style={styles.botonesCard}>
-                    {visitado ? (
-                      <Text style={styles.visitadoCheck}>✓</Text>
-                    ) : (
+          {Platform.OS === 'web' ? (
+            <FlatList
+              style={{ flex: 1 }}
+              data={clientes}
+              keyExtractor={(item) => String(item.id)}
+              contentContainerStyle={{ padding: 16, gap: 10 }}
+              renderItem={({ item, index }) => {
+                const visitado = paradas.some((p) => p.cliente_id === item.id && p.completada)
+                  || pendientes.some((p) => p.cliente_id === item.id);
+                return (
+                  <View style={[styles.clienteCard, visitado && styles.clienteCardVisitado]}>
+                    <View style={styles.clienteOrden}>
+                      <Text style={styles.clienteOrdenNum}>{index + 1}</Text>
+                    </View>
+                    <View style={styles.clienteInfo}>
+                      <Text style={styles.clienteNombre}>{item.nombre}</Text>
+                      <Text style={styles.clienteDireccion}>{item.direccion}</Text>
+                      {item.telefono && <Text style={styles.clienteTelefono}>📞 {item.telefono}</Text>}
+                    </View>
+                    <View style={styles.botonesCard}>
+                      {visitado ? (
+                        <Text style={styles.visitadoCheck}>✓</Text>
+                      ) : (
+                        <TouchableOpacity
+                          style={[styles.btnVisitar, procesando && { opacity: 0.5 }]}
+                          onPress={() => iniciarVisita(item)}
+                          disabled={procesando}
+                        >
+                          <Text style={styles.btnVisitarTexto}>Visitar</Text>
+                        </TouchableOpacity>
+                      )}
                       <TouchableOpacity
-                        style={[styles.btnVisitar, procesando && { opacity: 0.5 }]}
-                        onPress={() => iniciarVisita(item)}
-                        disabled={procesando}
+                        style={styles.btnCartilla}
+                        onPress={() => setClienteCartilla(item)}
                       >
-                        <Text style={styles.btnVisitarTexto}>Visitar</Text>
+                        <Text style={styles.btnCartillaIcono}>📋</Text>
                       </TouchableOpacity>
-                    )}
-                    <TouchableOpacity
-                      style={styles.btnCartilla}
-                      onPress={() => setClienteCartilla(item)}
-                    >
-                      <Text style={styles.btnCartillaIcono}>📋</Text>
-                    </TouchableOpacity>
+                    </View>
                   </View>
-                </View>
-              );
-            }}
-            ListEmptyComponent={<Text style={styles.vacio}>No hay clientes en la ruta de hoy</Text>}
-          />
+                );
+              }}
+              ListEmptyComponent={<Text style={styles.vacio}>No hay clientes en la ruta de hoy</Text>}
+            />
+          ) : (
+            <DraggableFlatList
+              style={{ flex: 1 }}
+              data={clientes}
+              keyExtractor={(item) => String(item.id)}
+              contentContainerStyle={{ padding: 16, gap: 10 }}
+              onDragEnd={({ data }) => handleReordenar(data)}
+              renderItem={({ item, getIndex, drag, isActive }: RenderItemParams<Cliente>) => {
+                const index = getIndex() ?? 0;
+                const visitado = paradas.some((p) => p.cliente_id === item.id && p.completada)
+                  || pendientes.some((p) => p.cliente_id === item.id);
+                return (
+                  <View style={[styles.clienteCard, visitado && styles.clienteCardVisitado, isActive && styles.clienteCardActiva]}>
+                    <View style={styles.clienteOrden}>
+                      <Text style={styles.clienteOrdenNum}>{index + 1}</Text>
+                    </View>
+                    <TouchableOpacity onLongPress={drag} delayLongPress={150} style={styles.asa}>
+                      <Text style={styles.asaTexto}>☰</Text>
+                    </TouchableOpacity>
+                    <View style={styles.clienteInfo}>
+                      <Text style={styles.clienteNombre}>{item.nombre}</Text>
+                      <Text style={styles.clienteDireccion}>{item.direccion}</Text>
+                      {item.telefono && <Text style={styles.clienteTelefono}>📞 {item.telefono}</Text>}
+                    </View>
+                    <View style={styles.botonesCard}>
+                      {visitado ? (
+                        <Text style={styles.visitadoCheck}>✓</Text>
+                      ) : (
+                        <TouchableOpacity
+                          style={[styles.btnVisitar, procesando && { opacity: 0.5 }]}
+                          onPress={() => iniciarVisita(item)}
+                          disabled={procesando}
+                        >
+                          <Text style={styles.btnVisitarTexto}>Visitar</Text>
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity
+                        style={styles.btnCartilla}
+                        onPress={() => setClienteCartilla(item)}
+                      >
+                        <Text style={styles.btnCartillaIcono}>📋</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              }}
+              ListEmptyComponent={<Text style={styles.vacio}>No hay clientes en la ruta de hoy</Text>}
+            />
+          )}
         </View>
       )}
 

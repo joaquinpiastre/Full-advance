@@ -7,7 +7,7 @@ import { useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import {
   obtenerUsuariosAsignables, obtenerTareasAsignadas, obtenerTareasCreadas,
-  crearTarea, completarTarea,
+  crearTarea, completarTarea, actualizarTarea, eliminarTarea,
 } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { Tarea } from '../types';
@@ -41,6 +41,10 @@ export default function TareasScreen({ color = COLORS.primary }: Props) {
   const [completando, setCompletando] = useState<number | null>(null);
   const [notaCompletar, setNotaCompletar] = useState('');
   const [fotoCompletar, setFotoCompletar] = useState<string | null>(null);
+  const [editandoCreada, setEditandoCreada] = useState<number | null>(null);
+  const [mensajeEdit, setMensajeEdit] = useState('');
+  const [guardandoEdit, setGuardandoEdit] = useState(false);
+  const [eliminandoCreada, setEliminandoCreada] = useState<number | null>(null);
 
   const cargar = useCallback(async () => {
     try {
@@ -133,6 +137,56 @@ export default function TareasScreen({ color = COLORS.primary }: Props) {
     setMarcando(null);
   };
 
+  const abrirEditarCreada = (tarea: Tarea) => {
+    setEditandoCreada(tarea.id);
+    setMensajeEdit(tarea.mensaje);
+  };
+
+  const cancelarEditarCreada = () => {
+    setEditandoCreada(null);
+    setMensajeEdit('');
+  };
+
+  const guardarEdicionCreada = async (tarea: Tarea) => {
+    if (!mensajeEdit.trim()) {
+      Alert.alert('Error', 'Escribí la tarea');
+      return;
+    }
+    setGuardandoEdit(true);
+    try {
+      const res = await actualizarTarea(tarea.id, { mensaje: mensajeEdit.trim() });
+      setCreadas((prev) => prev.map((t) => (t.id === tarea.id ? res.data : t)));
+      cancelarEditarCreada();
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo editar la tarea');
+    }
+    setGuardandoEdit(false);
+  };
+
+  const eliminarTareaCreada = (tarea: Tarea) => {
+    Alert.alert(
+      'Eliminar tarea',
+      `¿Eliminar la tarea asignada a ${tarea.asignado_nombre}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            setEliminandoCreada(tarea.id);
+            try {
+              await eliminarTarea(tarea.id);
+              setCreadas((prev) => prev.filter((t) => t.id !== tarea.id));
+            } catch (e: any) {
+              Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo eliminar la tarea');
+            }
+            setEliminandoCreada(null);
+          },
+        },
+      ]
+    );
+  };
+
   if (cargando) return <View style={styles.center}><ActivityIndicator color={color} size="large" /></View>;
 
   const pendientes = asignadas.filter((t) => !t.completada);
@@ -201,13 +255,57 @@ export default function TareasScreen({ color = COLORS.primary }: Props) {
                         <Text style={styles.pillTexto}>{t.completada ? '✓ REALIZADA' : '⏳ PENDIENTE'}</Text>
                       </View>
                     </View>
-                    <Text style={styles.cardMensaje}>{t.mensaje}</Text>
+
+                    {editandoCreada === t.id ? (
+                      <View style={{ gap: 8 }}>
+                        <TextInput
+                          style={[styles.input, styles.inputMultiline]}
+                          multiline
+                          value={mensajeEdit}
+                          onChangeText={setMensajeEdit}
+                        />
+                        <View style={styles.completarBotones}>
+                          <TouchableOpacity style={styles.btnCancelar} onPress={cancelarEditarCreada} disabled={guardandoEdit}>
+                            <Text style={styles.btnCancelarTexto}>Cancelar</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.btnRealizada, { backgroundColor: color, flex: 1 }]}
+                            onPress={() => guardarEdicionCreada(t)}
+                            disabled={guardandoEdit}
+                          >
+                            {guardandoEdit ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnEnviarTexto}>Guardar</Text>}
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : (
+                      <Text style={styles.cardMensaje}>{t.mensaje}</Text>
+                    )}
+
                     <Text style={styles.cardFooter}>
                       {format(new Date(t.created_at), "d MMM, HH:mm", { locale: es })}
                       {t.completada && t.completada_at ? ` · Realizada ${format(new Date(t.completada_at), "d MMM, HH:mm", { locale: es })}` : ''}
                     </Text>
                     {t.nota_completada && <Text style={styles.cardEvidenciaNota}>📝 {t.nota_completada}</Text>}
                     {t.foto_uri && <Image source={{ uri: urlFoto(t.foto_uri) }} style={styles.cardEvidenciaFoto} />}
+
+                    {editandoCreada !== t.id && (
+                      <View style={styles.accionesFila}>
+                        {!t.completada && (
+                          <TouchableOpacity style={styles.btnAccionSec} onPress={() => abrirEditarCreada(t)}>
+                            <Text style={styles.btnAccionSecTexto}>✏️ Editar</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                          style={styles.btnAccionDanger}
+                          onPress={() => eliminarTareaCreada(t)}
+                          disabled={eliminandoCreada === t.id}
+                        >
+                          {eliminandoCreada === t.id
+                            ? <ActivityIndicator color={COLORS.danger} size="small" />
+                            : <Text style={styles.btnAccionDangerTexto}>🗑️ Eliminar</Text>}
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </View>
                 ))}
               </View>
@@ -339,6 +437,18 @@ const styles = StyleSheet.create({
   pillTexto: { color: '#fff', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
 
   btnRealizada: { borderRadius: 10, padding: 10, alignItems: 'center', marginTop: 4 },
+
+  accionesFila: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  btnAccionSec: {
+    flex: 1, borderRadius: 10, padding: 9, alignItems: 'center',
+    borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.background,
+  },
+  btnAccionSecTexto: { color: COLORS.textLight, fontWeight: '700', fontSize: 12 },
+  btnAccionDanger: {
+    flex: 1, borderRadius: 10, padding: 9, alignItems: 'center',
+    borderWidth: 1, borderColor: COLORS.danger, backgroundColor: '#FEF2F2',
+  },
+  btnAccionDangerTexto: { color: COLORS.danger, fontWeight: '700', fontSize: 12 },
 
   completarForm: { gap: 8, marginTop: 4 },
   subLabel: { fontSize: 12, fontWeight: '700', color: COLORS.textLight, textTransform: 'uppercase' },

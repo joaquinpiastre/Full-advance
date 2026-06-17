@@ -592,6 +592,7 @@ export default function JornadaRepartidor() {
       <NuevoClienteModal
         visible={nuevoClienteVisible}
         color={COLORS.repartidor}
+        rutas={(asignacion?.rutas ?? []).map((r: any) => ({ id: r.id, nombre: r.nombre }))}
         onClose={() => {
           setNuevoClienteVisible(false);
           setTimeout(() => setClientesModal(true), 350);

@@ -45,6 +45,14 @@ export default function SupervisorLayout() {
         }}
       />
       <Tabs.Screen
+        name="clientes"
+        options={{
+          title: 'Clientes',
+          tabBarIcon: tabIcon('people', 'people-outline'),
+          headerTitle: 'Clientes',
+        }}
+      />
+      <Tabs.Screen
         name="mapa"
         options={{
           title: 'Mapa',

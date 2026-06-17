@@ -230,6 +230,12 @@ export const obtenerTareas = () =>
 export const crearTarea = (data: { asignado_id: number; mensaje: string }) =>
   api.post('/tareas', data);
 
+export const actualizarTarea = (id: number, data: { mensaje: string }) =>
+  api.put(`/tareas/${id}`, data);
+
+export const eliminarTarea = (id: number) =>
+  api.delete(`/tareas/${id}`);
+
 export const completarTarea = (id: number, data: FormData) =>
   api.patch(`/tareas/${id}/completar`, data, {
     headers: { 'Content-Type': 'multipart/form-data' },

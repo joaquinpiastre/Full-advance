@@ -12,6 +12,7 @@ import { COLORS, COLOR_CATEGORIA } from '../../constants';
 import { Cliente, CategoriaCliente, Ruta } from '../../types';
 import Buscador from '../../components/Buscador';
 import { coincideBusqueda } from '../../utils/busqueda';
+import { esSoloCitric } from '../../utils/marcas';
 import SelectorModal from '../../components/SelectorModal';
 import SelectorModalMultiple from '../../components/SelectorModalMultiple';
 
@@ -29,6 +30,7 @@ const FRECUENCIAS = ['Semanal', 'Quincenal', 'Mensual', 'Ocasional'];
 const FORMAS_PAGO = ['Efectivo', 'Cuenta corriente', 'Transferencia'];
 const DIAS_VISITA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Sin preferencia'];
 const MARCAS = ['BIMBO', 'CITRIC', 'SANAS', 'ARRABAL', 'FARGO', 'LACTAL'];
+const COLOR_CITRIC = '#F97316';
 
 function Chips({ opciones, valor, onSeleccionar, colorPorOpcion }: {
   opciones: string[];
@@ -69,6 +71,7 @@ export default function Clientes() {
   const [busqueda, setBusqueda] = useState('');
   const [categoriaFiltro, setCategoriaFiltro] = useState<CategoriaCliente | null>(null);
   const [estadoFiltro, setEstadoFiltro] = useState<'activos' | 'inactivos'>('activos');
+  const [soloCitric, setSoloCitric] = useState(false);
   const [departamentos, setDepartamentos] = useState<{ id: number; nombre: string }[]>([]);
   const [distritos, setDistritos] = useState<{ id: number; nombre: string; departamento_id: number | null }[]>([]);
 
@@ -229,9 +232,10 @@ export default function Clientes() {
         c.telefono, c.email, c.contacto_nombre, c.cuit, c.notas
       );
       const coincideCategoria = !categoriaFiltro || c.categoria === categoriaFiltro;
-      return coincideTexto && coincideCategoria;
+      const coincideCitric = !soloCitric || esSoloCitric(c);
+      return coincideTexto && coincideCategoria && coincideCitric;
     });
-  }, [clientes, busqueda, categoriaFiltro]);
+  }, [clientes, busqueda, categoriaFiltro, soloCitric]);
 
   if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
 
@@ -281,6 +285,19 @@ export default function Clientes() {
             );
           })}
         </View>
+        <View style={styles.estadoFila}>
+          <TouchableOpacity
+            style={[
+              styles.citricChip,
+              soloCitric && { backgroundColor: COLOR_CITRIC, borderColor: COLOR_CITRIC },
+            ]}
+            onPress={() => setSoloCitric((v) => !v)}
+          >
+            <Text style={[styles.citricChipTexto, soloCitric && { color: '#fff' }]}>
+              🍊 Citric (exclusivo)
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
@@ -307,6 +324,9 @@ export default function Clientes() {
               {(item.departamento || item.zona) && (
                 <Text style={styles.cardTel}>📍 {[item.departamento, item.zona].filter(Boolean).join(' · ')}</Text>
               )}
+              {item.marcas?.length ? (
+                <Text style={styles.cardTel}>🛒 Marcas: {item.marcas.join(', ')}</Text>
+              ) : null}
             </TouchableOpacity>
             <View style={styles.accionesFila}>
               <TouchableOpacity
@@ -574,6 +594,15 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
   },
   categoriaChipTexto: { fontWeight: '800', fontSize: 14 },
+  citricChip: {
+    borderWidth: 1.5,
+    borderColor: COLOR_CITRIC,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    backgroundColor: COLORS.card,
+  },
+  citricChipTexto: { fontWeight: '700', fontSize: 13, color: COLOR_CITRIC },
   card: {
     backgroundColor: COLORS.card,
     borderRadius: 14,

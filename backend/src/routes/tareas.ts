@@ -111,6 +111,44 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// Editar el mensaje de una tarea que yo asigné (solo si todavía no fue realizada).
+router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const { mensaje } = req.body;
+  if (!mensaje?.trim()) return res.status(400).json({ error: 'El mensaje es obligatorio' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE tareas SET mensaje=$1
+       WHERE id=$2 AND autor_id=$3 AND completada=false
+       RETURNING *`,
+      [mensaje.trim(), id, req.usuario!.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Tarea no encontrada, no te pertenece o ya fue realizada' });
+    const { rows: nombres } = await pool.query(
+      `SELECT u.nombre as asignado_nombre, u.rol as asignado_rol FROM usuarios u WHERE u.id=$1`,
+      [rows[0].asignado_id]
+    );
+    res.json({ ...rows[0], ...nombres[0], autor_nombre: req.usuario!.nombre, autor_rol: req.usuario!.rol });
+  } catch {
+    res.status(500).json({ error: 'Error al editar la tarea' });
+  }
+});
+
+// Eliminar una tarea que yo asigné.
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  try {
+    const { rows } = await pool.query(
+      `DELETE FROM tareas WHERE id=$1 AND autor_id=$2 RETURNING id`,
+      [id, req.usuario!.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Tarea no encontrada o no te pertenece' });
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: 'Error al eliminar la tarea' });
+  }
+});
+
 // Marcar una tarea propia como realizada, con foto y nota opcionales como evidencia.
 router.patch('/:id/completar', authMiddleware, upload.single('foto'), async (req: AuthRequest, res: Response) => {
   const { id } = req.params;

@@ -28,12 +28,16 @@ interface Props {
   color?: string;
   onClose: () => void;
   onCreado?: (cliente: Cliente) => void;
+  // Rutas asignadas hoy al usuario (preventista/repartidor). Si hay más de
+  // una, se le pide elegir a cuál se agrega el cliente nuevo.
+  rutas?: { id: number; nombre: string }[];
 }
 
-export default function NuevoClienteModal({ visible, color = COLORS.primary, onClose, onCreado }: Props) {
+export default function NuevoClienteModal({ visible, color = COLORS.primary, onClose, onCreado, rutas }: Props) {
   const { usuario } = useAuthStore();
   const puedeAgregarZonas = usuario?.rol === 'admin' || usuario?.rol === 'supervisor';
   const [form, setForm] = useState(FORM_VACIO);
+  const [rutaId, setRutaId] = useState<number | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [departamentos, setDepartamentos] = useState<{ id: number; nombre: string }[]>([]);
   const [distritos, setDistritos] = useState<{ id: number; nombre: string; departamento_id: number | null }[]>([]);
@@ -42,7 +46,8 @@ export default function NuevoClienteModal({ visible, color = COLORS.primary, onC
     if (!visible) return;
     obtenerDepartamentos().then((res) => setDepartamentos(res.data)).catch(() => {});
     obtenerDistritos().then((res) => setDistritos(res.data)).catch(() => {});
-  }, [visible]);
+    setRutaId(rutas?.length === 1 ? rutas[0].id : null);
+  }, [visible, rutas]);
 
   const departamentoId = departamentos.find((d) => d.nombre === form.departamento)?.id ?? null;
   const distritosFiltrados = departamentoId
@@ -52,6 +57,10 @@ export default function NuevoClienteModal({ visible, color = COLORS.primary, onC
   const guardar = async () => {
     if (!form.nombre.trim() || !form.direccion.trim()) {
       Alert.alert('Error', 'El nombre y la dirección son obligatorios');
+      return;
+    }
+    if (rutas && rutas.length > 1 && !rutaId) {
+      Alert.alert('Error', 'Elegí a qué ruta pertenece el cliente');
       return;
     }
     setGuardando(true);
@@ -68,6 +77,7 @@ export default function NuevoClienteModal({ visible, color = COLORS.primary, onC
         tipo_comercio: form.tipo_comercio || null,
         marcas: form.marcas.length ? form.marcas : null,
         notas: form.notas.trim() || null,
+        ...(rutaId ? { ruta_id: rutaId } : {}),
       });
       setForm(FORM_VACIO);
       onCreado?.(res.data);
@@ -92,6 +102,19 @@ export default function NuevoClienteModal({ visible, color = COLORS.primary, onC
           <Text style={styles.aviso}>
             ➕ Cargá un nuevo cliente. Quedará agregado a tu ruta de hoy.
           </Text>
+
+          {rutas && rutas.length > 1 && (
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Ruta *</Text>
+              <SelectorModal
+                titulo="Ruta"
+                opciones={rutas.map((r) => r.nombre)}
+                valor={rutas.find((r) => r.id === rutaId)?.nombre ?? ''}
+                onSeleccionar={(v) => setRutaId(rutas.find((r) => r.nombre === v)?.id ?? null)}
+                color={color}
+              />
+            </View>
+          )}
 
           <View style={styles.formGroup}>
             <Text style={styles.label}>Nombre *</Text>

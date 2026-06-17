@@ -32,6 +32,7 @@ export default function RutaPreventista() {
   const { jornada, setJornada } = useJornadaStore();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [rutaId, setRutaId] = useState<number | null>(null);
+  const [rutasAsignadas, setRutasAsignadas] = useState<{ id: number; nombre: string }[]>([]);
   const [paradas, setParadas] = useState<any[]>([]);
   const [cargando, setCargando] = useState(true);
   const [clienteCartilla, setClienteCartilla] = useState<Cliente | null>(null);
@@ -89,6 +90,7 @@ export default function RutaPreventista() {
       }
       setClientes(merged);
       setRutaId(rutas.length === 1 ? rutas[0].id : null);
+      setRutasAsignadas(rutas.map((r: any) => ({ id: r.id, nombre: r.nombre })));
       if (jornada) {
         const paradasRes = await obtenerParadas(jornada.id);
         setParadas(paradasRes.data);
@@ -665,6 +667,7 @@ export default function RutaPreventista() {
       <NuevoClienteModal
         visible={nuevoClienteVisible}
         color={COLORS.preventista}
+        rutas={rutasAsignadas}
         onClose={() => setNuevoClienteVisible(false)}
         onCreado={cargar}
       />

@@ -49,14 +49,19 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   const client = await pool.connect();
   try {
     if (!esAdmin) {
-      // Repartidores/preventistas asignan el cliente automáticamente a su ruta del día.
+      // Repartidores/preventistas solo pueden asignar el cliente a una de
+      // sus rutas asignadas hoy (puede tener más de una con multi-ruta).
       const hoy = new Date().toISOString().split('T')[0];
       const { rows: asigRows } = await client.query(
-        'SELECT ruta_id FROM asignaciones WHERE usuario_id=$1 AND fecha=$2 LIMIT 1',
+        'SELECT ruta_id FROM asignaciones WHERE usuario_id=$1 AND fecha=$2',
         [req.usuario!.id, hoy]
       );
       if (!asigRows.length) return res.status(400).json({ error: 'No tenés una ruta asignada hoy' });
-      ruta_id = asigRows[0].ruta_id;
+      const rutasAsignadas: number[] = asigRows.map((r) => r.ruta_id);
+      if (ruta_id && !rutasAsignadas.includes(Number(ruta_id))) {
+        return res.status(403).json({ error: 'Esa ruta no está entre tus rutas asignadas hoy' });
+      }
+      ruta_id = ruta_id ? Number(ruta_id) : rutasAsignadas[0];
     }
     if (!ruta_id) return res.status(400).json({ error: 'Debés asignar una ruta' });
 

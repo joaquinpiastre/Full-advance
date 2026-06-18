@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, Alert, Image } from 'react-native';
 import { obtenerPagos, obtenerEstadisticasPagos, eliminarPago } from '../services/api';
-import { COLORS } from '../constants';
+import { COLORS, urlFoto } from '../constants';
 import { Pago, MetodoPago, Rol } from '../types';
 import { formatMoney } from '../utils/dinero';
 import { isoADDMMAAAA } from '../utils/fechas';
@@ -256,6 +256,12 @@ export default function PagosPanelScreen({ puedeEliminar = false }: Props) {
                 {item.numero_factura && <Text style={styles.cardDato}>🧾 Factura #{item.numero_factura}</Text>}
                 {item.numero_cheque && <Text style={styles.cardDato}>💵 Cheque #{item.numero_cheque}</Text>}
                 {item.nota && <Text style={styles.cardNota}>📝 {item.nota}</Text>}
+                {item.comprobante_uri && (
+                  <View style={styles.comprobanteCont}>
+                    <Text style={styles.cardDato}>📎 Comprobante de {item.cliente_nombre}:</Text>
+                    <Image source={{ uri: urlFoto(item.comprobante_uri) }} style={styles.comprobanteImg} />
+                  </View>
+                )}
 
                 {puedeEliminar && (
                   <TouchableOpacity
@@ -346,6 +352,8 @@ const styles = StyleSheet.create({
   cardMontoTexto: { fontSize: 12, color: COLORS.textLight },
   cardMontoValor: { fontWeight: '800', color: COLORS.text },
   cardNota: { fontSize: 12, color: COLORS.text, fontStyle: 'italic' },
+  comprobanteCont: { gap: 4, marginTop: 2 },
+  comprobanteImg: { width: 100, height: 100, borderRadius: 8 },
 
   pill: { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 },
   pillTexto: { color: '#fff', fontSize: 9, fontWeight: '800', letterSpacing: 0.3 },

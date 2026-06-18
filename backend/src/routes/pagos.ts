@@ -1,8 +1,22 @@
 import { Router, Response } from 'express';
+import multer from 'multer';
+import fs from 'fs';
 import { pool } from '../db/client';
 import { authMiddleware, adminOSupervisor, AuthRequest } from '../middleware/auth';
 
 const router = Router();
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = process.env.UPLOADS_DIR ?? './uploads';
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  },
+});
+const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
 const METODOS_VALIDOS = ['efectivo', 'transferencia_hecha', 'transferencia_por_hacer', 'cuenta_corriente', 'cheque'];
 
@@ -135,6 +149,24 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
     res.json({ ok: true });
   } catch {
     res.status(500).json({ error: 'Error al eliminar el pago' });
+  }
+});
+
+// Sube (o reemplaza) el comprobante de transferencia/pago de un pago propio (o cualquiera si admin).
+router.post('/:id/comprobante', authMiddleware, upload.single('comprobante'), async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  if (!req.file) return res.status(400).json({ error: 'Falta el archivo del comprobante' });
+  const comprobante_uri = `/uploads/${req.file.filename}`;
+  try {
+    const esAdmin = req.usuario?.rol === 'admin';
+    const { rows } = await pool.query(
+      `UPDATE pagos SET comprobante_uri=$1 WHERE id=$2 AND (usuario_id=$3 OR $4=true) RETURNING *`,
+      [comprobante_uri, id, req.usuario!.id, esAdmin]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Pago no encontrado o no te pertenece' });
+    res.json(rows[0]);
+  } catch {
+    res.status(500).json({ error: 'Error al subir el comprobante' });
   }
 });
 

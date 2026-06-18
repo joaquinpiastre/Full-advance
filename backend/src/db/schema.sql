@@ -145,8 +145,10 @@ CREATE TABLE IF NOT EXISTS pagos (
   )),
   numero_cheque VARCHAR(50),
   nota TEXT,
+  comprobante_uri VARCHAR(255),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE pagos ADD COLUMN IF NOT EXISTS comprobante_uri VARCHAR(255);
 
 CREATE TABLE IF NOT EXISTS ruta_clientes (
   id SERIAL PRIMARY KEY,

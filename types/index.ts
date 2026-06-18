@@ -202,6 +202,7 @@ export interface Pago {
   metodo_pago: MetodoPago;
   numero_cheque?: string;
   nota?: string;
+  comprobante_uri?: string;
   created_at: string;
   cliente_nombre?: string;
   autor_nombre?: string;

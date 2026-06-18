@@ -432,6 +432,7 @@ pool.query(`
     created_at TIMESTAMPTZ DEFAULT NOW()
   )
 `).catch(() => {});
+pool.query(`ALTER TABLE pagos ADD COLUMN IF NOT EXISTS comprobante_uri VARCHAR(255)`).catch(() => {});
 
 // Auto-cierre de jornadas inactivas: si la última parada (o el inicio de jornada
 // si no hubo ninguna) fue hace más de 5 horas, la jornada se cierra sola.

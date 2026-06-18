@@ -1,14 +1,15 @@
 import { useState, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity,
-  ActivityIndicator, RefreshControl, Alert, Modal,
+  ActivityIndicator, RefreshControl, Alert, Modal, Image, Platform,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import {
-  obtenerClientes, obtenerMisPagos, crearPago, actualizarPago, eliminarPago,
+  obtenerClientes, obtenerMisPagos, crearPago, actualizarPago, eliminarPago, subirComprobantePago,
 } from '../services/api';
 import { Cliente, Pago, MetodoPago } from '../types';
-import { COLORS } from '../constants';
+import { COLORS, urlFoto } from '../constants';
 import { formatMoney } from '../utils/dinero';
 import { ddmmaaaaAIso, isoADDMMAAAA, hoyDDMMAAAA } from '../utils/fechas';
 import { METODOS_PAGO, METODO_LABEL, METODO_COLOR } from '../utils/pagos';
@@ -44,6 +45,12 @@ export default function PagosScreen({ color = COLORS.primary }: Props) {
   const [eliminandoId, setEliminandoId] = useState<number | null>(null);
   const listRef = useRef<FlatList<Pago>>(null);
 
+  // Comprobante (foto/captura de transferencia): comprobante = elegido recién,
+  // pendiente de subir; comprobanteExistente = el que ya tiene el pago en edición.
+  const [comprobante, setComprobante] = useState<string | null>(null);
+  const [comprobanteExistente, setComprobanteExistente] = useState<string | null>(null);
+  const [subiendoComprobante, setSubiendoComprobante] = useState(false);
+
   const cargar = useCallback(async () => {
     try {
       const [resClientes, resPagos] = await Promise.all([
@@ -66,6 +73,8 @@ export default function PagosScreen({ color = COLORS.primary }: Props) {
     setForm(FORM_VACIO);
     setClienteSeleccionado(null);
     setEditandoId(null);
+    setComprobante(null);
+    setComprobanteExistente(null);
   };
 
   const abrirEditar = (pago: Pago) => {
@@ -82,7 +91,52 @@ export default function PagosScreen({ color = COLORS.primary }: Props) {
       nota: pago.nota ?? '',
     });
     setEditandoId(pago.id);
+    setComprobante(null);
+    setComprobanteExistente(pago.comprobante_uri ?? null);
     listRef.current?.scrollToOffset({ offset: 0, animated: true });
+  };
+
+  const elegirComprobante = () => {
+    Alert.alert('Comprobante', '¿Cómo querés agregarlo?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: '🖼️ Elegir de galería', onPress: elegirComprobanteDeGaleria },
+      { text: '📷 Sacar foto', onPress: tomarFotoComprobante },
+    ]);
+  };
+
+  const tomarFotoComprobante = async () => {
+    try {
+      const permiso = await ImagePicker.requestCameraPermissionsAsync();
+      if (permiso.status !== 'granted') {
+        Alert.alert(
+          'Permiso de cámara',
+          permiso.canAskAgain
+            ? 'Necesitás permitir el acceso a la cámara.'
+            : 'El permiso fue denegado permanentemente. Habilitalo en Ajustes → Aplicaciones → Permisos → Cámara.'
+        );
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({ quality: 0.7, allowsEditing: false });
+      if (result.canceled) return;
+      setComprobante(result.assets[0].uri);
+    } catch {
+      Alert.alert('Error', 'No se pudo abrir la cámara.');
+    }
+  };
+
+  const elegirComprobanteDeGaleria = async () => {
+    try {
+      const permiso = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permiso.status !== 'granted') {
+        Alert.alert('Permiso de galería', 'Necesitás permitir el acceso a tus fotos.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.7, allowsEditing: false });
+      if (result.canceled) return;
+      setComprobante(result.assets[0].uri);
+    } catch {
+      Alert.alert('Error', 'No se pudo abrir la galería.');
+    }
   };
 
   const guardar = async () => {
@@ -136,13 +190,35 @@ export default function PagosScreen({ color = COLORS.primary }: Props) {
 
     setGuardando(true);
     try {
+      let pagoGuardado: Pago;
       if (editandoId) {
         const res = await actualizarPago(editandoId, payload);
-        setMisPagos((prev) => prev.map((p) => (p.id === editandoId ? res.data : p)));
+        pagoGuardado = { ...res.data, cliente_nombre: clienteSeleccionado.nombre };
+        setMisPagos((prev) => prev.map((p) => (p.id === editandoId ? pagoGuardado : p)));
       } else {
         const res = await crearPago(payload);
-        setMisPagos((prev) => [res.data, ...prev]);
+        pagoGuardado = { ...res.data, cliente_nombre: clienteSeleccionado.nombre };
+        setMisPagos((prev) => [pagoGuardado, ...prev]);
       }
+
+      if (comprobante) {
+        setSubiendoComprobante(true);
+        try {
+          const form = new FormData();
+          if (Platform.OS === 'web') {
+            const blob = await (await fetch(comprobante)).blob();
+            form.append('comprobante', blob, 'comprobante.jpg');
+          } else {
+            form.append('comprobante', { uri: comprobante, type: 'image/jpeg', name: 'comprobante.jpg' } as any);
+          }
+          const resComprobante = await subirComprobantePago(pagoGuardado.id, form);
+          setMisPagos((prev) => prev.map((p) => (p.id === pagoGuardado.id ? { ...p, comprobante_uri: resComprobante.data.comprobante_uri } : p)));
+        } catch {
+          Alert.alert('Pago guardado', 'El pago se guardó, pero no se pudo subir el comprobante. Podés intentar de nuevo editando el pago.');
+        }
+        setSubiendoComprobante(false);
+      }
+
       resetForm();
     } catch (e: any) {
       Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo guardar el pago');
@@ -319,6 +395,23 @@ export default function PagosScreen({ color = COLORS.primary }: Props) {
               />
             </View>
 
+            <View style={styles.campo}>
+              <Text style={styles.label}>Comprobante (opcional)</Text>
+              {comprobante || comprobanteExistente ? (
+                <TouchableOpacity onPress={elegirComprobante} style={styles.comprobantePreviewCont}>
+                  <Image
+                    source={{ uri: comprobante ?? urlFoto(comprobanteExistente) }}
+                    style={styles.comprobantePreview}
+                  />
+                  <Text style={styles.comprobanteCambiar}>Tocá para cambiarlo</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={styles.btnComprobante} onPress={elegirComprobante}>
+                  <Text style={styles.btnComprobanteTexto}>📎 Adjuntar comprobante de transferencia</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
             <View style={styles.fila}>
               {editandoId && (
                 <TouchableOpacity style={styles.btnCancelar} onPress={resetForm} disabled={guardando}>
@@ -335,6 +428,7 @@ export default function PagosScreen({ color = COLORS.primary }: Props) {
                   : <Text style={styles.btnGuardarTexto}>{editandoId ? 'Guardar cambios' : 'Guardar pago'}</Text>}
               </TouchableOpacity>
             </View>
+            {subiendoComprobante && <Text style={styles.subiendoTexto}>Subiendo comprobante...</Text>}
           </View>
 
           <Text style={styles.seccionTitulo}>Mis pagos recientes</Text>
@@ -364,6 +458,12 @@ export default function PagosScreen({ color = COLORS.primary }: Props) {
             {item.numero_factura && <Text style={styles.cardDato}>🧾 Factura #{item.numero_factura}</Text>}
             {item.numero_cheque && <Text style={styles.cardDato}>💵 Cheque #{item.numero_cheque}</Text>}
             {item.nota && <Text style={styles.cardNota}>📝 {item.nota}</Text>}
+            {item.comprobante_uri && (
+              <View style={styles.comprobanteCardCont}>
+                <Text style={styles.cardDato}>📎 Comprobante de {item.cliente_nombre}:</Text>
+                <Image source={{ uri: urlFoto(item.comprobante_uri) }} style={styles.comprobanteCardImg} />
+              </View>
+            )}
 
             <View style={styles.accionesFila}>
               <TouchableOpacity style={styles.btnAccionSec} onPress={() => abrirEditar(item)}>
@@ -466,6 +566,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18, borderWidth: 1, borderColor: COLORS.border,
   },
   btnCancelarTexto: { color: COLORS.textLight, fontWeight: '700', fontSize: 13 },
+  subiendoTexto: { fontSize: 12, color: COLORS.textLight, textAlign: 'center', marginTop: -4 },
+
+  btnComprobante: {
+    borderWidth: 1.5, borderColor: COLORS.border, borderStyle: 'dashed', borderRadius: 10,
+    padding: 14, alignItems: 'center', backgroundColor: COLORS.background,
+  },
+  btnComprobanteTexto: { fontSize: 13, fontWeight: '600', color: COLORS.textLight },
+  comprobantePreviewCont: { alignItems: 'flex-start', gap: 4 },
+  comprobantePreview: { width: 120, height: 120, borderRadius: 10, backgroundColor: COLORS.background },
+  comprobanteCambiar: { fontSize: 11, color: COLORS.textLight, fontStyle: 'italic' },
+  comprobanteCardCont: { gap: 4, marginTop: 2 },
+  comprobanteCardImg: { width: 100, height: 100, borderRadius: 8 },
 
   seccionTitulo: { fontSize: 13, fontWeight: '800', color: COLORS.text, textTransform: 'uppercase', letterSpacing: 0.5 },
 

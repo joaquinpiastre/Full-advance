@@ -308,6 +308,12 @@ export const actualizarPago = (id: number, data: Parameters<typeof crearPago>[0]
 export const eliminarPago = (id: number) =>
   api.delete(`/pagos/${id}`);
 
+export const subirComprobantePago = (id: number, data: FormData) =>
+  api.post(`/pagos/${id}/comprobante`, data, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 30000,
+  });
+
 export const obtenerEstadisticasPagos = () =>
   api.get('/estadisticas/pagos');
 

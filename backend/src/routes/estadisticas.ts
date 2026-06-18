@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { pool } from '../db/client';
-import { authMiddleware, soloAdmin, AuthRequest } from '../middleware/auth';
+import { authMiddleware, soloAdmin, adminOSupervisor, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -107,6 +107,62 @@ router.get('/encuestas', authMiddleware, soloAdmin, async (_req: AuthRequest, re
     res.json(resultados);
   } catch {
     res.status(500).json({ error: 'Error al obtener estadísticas de encuestas' });
+  }
+});
+
+// Balance y estadísticas de cobranzas: resumen, evolución diaria, ranking
+// por usuario ("quién acumula cuánto") y desglose por método de pago.
+// Accesible para admin y supervisor.
+router.get('/pagos', authMiddleware, adminOSupervisor, async (_req: AuthRequest, res: Response) => {
+  try {
+    const [resumenRes, porDiaRes, porUsuarioRes, porMetodoRes] = await Promise.all([
+      pool.query(`
+        SELECT
+          COALESCE(SUM(monto_pagado) FILTER (WHERE fecha_pago >= CURRENT_DATE - INTERVAL '30 days'), 0)::float AS total_cobrado_30d,
+          COUNT(*) FILTER (WHERE fecha_pago >= CURRENT_DATE - INTERVAL '30 days')::int AS cantidad_pagos_30d,
+          COALESCE(SUM(monto_a_cobrar - monto_pagado) FILTER (WHERE monto_a_cobrar > monto_pagado), 0)::float AS pendiente_total
+        FROM pagos
+      `),
+      pool.query(`
+        SELECT to_char(d, 'YYYY-MM-DD') AS fecha, COALESCE(SUM(p.monto_pagado), 0)::float AS total
+        FROM generate_series(CURRENT_DATE - INTERVAL '13 days', CURRENT_DATE, INTERVAL '1 day') AS d
+        LEFT JOIN pagos p ON p.fecha_pago = d::date
+        GROUP BY d
+        ORDER BY d
+      `),
+      pool.query(`
+        SELECT u.id as usuario_id, u.nombre, u.rol,
+          SUM(p.monto_pagado)::float AS total_cobrado,
+          COUNT(p.id)::int AS cantidad_pagos
+        FROM pagos p
+        JOIN usuarios u ON u.id = p.usuario_id
+        WHERE p.fecha_pago >= CURRENT_DATE - INTERVAL '30 days'
+        GROUP BY u.id
+        ORDER BY total_cobrado DESC
+      `),
+      pool.query(`
+        SELECT metodo_pago, SUM(monto_pagado)::float AS total, COUNT(*)::int AS cantidad
+        FROM pagos
+        WHERE fecha_pago >= CURRENT_DATE - INTERVAL '30 days'
+        GROUP BY metodo_pago
+        ORDER BY total DESC
+      `),
+    ]);
+
+    const r = resumenRes.rows[0];
+    res.json({
+      resumen: {
+        totalCobrado30d: r.total_cobrado_30d,
+        cantidadPagos30d: r.cantidad_pagos_30d,
+        promedioPorPago: r.cantidad_pagos_30d > 0 ? r.total_cobrado_30d / r.cantidad_pagos_30d : 0,
+        pendienteTotal: r.pendiente_total,
+      },
+      porDia: porDiaRes.rows,
+      porUsuario: porUsuarioRes.rows,
+      porMetodo: porMetodoRes.rows,
+    });
+  } catch {
+    res.status(500).json({ error: 'Error al obtener estadísticas de pagos' });
   }
 });
 

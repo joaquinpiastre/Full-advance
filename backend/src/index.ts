@@ -19,6 +19,7 @@ import anunciosRouter from './routes/anuncios';
 import tareasRouter from './routes/tareas';
 import calificacionesRouter from './routes/calificaciones';
 import encuestasRouter from './routes/encuestas';
+import pagosRouter from './routes/pagos';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -41,6 +42,7 @@ app.use('/anuncios', anunciosRouter);
 app.use('/tareas', tareasRouter);
 app.use('/calificaciones', calificacionesRouter);
 app.use('/encuestas', encuestasRouter);
+app.use('/pagos', pagosRouter);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', app: 'Full Advance' }));
 
@@ -408,6 +410,28 @@ pool.query(`ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_rol_check`)
       CHECK (rol IN ('admin', 'repartidor', 'preventista', 'supervisor'))
   `))
   .catch(() => {});
+
+// Cobranzas: preventistas/repartidores registran los pagos que reciben de
+// los clientes durante la visita. usuario_id es quien cargó el pago.
+pool.query(`
+  CREATE TABLE IF NOT EXISTS pagos (
+    id SERIAL PRIMARY KEY,
+    usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+    cliente_id INTEGER NOT NULL REFERENCES clientes(id),
+    numero_cliente VARCHAR(50),
+    fecha_pago DATE NOT NULL,
+    fecha_emision_factura DATE,
+    numero_factura VARCHAR(50),
+    monto_a_cobrar DOUBLE PRECISION NOT NULL,
+    monto_pagado DOUBLE PRECISION NOT NULL,
+    metodo_pago VARCHAR(30) NOT NULL CHECK (metodo_pago IN (
+      'efectivo', 'transferencia_hecha', 'transferencia_por_hacer', 'cuenta_corriente', 'cheque'
+    )),
+    numero_cheque VARCHAR(50),
+    nota TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )
+`).catch(() => {});
 
 // Auto-cierre de jornadas inactivas: si la última parada (o el inicio de jornada
 // si no hubo ninguna) fue hace más de 5 horas, la jornada se cierra sola.

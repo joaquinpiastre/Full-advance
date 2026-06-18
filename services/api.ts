@@ -283,6 +283,34 @@ export const actualizarEncuesta = (id: number, data: Partial<{ pregunta: string;
 export const eliminarEncuesta = (id: number) =>
   api.delete(`/encuestas/${id}`);
 
+// Pagos / cobranzas
+export const obtenerMisPagos = () =>
+  api.get('/pagos/mios');
+
+export const obtenerPagos = () =>
+  api.get('/pagos');
+
+export const crearPago = (data: {
+  cliente_id: number;
+  fecha_pago: string;
+  fecha_emision_factura?: string | null;
+  numero_factura?: string | null;
+  monto_a_cobrar: number;
+  monto_pagado: number;
+  metodo_pago: string;
+  numero_cheque?: string | null;
+  nota?: string | null;
+}) => api.post('/pagos', data);
+
+export const actualizarPago = (id: number, data: Parameters<typeof crearPago>[0]) =>
+  api.put(`/pagos/${id}`, data);
+
+export const eliminarPago = (id: number) =>
+  api.delete(`/pagos/${id}`);
+
+export const obtenerEstadisticasPagos = () =>
+  api.get('/estadisticas/pagos');
+
 // Historial
 export const obtenerHistorialJornadas = (usuario_id?: number) =>
   api.get('/jornadas/historial', { params: { usuario_id } });

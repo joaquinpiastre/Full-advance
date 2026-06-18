@@ -85,6 +85,14 @@ export default function PreventistaLayout() {
           headerTitle: 'Tareas',
         }}
       />
+      <Tabs.Screen
+        name="pagos"
+        options={{
+          title: 'Pagos',
+          tabBarIcon: tabIcon('cash', 'cash-outline'),
+          headerTitle: 'Pagos y Cobranzas',
+        }}
+      />
     </Tabs>
   );
 }

@@ -128,6 +128,26 @@ CREATE TABLE IF NOT EXISTS rutas (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Cobranzas: preventistas/repartidores registran los pagos que reciben de
+-- los clientes durante la visita. usuario_id es quien cargó el pago.
+CREATE TABLE IF NOT EXISTS pagos (
+  id SERIAL PRIMARY KEY,
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+  cliente_id INTEGER NOT NULL REFERENCES clientes(id),
+  numero_cliente VARCHAR(50),
+  fecha_pago DATE NOT NULL,
+  fecha_emision_factura DATE,
+  numero_factura VARCHAR(50),
+  monto_a_cobrar DOUBLE PRECISION NOT NULL,
+  monto_pagado DOUBLE PRECISION NOT NULL,
+  metodo_pago VARCHAR(30) NOT NULL CHECK (metodo_pago IN (
+    'efectivo', 'transferencia_hecha', 'transferencia_por_hacer', 'cuenta_corriente', 'cheque'
+  )),
+  numero_cheque VARCHAR(50),
+  nota TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS ruta_clientes (
   id SERIAL PRIMARY KEY,
   ruta_id INTEGER REFERENCES rutas(id) ON DELETE CASCADE,

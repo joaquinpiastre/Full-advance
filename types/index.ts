@@ -187,6 +187,27 @@ export interface Tarea {
   asignado_rol?: Rol;
 }
 
+export type MetodoPago = 'efectivo' | 'transferencia_hecha' | 'transferencia_por_hacer' | 'cuenta_corriente' | 'cheque';
+
+export interface Pago {
+  id: number;
+  usuario_id: number;
+  cliente_id: number;
+  numero_cliente?: string;
+  fecha_pago: string;
+  fecha_emision_factura?: string;
+  numero_factura?: string;
+  monto_a_cobrar: number;
+  monto_pagado: number;
+  metodo_pago: MetodoPago;
+  numero_cheque?: string;
+  nota?: string;
+  created_at: string;
+  cliente_nombre?: string;
+  autor_nombre?: string;
+  autor_rol?: Rol;
+}
+
 export interface UbicacionLive {
   usuario_id: number;
   nombre: string;

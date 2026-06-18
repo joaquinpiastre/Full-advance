@@ -121,6 +121,14 @@ export default function AdminLayout() {
           headerTitle: 'Tareas',
         }}
       />
+      <Tabs.Screen
+        name="pagos"
+        options={{
+          title: 'Pagos',
+          tabBarIcon: tabIcon('cash', 'cash-outline'),
+          headerTitle: 'Pagos y Cobranzas',
+        }}
+      />
     </Tabs>
   );
 }

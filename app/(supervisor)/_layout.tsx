@@ -100,6 +100,14 @@ export default function SupervisorLayout() {
           headerTitle: 'Tareas',
         }}
       />
+      <Tabs.Screen
+        name="pagos"
+        options={{
+          title: 'Pagos',
+          tabBarIcon: tabIcon('cash', 'cash-outline'),
+          headerTitle: 'Pagos y Cobranzas',
+        }}
+      />
     </Tabs>
   );
 }

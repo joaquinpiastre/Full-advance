@@ -50,6 +50,14 @@ export default function AdminLayout() {
         }}
       />
       <Tabs.Screen
+        name="seguimiento"
+        options={{
+          title: 'En Vivo',
+          tabBarIcon: tabIcon('radio', 'radio-outline'),
+          headerTitle: 'Seguimiento en Vivo',
+        }}
+      />
+      <Tabs.Screen
         name="usuarios"
         options={{
           title: 'Usuarios',

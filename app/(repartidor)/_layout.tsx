@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import { COLORS } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -10,6 +11,9 @@ const tabIcon = (active: IconName, inactive: IconName) =>
   );
 
 export default function RepartidorLayout() {
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = 56 + insets.bottom;
+
   return (
     <Tabs
       screenOptions={{
@@ -21,9 +25,9 @@ export default function RepartidorLayout() {
         tabBarStyle: {
           backgroundColor: '#fff',
           borderTopColor: COLORS.divider,
-          height: 62,
+          height: tabBarHeight,
           paddingTop: 6,
-          paddingBottom: 8,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
       }}

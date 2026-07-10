@@ -19,6 +19,11 @@
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.fulladvance.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBsYKX7huzWh28W-HTjVclt4r6hlX1gNC0"
+        }
+      },
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
@@ -56,7 +61,15 @@
           "cameraPermission": "Full Advance necesita acceso a la cámara para registrar entregas."
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Full Advance necesita acceso a tus fotos para subir comprobantes de pago.",
+          "cameraPermission": "Full Advance necesita acceso a la cámara para registrar comprobantes."
+        }
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true

@@ -3,7 +3,6 @@ import {
   View, Text, StyleSheet, ActivityIndicator, TouchableOpacity,
   Alert, ScrollView, Image, TextInput, FlatList, Platform,
 } from 'react-native';
-import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useFocusEffect } from 'expo-router';
 import { useJornadaStore } from '../../store/jornadaStore';
@@ -62,6 +61,7 @@ export default function RutaPreventista() {
   const [respuestasEncuestas, setRespuestasEncuestas] = useState<Record<number, boolean>>({});
   const [pendientes, setPendientes] = useState<VisitaPendiente[]>([]);
   const [busqueda, setBusqueda] = useState('');
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const enviandoRef = useRef(false);
 
   useEffect(() => {
@@ -73,10 +73,19 @@ export default function RutaPreventista() {
 
   const cargar = useCallback(async () => {
     setCargando(true);
+    setErrorCarga(null);
     try {
       const asigRes = await obtenerAsignacionHoy();
       const rutas: any[] = asigRes.data?.rutas ?? [];
-      // Merge clients from all selected routes, deduplicating by client id
+      const necesitaEleccion = asigRes.data?.necesita_eleccion;
+
+      if (necesitaEleccion && rutas.length === 0) {
+        setErrorCarga('Todavía no elegiste tus rutas de la semana. Volvé al Inicio y tocá "Elegir rutas".');
+        setClientes([]);
+        setCargando(false);
+        return;
+      }
+
       const seen = new Set<number>();
       const merged: Cliente[] = [];
       for (const r of rutas) {
@@ -95,7 +104,9 @@ export default function RutaPreventista() {
         const paradasRes = await obtenerParadas(jornada.id);
         setParadas(paradasRes.data);
       }
-    } catch {}
+    } catch (e: any) {
+      setErrorCarga(e?.response?.data?.error ?? 'No se pudieron cargar los clientes. Verificá tu conexión.');
+    }
     setCargando(false);
   }, [jornada]);
 
@@ -268,6 +279,30 @@ export default function RutaPreventista() {
   };
 
   if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.preventista} size="large" /></View>;
+
+  if (errorCarga) return (
+    <View style={styles.center}>
+      <Text style={{ fontSize: 40, marginBottom: 16 }}>⚠️</Text>
+      <Text style={{ textAlign: 'center', color: COLORS.textMuted, fontSize: 15, paddingHorizontal: 32, marginBottom: 24 }}>
+        {errorCarga}
+      </Text>
+      <TouchableOpacity
+        style={{ backgroundColor: COLORS.preventista, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
+        onPress={cargar}
+      >
+        <Text style={{ color: '#fff', fontWeight: '700' }}>Reintentar</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  if (!jornada) return (
+    <View style={styles.center}>
+      <Text style={{ fontSize: 40, marginBottom: 16 }}>🏁</Text>
+      <Text style={{ textAlign: 'center', color: COLORS.textMuted, fontSize: 15, paddingHorizontal: 32 }}>
+        Iniciá la jornada desde la pantalla de Inicio para ver tu ruta.
+      </Text>
+    </View>
+  );
 
   const paradasCompletadas = paradas.filter((p) => p.completada);
   const clientesFiltrados = busqueda.trim()
@@ -536,122 +571,70 @@ export default function RutaPreventista() {
             />
           </View>
 
-          {Platform.OS === 'web' ? (
-            <FlatList
-              style={{ flex: 1 }}
-              data={clientesFiltrados}
-              keyExtractor={(item) => String(item.id)}
-              contentContainerStyle={{ padding: 16, gap: 10 }}
-              renderItem={({ item, index }) => {
-                const visitado = paradas.some((p) => p.cliente_id === item.id && p.completada)
-                  || pendientes.some((p) => p.cliente_id === item.id);
-                return (
-                  // @ts-ignore — RNW passes drag events to the underlying div
-                  <View
-                    style={[
-                      styles.clienteCard,
-                      visitado && styles.clienteCardVisitado,
+          <FlatList
+            style={{ flex: 1 }}
+            data={clientesFiltrados}
+            keyExtractor={(item) => String(item.id)}
+            contentContainerStyle={{ padding: 16, gap: 10 }}
+            renderItem={({ item, index }) => {
+              const visitado = paradas.some((p) => p.cliente_id === item.id && p.completada)
+                || pendientes.some((p) => p.cliente_id === item.id);
+              return (
+                <View
+                  style={[
+                    styles.clienteCard,
+                    visitado && styles.clienteCardVisitado,
+                    ...(Platform.OS === 'web' ? [
                       dragSrcIdx === index && { opacity: 0.4 },
                       dragOverIdx === index && styles.clienteCardDragOver,
-                    ]}
-                    onDragOver={(e: any) => { e.preventDefault(); setDragOverIdx(index); }}
-                    onDrop={(e: any) => { e.preventDefault(); webDrop(index); }}
-                    onDragLeave={() => { if (dragOverIdx === index) setDragOverIdx(null); }}
-                  >
-                    <View style={styles.clienteOrden}>
-                      <Text style={styles.clienteOrdenNum}>{index + 1}</Text>
-                    </View>
-                    {!busqueda.trim() && (
-                      // @ts-ignore
-                      <View
-                        style={styles.asaWeb}
-                        draggable
-                        onDragStart={() => setDragSrcIdx(index)}
-                        onDragEnd={() => { setDragSrcIdx(null); setDragOverIdx(null); }}
-                      >
-                        <Text style={styles.asaTexto}>☰</Text>
-                      </View>
-                    )}
-                    <View style={styles.clienteInfo}>
-                      <Text style={styles.clienteNombre}>{item.nombre}</Text>
-                      <Text style={styles.clienteDireccion}>{item.direccion}</Text>
-                      {item.telefono && <Text style={styles.clienteTelefono}>📞 {item.telefono}</Text>}
-                    </View>
-                    <View style={styles.botonesCard}>
-                      {visitado ? (
-                        <Text style={styles.visitadoCheck}>✓</Text>
-                      ) : (
-                        <TouchableOpacity
-                          style={[styles.btnVisitar, procesando && { opacity: 0.5 }]}
-                          onPress={() => iniciarVisita(item)}
-                          disabled={procesando}
-                        >
-                          <Text style={styles.btnVisitarTexto}>Visitar</Text>
-                        </TouchableOpacity>
-                      )}
-                      <TouchableOpacity
-                        style={styles.btnCartilla}
-                        onPress={() => setClienteCartilla(item)}
-                      >
-                        <Text style={styles.btnCartillaIcono}>📋</Text>
-                      </TouchableOpacity>
-                    </View>
+                    ] : []),
+                  ]}
+                  {...(Platform.OS === 'web' ? ({
+                    onDragOver: (e: any) => { e.preventDefault(); setDragOverIdx(index); },
+                    onDrop: (e: any) => { e.preventDefault(); webDrop(index); },
+                    onDragLeave: () => { if (dragOverIdx === index) setDragOverIdx(null); },
+                  } as any) : {})}
+                >
+                  <View style={styles.clienteOrden}>
+                    <Text style={styles.clienteOrdenNum}>{index + 1}</Text>
                   </View>
-                );
-              }}
-              ListEmptyComponent={<Text style={styles.vacio}>No hay clientes en la ruta de hoy</Text>}
-            />
-          ) : (
-            <DraggableFlatList
-              style={{ flex: 1 }}
-              data={clientesFiltrados}
-              keyExtractor={(item) => String(item.id)}
-              contentContainerStyle={{ padding: 16, gap: 10 }}
-              onDragEnd={({ data }) => handleReordenar(data)}
-              renderItem={({ item, getIndex, drag, isActive }: RenderItemParams<Cliente>) => {
-                const index = getIndex() ?? 0;
-                const visitado = paradas.some((p) => p.cliente_id === item.id && p.completada)
-                  || pendientes.some((p) => p.cliente_id === item.id);
-                return (
-                  <View style={[styles.clienteCard, visitado && styles.clienteCardVisitado, isActive && styles.clienteCardActiva]}>
-                    <View style={styles.clienteOrden}>
-                      <Text style={styles.clienteOrdenNum}>{index + 1}</Text>
+                  {Platform.OS === 'web' && !busqueda.trim() && (
+                    <View
+                      style={styles.asaWeb}
+                      {...({ draggable: true, onDragStart: () => setDragSrcIdx(index), onDragEnd: () => { setDragSrcIdx(null); setDragOverIdx(null); } } as any)}
+                    >
+                      <Text style={styles.asaTexto}>☰</Text>
                     </View>
-                    {!busqueda.trim() && (
-                      <TouchableOpacity onPressIn={drag} style={styles.asa}>
-                        <Text selectable={false} style={styles.asaTexto}>☰</Text>
+                  )}
+                  <View style={styles.clienteInfo}>
+                    <Text style={styles.clienteNombre}>{item.nombre}</Text>
+                    <Text style={styles.clienteDireccion}>{item.direccion}</Text>
+                    {item.telefono && <Text style={styles.clienteTelefono}>📞 {item.telefono}</Text>}
+                  </View>
+                  <View style={styles.botonesCard}>
+                    {visitado ? (
+                      <Text style={styles.visitadoCheck}>✓</Text>
+                    ) : (
+                      <TouchableOpacity
+                        style={[styles.btnVisitar, procesando && { opacity: 0.5 }]}
+                        onPress={() => iniciarVisita(item)}
+                        disabled={procesando}
+                      >
+                        <Text style={styles.btnVisitarTexto}>Visitar</Text>
                       </TouchableOpacity>
                     )}
-                    <View style={styles.clienteInfo}>
-                      <Text style={styles.clienteNombre}>{item.nombre}</Text>
-                      <Text style={styles.clienteDireccion}>{item.direccion}</Text>
-                      {item.telefono && <Text style={styles.clienteTelefono}>📞 {item.telefono}</Text>}
-                    </View>
-                    <View style={styles.botonesCard}>
-                      {visitado ? (
-                        <Text style={styles.visitadoCheck}>✓</Text>
-                      ) : (
-                        <TouchableOpacity
-                          style={[styles.btnVisitar, procesando && { opacity: 0.5 }]}
-                          onPress={() => iniciarVisita(item)}
-                          disabled={procesando}
-                        >
-                          <Text style={styles.btnVisitarTexto}>Visitar</Text>
-                        </TouchableOpacity>
-                      )}
-                      <TouchableOpacity
-                        style={styles.btnCartilla}
-                        onPress={() => setClienteCartilla(item)}
-                      >
-                        <Text style={styles.btnCartillaIcono}>📋</Text>
-                      </TouchableOpacity>
-                    </View>
+                    <TouchableOpacity
+                      style={styles.btnCartilla}
+                      onPress={() => setClienteCartilla(item)}
+                    >
+                      <Text style={styles.btnCartillaIcono}>📋</Text>
+                    </TouchableOpacity>
                   </View>
-                );
-              }}
-              ListEmptyComponent={<Text style={styles.vacio}>No hay clientes en la ruta de hoy</Text>}
-            />
-          )}
+                </View>
+              );
+            }}
+            ListEmptyComponent={<Text style={styles.vacio}>No hay clientes en la ruta de hoy</Text>}
+          />
         </View>
       )}
 
@@ -912,9 +895,8 @@ const styles = StyleSheet.create({
   asaWeb: {
     width: 34, borderRadius: 8,
     justifyContent: 'center', alignItems: 'center',
-    // @ts-ignore web-only
     cursor: 'grab',
-  },
+  } as any,
   clienteCardDragOver: {
     borderTopWidth: 3,
     borderTopColor: COLORS.preventista,

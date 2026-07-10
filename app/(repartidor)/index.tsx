@@ -52,7 +52,19 @@ export default function InicioRepartidor() {
       const seleccionadas: number[] = res.data?.seleccionadas ?? [];
       setRutasDisponibles((prev) => ({ ...prev, selecciones_actuales: seleccionadas }));
     } catch (e: any) {
-      Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo elegir la ruta');
+      // Re-sync with backend: the request may have succeeded server-side even if
+      // the response didn't arrive (timeout / network drop), so always refresh to
+      // show the true selection state instead of leaving a stale UI.
+      try {
+        const rutasRes = await obtenerRutasDisponibles();
+        const d = rutasRes.data;
+        setRutasDisponibles({ opciones: d.opciones ?? [], selecciones_actuales: d.selecciones_actuales ?? [] });
+      } catch {}
+      // Only show an error alert for actual server-side rejections (4xx/5xx), not
+      // for network timeouts where the server may have saved the selection anyway.
+      if (e?.response) {
+        Alert.alert('Error', e.response.data?.error ?? 'No se pudo elegir la ruta');
+      }
     }
   };
 

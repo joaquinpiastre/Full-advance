@@ -3,7 +3,6 @@ import {
   View, Text, StyleSheet, TouchableOpacity, Alert,
   ScrollView, ActivityIndicator, Image, TextInput, Modal, FlatList, Platform,
 } from 'react-native';
-import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useJornadaStore } from '../../store/jornadaStore';
@@ -45,6 +44,7 @@ export default function JornadaRepartidor() {
   const [clienteCartilla, setClienteCartilla] = useState<Cliente | null>(null);
   const [nuevoClienteVisible, setNuevoClienteVisible] = useState(false);
   const [pendientes, setPendientes] = useState<VisitaPendiente[]>([]);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const enviandoRef = useRef(false);
 
   useEffect(() => {
@@ -61,6 +61,7 @@ export default function JornadaRepartidor() {
   const cargarDatos = async () => {
     if (!jornada) return;
     setCargando(true);
+    setErrorCarga(null);
     try {
       const [paradasRes, asigRes] = await Promise.allSettled([
         obtenerParadas(jornada.id),
@@ -70,7 +71,11 @@ export default function JornadaRepartidor() {
       if (asigRes.status === 'fulfilled') {
         const data = asigRes.value.data;
         setAsignacion(data);
-        // Merge clients from all selected routes, deduplicating by client id
+        if (data.necesita_eleccion && (!data.rutas || data.rutas.length === 0)) {
+          setErrorCarga('No tenés rutas seleccionadas. Volvé al Inicio y elegí tus rutas antes de empezar.');
+          setCargando(false);
+          return;
+        }
         const seen = new Set<number>();
         const merged: any[] = [];
         for (const r of (data.rutas ?? [])) {
@@ -82,8 +87,12 @@ export default function JornadaRepartidor() {
           }
         }
         setClientesRuta(merged);
+      } else if (asigRes.status === 'rejected') {
+        setErrorCarga('No se pudo cargar la ruta. Verificá tu conexión y reintentá.');
       }
-    } catch {}
+    } catch (e: any) {
+      setErrorCarga(e?.response?.data?.error ?? 'Error al cargar los datos. Verificá tu conexión.');
+    }
     setCargando(false);
   };
 
@@ -234,6 +243,21 @@ export default function JornadaRepartidor() {
   }
 
   if (cargando) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
+
+  if (errorCarga) return (
+    <View style={styles.center}>
+      <Text style={{ fontSize: 40, marginBottom: 16 }}>⚠️</Text>
+      <Text style={{ textAlign: 'center', color: COLORS.textMuted, fontSize: 15, paddingHorizontal: 32, marginBottom: 24 }}>
+        {errorCarga}
+      </Text>
+      <TouchableOpacity
+        style={{ backgroundColor: COLORS.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
+        onPress={cargarDatos}
+      >
+        <Text style={{ color: '#fff', fontWeight: '700' }}>Reintentar</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   const paradasCompletadas = paradas.filter((p) => p.completada);
 
@@ -493,17 +517,16 @@ export default function JornadaRepartidor() {
                       dragSrcIdx === index && { opacity: 0.4 },
                       dragOverIdx === index && styles.clienteRowDragOver,
                     ]}
-                    onDragOver={(e: any) => { e.preventDefault(); setDragOverIdx(index); }}
-                    onDrop={(e: any) => { e.preventDefault(); webDrop(index); }}
-                    onDragLeave={() => { if (dragOverIdx === index) setDragOverIdx(null); }}
+                    {...({
+                      onDragOver: (e: any) => { e.preventDefault(); setDragOverIdx(index); },
+                      onDrop: (e: any) => { e.preventDefault(); webDrop(index); },
+                      onDragLeave: () => { if (dragOverIdx === index) setDragOverIdx(null); },
+                    } as any)}
                   >
                     {!busquedaClientes.trim() && (
-                      // @ts-ignore
                       <View
                         style={styles.asaWeb}
-                        draggable
-                        onDragStart={() => setDragSrcIdx(index)}
-                        onDragEnd={() => { setDragSrcIdx(null); setDragOverIdx(null); }}
+                        {...({ draggable: true, onDragStart: () => setDragSrcIdx(index), onDragEnd: () => { setDragSrcIdx(null); setDragOverIdx(null); } } as any)}
                       >
                         <Text style={styles.asaTexto}>☰</Text>
                       </View>
@@ -532,24 +555,17 @@ export default function JornadaRepartidor() {
               }
             />
           ) : (
-            <DraggableFlatList
+            <FlatList
               style={{ flex: 1 }}
               data={clientesRutaFiltrados}
               keyExtractor={(item: any) => String(item.cliente.id)}
               contentContainerStyle={{ padding: 16, gap: 10 }}
-              onDragEnd={({ data }) => handleReordenar(data)}
-              renderItem={({ item, getIndex, drag, isActive }: RenderItemParams<any>) => {
-                const index = getIndex() ?? 0;
+              renderItem={({ item, index }: { item: any; index: number }) => {
                 const cliente = item.cliente;
                 const yaVisitado = paradas.some((p) => p.cliente_id === cliente.id && p.completada)
                   || pendientes.some((p) => p.cliente_id === cliente.id);
                 return (
-                  <View style={[styles.clienteRow, isActive && styles.clienteRowActiva]}>
-                    {!busquedaClientes.trim() && (
-                      <TouchableOpacity onPressIn={drag} style={styles.asa}>
-                        <Text selectable={false} style={styles.asaTexto}>☰</Text>
-                      </TouchableOpacity>
-                    )}
+                  <View style={styles.clienteRow}>
                     <TouchableOpacity
                       style={[styles.clienteItem, yaVisitado && styles.clienteItemVisitado]}
                       onPress={() => iniciarParadaEnCliente(cliente)}
@@ -797,9 +813,8 @@ const styles = StyleSheet.create({
   asaWeb: {
     width: 34, borderRadius: 8,
     justifyContent: 'center', alignItems: 'center',
-    // @ts-ignore web-only
     cursor: 'grab',
-  },
+  } as any,
   clienteRowDragOver: {
     borderTopWidth: 3,
     borderTopColor: COLORS.primary,

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../db/client';
-import { authMiddleware, soloAdmin, adminOSupervisor, AuthRequest } from '../middleware/auth';
+import { authMiddleware, soloAdmin, adminOSupervisor, gestionRutas, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -106,7 +106,7 @@ router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
   }
 });
 
-router.post('/', authMiddleware, soloAdmin, async (req: AuthRequest, res: Response) => {
+router.post('/', authMiddleware, gestionRutas, async (req: AuthRequest, res: Response) => {
   const { nombre, descripcion, clientes } = req.body;
   if (!nombre) return res.status(400).json({ error: 'Nombre requerido' });
   const client = await pool.connect();
@@ -135,7 +135,7 @@ router.post('/', authMiddleware, soloAdmin, async (req: AuthRequest, res: Respon
   }
 });
 
-router.put('/:id', authMiddleware, soloAdmin, async (req: AuthRequest, res: Response) => {
+router.put('/:id', authMiddleware, gestionRutas, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const { nombre, descripcion, clientes } = req.body;
   if (!nombre) return res.status(400).json({ error: 'Nombre requerido' });
@@ -196,7 +196,7 @@ router.put('/:id/orden', authMiddleware, async (req: AuthRequest, res: Response)
 
 // Quitar un cliente de la ruta (no lo elimina de la base de clientes).
 // Requiere una nota explicando el motivo, que queda registrada como alerta.
-router.delete('/:id/clientes/:clienteId', authMiddleware, soloAdmin, async (req: AuthRequest, res: Response) => {
+router.delete('/:id/clientes/:clienteId', authMiddleware, gestionRutas, async (req: AuthRequest, res: Response) => {
   const { id, clienteId } = req.params;
   const { nota } = req.body;
   if (!nota || !String(nota).trim()) return res.status(400).json({ error: 'La nota es obligatoria' });
@@ -225,14 +225,28 @@ router.delete('/:id/clientes/:clienteId', authMiddleware, soloAdmin, async (req:
   }
 });
 
-router.delete('/:id', authMiddleware, soloAdmin, async (req: AuthRequest, res: Response) => {
+router.delete('/:id', authMiddleware, gestionRutas, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
+  const client = await pool.connect();
   try {
-    const { rows } = await pool.query('UPDATE rutas SET activa=false WHERE id=$1 RETURNING id', [id]);
-    if (!rows.length) return res.status(404).json({ error: 'No encontrada' });
+    await client.query('BEGIN');
+    const { rows } = await client.query('UPDATE rutas SET activa=false WHERE id=$1 RETURNING id', [id]);
+    if (!rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'No encontrada' });
+    }
+    // Limpiamos toda referencia vigente a esta ruta para que deje de aparecer
+    // como asignada a cualquier repartidor/preventista (queda solo el historial).
+    await client.query('DELETE FROM asignaciones WHERE ruta_id=$1', [id]);
+    await client.query('DELETE FROM asignaciones_fijas WHERE ruta_id=$1', [id]);
+    await client.query('DELETE FROM selecciones_ruta WHERE ruta_id=$1', [id]);
+    await client.query('COMMIT');
     res.json({ ok: true });
   } catch {
+    await client.query('ROLLBACK');
     res.status(500).json({ error: 'Error al eliminar ruta' });
+  } finally {
+    client.release();
   }
 });
 

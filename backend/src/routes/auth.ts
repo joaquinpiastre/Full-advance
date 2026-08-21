@@ -80,15 +80,31 @@ router.get('/usuarios', authMiddleware, soloAdmin, async (_req: Request, res: Re
 router.delete('/usuarios/:id', authMiddleware, soloAdmin, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   if (req.usuario?.id === Number(id)) return res.status(400).json({ error: 'No podés eliminar tu propio usuario' });
+  const client = await pool.connect();
   try {
-    const { rows } = await pool.query(
+    await client.query('BEGIN');
+    const { rows } = await client.query(
       `UPDATE usuarios SET activo=false WHERE id=$1 AND rol != 'admin' RETURNING id`,
       [id]
     );
-    if (!rows.length) return res.status(404).json({ error: 'Usuario no encontrado' });
+    if (!rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    // Limpiamos todo rastro de estado vigente del usuario para que no quede
+    // visible en ningún lado (rutas asignadas, elegidas, ubicación en vivo).
+    // El historial (pagos, jornadas, calificaciones, etc.) se conserva.
+    await client.query('DELETE FROM asignaciones WHERE usuario_id=$1', [id]);
+    await client.query('DELETE FROM asignaciones_fijas WHERE usuario_id=$1', [id]);
+    await client.query('DELETE FROM selecciones_ruta WHERE usuario_id=$1', [id]);
+    await client.query('DELETE FROM gps_live WHERE usuario_id=$1', [id]);
+    await client.query('COMMIT');
     res.json({ ok: true });
   } catch {
+    await client.query('ROLLBACK');
     res.status(500).json({ error: 'Error del servidor' });
+  } finally {
+    client.release();
   }
 });
 

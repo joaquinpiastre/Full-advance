@@ -57,6 +57,14 @@ export default function RepartidorLayout() {
         }}
       />
       <Tabs.Screen
+        name="rutas"
+        options={{
+          title: 'Rutas',
+          tabBarIcon: tabIcon('trail-sign', 'trail-sign-outline'),
+          headerTitle: 'Rutas',
+        }}
+      />
+      <Tabs.Screen
         name="historial"
         options={{
           title: 'Historial',

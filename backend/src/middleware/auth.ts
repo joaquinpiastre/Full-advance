@@ -28,3 +28,12 @@ export const adminOSupervisor = (req: AuthRequest, res: Response, next: NextFunc
   }
   next();
 };
+
+// Gestión de rutas (crear, editar, quitar clientes, eliminar): admin y también
+// repartidor/preventista, que pueden armar y modificar rutas igual que el admin.
+export const gestionRutas = (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (!['admin', 'repartidor', 'preventista'].includes(req.usuario?.rol ?? '')) {
+    return res.status(403).json({ error: 'No autorizado' });
+  }
+  next();
+};

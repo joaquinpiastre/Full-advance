@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert,
-  ScrollView, ActivityIndicator, Image, TextInput, Modal, FlatList, Platform,
+  ScrollView, ActivityIndicator, Image, TextInput, FlatList, Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
@@ -20,11 +20,9 @@ import CartillaModal from '../../components/CartillaModal';
 import NuevoClienteModal from '../../components/NuevoClienteModal';
 import FotoReferenciaCliente from '../../components/FotoReferenciaCliente';
 import AccionesList from '../../components/AccionesList';
-import { COLORS, urlFoto } from '../../constants';
+import { COLORS } from '../../constants';
 import { coincideBusqueda } from '../../utils/busqueda';
 import { Parada, Cliente } from '../../types';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 
 type EstadoFotos = 'esperando' | 'visita';
 
@@ -45,7 +43,6 @@ export default function JornadaRepartidor() {
   const [accionDesc, setAccionDesc] = useState<string[]>(['']);
   const [oportunidades, setOportunidades] = useState<string[]>(['']);
   const [procesando, setProcesando] = useState(false);
-  const [clientesModal, setClientesModal] = useState(false);
   const [clienteCartilla, setClienteCartilla] = useState<Cliente | null>(null);
   const [nuevoClienteVisible, setNuevoClienteVisible] = useState(false);
   const [pendientes, setPendientes] = useState<VisitaPendiente[]>([]);
@@ -113,8 +110,6 @@ export default function JornadaRepartidor() {
       Alert.alert('Cliente sin sincronizar', 'Este cliente se agregó sin conexión y todavía no se sincronizó. Esperá a que haya señal e intentá de nuevo.');
       return;
     }
-    setClientesModal(false);
-    setBusquedaClientes('');
     setProcesando(true);
     try {
       // Si ya existe una parada sin completar para este cliente (quedó "trabada"
@@ -315,6 +310,60 @@ export default function JornadaRepartidor() {
       )
     : clientesRuta;
 
+  const renderFilaCliente = (item: any, index: number) => {
+    const cliente = item.cliente;
+    const visitado = paradas.some((p) => p.cliente_id === cliente.id && p.completada)
+      || pendientes.some((p) => p.cliente_id === cliente.id);
+    return (
+      <View
+        style={[
+          styles.clienteCard,
+          ...(Platform.OS === 'web' ? [
+            dragSrcIdx === index && { opacity: 0.4 },
+            dragOverIdx === index && styles.clienteCardDragOver,
+          ] : []),
+        ]}
+        {...(Platform.OS === 'web' ? ({
+          onDragOver: (e: any) => { e.preventDefault(); setDragOverIdx(index); },
+          onDrop: (e: any) => { e.preventDefault(); webDrop(index); },
+          onDragLeave: () => { if (dragOverIdx === index) setDragOverIdx(null); },
+        } as any) : {})}
+      >
+        <View style={styles.clienteOrden}>
+          <Text style={styles.clienteOrdenNum}>{index + 1}</Text>
+        </View>
+        {Platform.OS === 'web' && !busquedaClientes.trim() && (
+          <View
+            style={styles.asaWeb}
+            {...({ draggable: true, onDragStart: () => setDragSrcIdx(index), onDragEnd: () => { setDragSrcIdx(null); setDragOverIdx(null); } } as any)}
+          >
+            <Text style={styles.asaTexto}>☰</Text>
+          </View>
+        )}
+        <View style={styles.clienteInfo}>
+          <Text style={styles.clienteNombre}>{cliente.nombre}{cliente.id < 0 ? ' ⏳' : ''}</Text>
+          <Text style={styles.clienteDireccion}>{cliente.direccion}</Text>
+        </View>
+        <View style={styles.botonesCard}>
+          {visitado ? (
+            <Text style={styles.visitadoCheck}>✓</Text>
+          ) : (
+            <TouchableOpacity
+              style={[styles.btnVisitar, procesando && { opacity: 0.5 }]}
+              onPress={() => iniciarParadaEnCliente(cliente)}
+              disabled={procesando}
+            >
+              <Text style={styles.btnVisitarTexto}>Visitar</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.btnCartilla} onPress={() => setClienteCartilla(cliente)}>
+            <Text style={styles.btnCartillaIcono}>📋</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       {/* Panel de flujo de fotos */}
@@ -443,83 +492,40 @@ export default function JornadaRepartidor() {
         </View>
       )}
 
-      {/* Lista de paradas del día */}
+      {/* Lista de clientes de la ruta */}
       {estadoFotos === 'esperando' && (
-        <>
-          <View style={styles.header}>
-            <Text style={styles.headerTitulo}>Paradas del día</Text>
-            <Text style={styles.headerCount}>{paradasCompletadas.length + pendientes.length} completadas</Text>
-          </View>
-
-          {pendientes.length > 0 && (
-            <View style={styles.pendientesBanner}>
-              <Text style={styles.pendientesTexto}>
-                ⏳ {pendientes.length} visita{pendientes.length > 1 ? 's' : ''} pendiente{pendientes.length > 1 ? 's' : ''} de enviar — se enviarán solas cuando haya internet
-              </Text>
-            </View>
-          )}
-
-          {accionesPendientes.length > 0 && (
-            <View style={styles.pendientesBanner}>
-              <Text style={styles.pendientesTexto}>
-                ⏳ {accionesPendientes.length} cambio{accionesPendientes.length > 1 ? 's' : ''} de ruta pendiente{accionesPendientes.length > 1 ? 's' : ''} de sincronizar
-              </Text>
-            </View>
-          )}
-
-          <TouchableOpacity style={styles.btnNuevaParada} onPress={() => setClientesModal(true)} disabled={procesando}>
-            {procesando
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.btnTexto}>+ Registrar llegada a cliente</Text>}
-          </TouchableOpacity>
-
-          <FlatList
-            style={{ flex: 1 }}
-            data={paradasCompletadas}
-            keyExtractor={(item) => String(item.id)}
-            contentContainerStyle={{ padding: 16, gap: 12 }}
-            renderItem={({ item }) => (
-              <View style={styles.paradaCard}>
-                <View style={styles.paradaHeader}>
-                  <Text style={styles.paradaNombre}>{item.cliente?.nombre ?? 'Sin cliente'}</Text>
-                  <Text style={styles.paradaHora}>{format(new Date(item.timestamp_llegada), 'HH:mm')}</Text>
-                </View>
-                <Text style={styles.paradaDireccion}>{item.cliente?.direccion}</Text>
-                <View style={styles.fotosRow}>
-                  {item.foto1_uri && <Image source={{ uri: urlFoto(item.foto1_uri) }} style={styles.fotoMini} />}
-                  {item.foto2_uri && <Image source={{ uri: urlFoto(item.foto2_uri) }} style={styles.fotoMini} />}
-                  {item.foto3_uri && <Image source={{ uri: urlFoto(item.foto3_uri) }} style={styles.fotoMini} />}
-                  {item.foto4_uri && <Image source={{ uri: urlFoto(item.foto4_uri) }} style={styles.fotoMini} />}
-                  {item.foto5_uri && <Image source={{ uri: urlFoto(item.foto5_uri) }} style={styles.fotoMini} />}
-                </View>
-                {item.nota ? <Text style={styles.paradaNota}>📝 {item.nota}</Text> : null}
+        <View style={{ flex: 1 }}>
+          <View style={styles.resumen}>
+            {pendientes.length > 0 && (
+              <View style={styles.pendientesBanner}>
+                <Text style={styles.pendientesTexto}>
+                  ⏳ {pendientes.length} visita{pendientes.length > 1 ? 's' : ''} pendiente{pendientes.length > 1 ? 's' : ''} de enviar — se enviarán solas cuando haya internet
+                </Text>
               </View>
             )}
-            ListEmptyComponent={
-              <Text style={styles.sinParadas}>No hay paradas registradas hoy</Text>
-            }
-          />
-        </>
-      )}
-
-      {/* Modal selección de cliente */}
-      <Modal visible={clientesModal} animationType="slide" presentationStyle="pageSheet">
-        <View style={styles.modal}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitulo}>Seleccionar cliente</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <TouchableOpacity style={styles.btnNuevoCliente} onPress={() => {
-                setClientesModal(false);
-                setBusquedaClientes('');
-                setNuevoClienteVisible(true);
-              }}>
-                <Text style={styles.btnNuevoClienteTexto}>+ Nuevo cliente</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => { setClientesModal(false); setBusquedaClientes(''); }}>
-                <Text style={styles.modalCerrar}>✕</Text>
+            {accionesPendientes.length > 0 && (
+              <View style={styles.pendientesBanner}>
+                <Text style={styles.pendientesTexto}>
+                  ⏳ {accionesPendientes.length} cambio{accionesPendientes.length > 1 ? 's' : ''} de ruta pendiente{accionesPendientes.length > 1 ? 's' : ''} de sincronizar
+                </Text>
+              </View>
+            )}
+            <View style={styles.resumenHeader}>
+              <Text style={styles.resumenTexto}>
+                {paradasCompletadas.length + pendientes.length} / {clientesRuta.length} clientes visitados
+              </Text>
+              <TouchableOpacity style={styles.btnNuevoCliente} onPress={() => setNuevoClienteVisible(true)}>
+                <Text style={styles.btnNuevoClienteTexto}>+ Agregar cliente</Text>
               </TouchableOpacity>
             </View>
+            <View style={styles.barra}>
+              <View style={[
+                styles.barraFill,
+                { width: clientesRuta.length ? `${((paradasCompletadas.length + pendientes.length) / clientesRuta.length) * 100}%` : '0%' }
+              ]} />
+            </View>
           </View>
+
           <View style={styles.buscadorCont}>
             <TextInput
               style={styles.buscadorInput}
@@ -531,112 +537,25 @@ export default function JornadaRepartidor() {
               clearButtonMode="while-editing"
             />
           </View>
-          {Platform.OS === 'web' ? (
-            <FlatList
-              style={{ flex: 1 }}
-              data={clientesRutaFiltrados}
-              keyExtractor={(item: any) => String(item.cliente.id)}
-              contentContainerStyle={{ padding: 16, gap: 10 }}
-              renderItem={({ item, index }) => {
-                const cliente = item.cliente;
-                const yaVisitado = paradas.some((p) => p.cliente_id === cliente.id && p.completada)
-                  || pendientes.some((p) => p.cliente_id === cliente.id);
-                return (
-                  // @ts-ignore — RNW passes drag events to the underlying div
-                  <View
-                    style={[
-                      styles.clienteRow,
-                      dragSrcIdx === index && { opacity: 0.4 },
-                      dragOverIdx === index && styles.clienteRowDragOver,
-                    ]}
-                    {...({
-                      onDragOver: (e: any) => { e.preventDefault(); setDragOverIdx(index); },
-                      onDrop: (e: any) => { e.preventDefault(); webDrop(index); },
-                      onDragLeave: () => { if (dragOverIdx === index) setDragOverIdx(null); },
-                    } as any)}
-                  >
-                    {!busquedaClientes.trim() && (
-                      <View
-                        style={styles.asaWeb}
-                        {...({ draggable: true, onDragStart: () => setDragSrcIdx(index), onDragEnd: () => { setDragSrcIdx(null); setDragOverIdx(null); } } as any)}
-                      >
-                        <Text style={styles.asaTexto}>☰</Text>
-                      </View>
-                    )}
-                    <TouchableOpacity
-                      style={[styles.clienteItem, yaVisitado && styles.clienteItemVisitado]}
-                      onPress={() => iniciarParadaEnCliente(cliente)}
-                      disabled={yaVisitado}
-                    >
-                      <Text style={styles.clienteNombre}>
-                        {index + 1}. {cliente.nombre}{cliente.id < 0 ? ' ⏳' : ''}
-                      </Text>
-                      <Text style={styles.clienteDireccion}>{cliente.direccion}</Text>
-                      {yaVisitado && <Text style={styles.clienteVisitado}>✓ Visitado</Text>}
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.btnCartilla} onPress={() => {
-                      setClientesModal(false);
-                      setClienteCartilla(cliente);
-                    }}>
-                      <Text style={styles.btnCartillaIcono}>📋</Text>
-                      <Text style={styles.btnCartillaTexto}>Cartilla</Text>
-                    </TouchableOpacity>
-                  </View>
-                );
-              }}
-              ListEmptyComponent={
-                <Text style={styles.sinParadas}>No hay clientes en la ruta de hoy</Text>
-              }
-            />
-          ) : (
-            <FlatList
-              style={{ flex: 1 }}
-              data={clientesRutaFiltrados}
-              keyExtractor={(item: any) => String(item.cliente.id)}
-              contentContainerStyle={{ padding: 16, gap: 10 }}
-              renderItem={({ item, index }: { item: any; index: number }) => {
-                const cliente = item.cliente;
-                const yaVisitado = paradas.some((p) => p.cliente_id === cliente.id && p.completada)
-                  || pendientes.some((p) => p.cliente_id === cliente.id);
-                return (
-                  <View style={styles.clienteRow}>
-                    <TouchableOpacity
-                      style={[styles.clienteItem, yaVisitado && styles.clienteItemVisitado]}
-                      onPress={() => iniciarParadaEnCliente(cliente)}
-                      disabled={yaVisitado}
-                    >
-                      <Text style={styles.clienteNombre}>
-                        {index + 1}. {cliente.nombre}{cliente.id < 0 ? ' ⏳' : ''}
-                      </Text>
-                      <Text style={styles.clienteDireccion}>{cliente.direccion}</Text>
-                      {yaVisitado && <Text style={styles.clienteVisitado}>✓ Visitado</Text>}
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.btnCartilla} onPress={() => {
-                      setClientesModal(false);
-                      setClienteCartilla(cliente);
-                    }}>
-                      <Text style={styles.btnCartillaIcono}>📋</Text>
-                      <Text style={styles.btnCartillaTexto}>Cartilla</Text>
-                    </TouchableOpacity>
-                  </View>
-                );
-              }}
-              ListEmptyComponent={
-                <Text style={styles.sinParadas}>No hay clientes en la ruta de hoy</Text>
-              }
-            />
-          )}
+
+          <FlatList
+            style={{ flex: 1 }}
+            data={clientesRutaFiltrados}
+            keyExtractor={(item: any) => String(item.cliente.id)}
+            contentContainerStyle={{ padding: 16, gap: 10 }}
+            renderItem={({ item, index }) => renderFilaCliente(item, index)}
+            ListEmptyComponent={
+              <Text style={styles.sinParadas}>No hay clientes en la ruta de hoy</Text>
+            }
+          />
         </View>
-      </Modal>
+      )}
 
       <CartillaModal
         cliente={clienteCartilla}
         visible={!!clienteCartilla}
         color={COLORS.repartidor}
-        onClose={() => {
-          setClienteCartilla(null);
-          setTimeout(() => setClientesModal(true), 350);
-        }}
+        onClose={() => setClienteCartilla(null)}
         onGuardado={cargarDatos}
         onEliminado={cargarDatos}
       />
@@ -646,10 +565,7 @@ export default function JornadaRepartidor() {
         color={COLORS.repartidor}
         rutas={ruta ? [{ id: ruta.id, nombre: ruta.nombre }] : []}
         clientesEnRuta={clientesRuta.map((rc: any) => rc.cliente.id)}
-        onClose={() => {
-          setNuevoClienteVisible(false);
-          setTimeout(() => setClientesModal(true), 350);
-        }}
+        onClose={() => setNuevoClienteVisible(false)}
         onCreado={handleClienteAgregado}
       />
     </View>
@@ -678,8 +594,6 @@ const styles = StyleSheet.create({
   fotoPanelCliente: { fontSize: 13, color: COLORS.textLight, fontWeight: '600' },
   fotoPanelTitulo: { fontSize: 20, fontWeight: '800', color: COLORS.primary },
   fotoPanelDesc: { fontSize: 14, color: COLORS.textLight },
-  fotosRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  fotoMini: { width: 70, height: 70, borderRadius: 8 },
   fotosGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   fotoSlot: {
     width: 70,
@@ -773,66 +687,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    paddingBottom: 8,
-  },
-  headerTitulo: { fontSize: 18, fontWeight: '700', color: COLORS.text },
-  headerCount: { fontSize: 13, color: COLORS.textLight },
   pendientesBanner: {
     backgroundColor: '#FFFBEB',
     borderWidth: 1,
     borderColor: '#F59E0B',
     borderRadius: 10,
     padding: 10,
-    marginHorizontal: 16,
-    marginBottom: 8,
   },
   pendientesTexto: { fontSize: 12, color: '#92400E', fontWeight: '600' },
-  btnNuevaParada: {
-    backgroundColor: COLORS.repartidor,
-    borderRadius: 12,
-    padding: 14,
-    alignItems: 'center',
-    marginHorizontal: 16,
-    marginBottom: 4,
-  },
   btnTexto: { color: '#fff', fontWeight: '700', fontSize: 15 },
 
-  paradaCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 14,
-    padding: 16,
-    gap: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.success,
-  },
-  paradaHeader: { flexDirection: 'row', justifyContent: 'space-between' },
-  paradaNombre: { fontSize: 15, fontWeight: '700', color: COLORS.text },
-  paradaHora: { fontSize: 13, color: COLORS.textLight },
-  paradaDireccion: { fontSize: 13, color: COLORS.textLight },
-  paradaNota: { fontSize: 13, color: COLORS.text, fontStyle: 'italic' },
   sinParadas: { textAlign: 'center', color: COLORS.textLight, marginTop: 40, fontSize: 14 },
 
-  modal: { flex: 1, backgroundColor: COLORS.background },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
+  resumen: {
     backgroundColor: COLORS.card,
+    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
+    gap: 8,
   },
-  modalTitulo: { fontSize: 18, fontWeight: '700', color: COLORS.text },
-  modalCerrar: { fontSize: 20, color: COLORS.textLight },
+  resumenHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  resumenTexto: { fontSize: 14, color: COLORS.text, fontWeight: '600' },
+  barra: { height: 8, backgroundColor: COLORS.border, borderRadius: 4 },
+  barraFill: { height: 8, backgroundColor: COLORS.repartidor, borderRadius: 4 },
   btnNuevoCliente: {
     backgroundColor: COLORS.repartidor,
     borderRadius: 8,
@@ -840,46 +717,58 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   btnNuevoClienteTexto: { color: '#fff', fontWeight: '700', fontSize: 12 },
-  clienteRow: { flexDirection: 'row', gap: 8, alignItems: 'stretch' },
-  clienteRowActiva: { opacity: 0.85 },
-  asa: {
-    width: 34, borderRadius: 8,
-    justifyContent: 'center', alignItems: 'center',
+  clienteCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 14,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.repartidor,
   },
+  clienteCardDragOver: {
+    borderTopWidth: 3,
+    borderTopColor: COLORS.primary,
+  },
+  clienteOrden: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: COLORS.repartidor,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  clienteOrdenNum: { color: '#fff', fontWeight: '700', fontSize: 13 },
   asaTexto: { fontSize: 18, color: COLORS.textLight },
   asaWeb: {
     width: 34, borderRadius: 8,
     justifyContent: 'center', alignItems: 'center',
     cursor: 'grab',
   } as any,
-  clienteRowDragOver: {
-    borderTopWidth: 3,
-    borderTopColor: COLORS.primary,
+  clienteInfo: { flex: 1 },
+  clienteNombre: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  clienteDireccion: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },
+  botonesCard: { flexDirection: 'column', alignItems: 'center', gap: 6 },
+  visitadoCheck: { fontSize: 22, color: COLORS.success, fontWeight: '700' },
+  btnVisitar: {
+    backgroundColor: COLORS.repartidor,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
-  clienteItem: {
-    flex: 1,
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
-    padding: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.repartidor,
-  },
-  clienteItemVisitado: { borderLeftColor: COLORS.success, opacity: 0.6 },
+  btnVisitarTexto: { color: '#fff', fontWeight: '700', fontSize: 12 },
   btnCartilla: {
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 2,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: COLORS.background,
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1, borderColor: COLORS.border,
   },
-  btnCartillaIcono: { fontSize: 18 },
-  btnCartillaTexto: { fontSize: 11, fontWeight: '700', color: COLORS.textLight },
-  clienteNombre: { fontSize: 15, fontWeight: '700', color: COLORS.text },
-  clienteDireccion: { fontSize: 13, color: COLORS.textLight, marginTop: 2 },
-  clienteVisitado: { fontSize: 12, color: COLORS.success, fontWeight: '600', marginTop: 4 },
+  btnCartillaIcono: { fontSize: 16 },
   buscadorCont: {
     paddingHorizontal: 16,
     paddingVertical: 10,

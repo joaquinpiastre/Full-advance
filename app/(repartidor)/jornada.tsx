@@ -50,6 +50,11 @@ export default function JornadaRepartidor() {
   const [nuevoClienteVisible, setNuevoClienteVisible] = useState(false);
   const [pendientes, setPendientes] = useState<VisitaPendiente[]>([]);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
+  // Web drag state (unused on native) — declarado acá arriba, antes de
+  // cualquier return condicional, para no violar las Reglas de los Hooks
+  // (React necesita llamar la misma cantidad de hooks en cada render).
+  const [dragSrcIdx, setDragSrcIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const enviandoRef = useRef(false);
 
   useEffect(() => {
@@ -292,10 +297,6 @@ export default function JornadaRepartidor() {
       }
     });
   };
-
-  // Web drag state (unused on native)
-  const [dragSrcIdx, setDragSrcIdx] = useState<number | null>(null);
-  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
   const webDrop = (toIndex: number) => {
     if (dragSrcIdx !== null && dragSrcIdx !== toIndex) {

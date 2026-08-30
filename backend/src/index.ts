@@ -85,17 +85,24 @@ pool.query(`
   )
 `).catch(() => {});
 
-// Permite seleccionar múltiples rutas por semana (antes: una por semana)
-pool.query(`ALTER TABLE selecciones_ruta DROP CONSTRAINT IF EXISTS selecciones_ruta_usuario_id_semana_inicio_key`)
+// Una sola ruta elegida por semana (versión vieja permitía varias: hay que
+// sacar el constraint de 3 columnas que agregaba esa migración y, si quedaron
+// filas duplicadas por usuario+semana, conservar solo la más reciente antes
+// de poder recrear el UNIQUE de 2 columnas.
+pool.query(`ALTER TABLE selecciones_ruta DROP CONSTRAINT IF EXISTS selecciones_ruta_usuario_id_ruta_id_semana_inicio_key`)
+  .then(() => pool.query(`
+    DELETE FROM selecciones_ruta a USING selecciones_ruta b
+    WHERE a.usuario_id = b.usuario_id
+      AND a.semana_inicio = b.semana_inicio
+      AND a.id < b.id
+  `))
   .then(() => pool.query(`
     DO $$
     BEGIN
       IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'selecciones_ruta_usuario_id_ruta_id_semana_inicio_key'
+        SELECT 1 FROM pg_constraint WHERE conname = 'selecciones_ruta_usuario_id_semana_inicio_key'
       ) THEN
-        ALTER TABLE selecciones_ruta
-          ADD CONSTRAINT selecciones_ruta_usuario_id_ruta_id_semana_inicio_key
-          UNIQUE (usuario_id, ruta_id, semana_inicio);
+        ALTER TABLE selecciones_ruta ADD CONSTRAINT selecciones_ruta_usuario_id_semana_inicio_key UNIQUE (usuario_id, semana_inicio);
       END IF;
     END $$;
   `))
@@ -433,6 +440,10 @@ pool.query(`
   )
 `).catch(() => {});
 pool.query(`ALTER TABLE pagos ADD COLUMN IF NOT EXISTS comprobante_uri VARCHAR(255)`).catch(() => {});
+
+// Ruta única por sesión: la jornada guarda la ruta que quedó fijada al
+// iniciarla (antes se recalculaba en vivo).
+pool.query(`ALTER TABLE jornadas ADD COLUMN IF NOT EXISTS ruta_id INTEGER REFERENCES rutas(id)`).catch(() => {});
 
 // Auto-cierre de jornadas inactivas: si la última parada (o el inicio de jornada
 // si no hubo ninguna) fue hace más de 5 horas, la jornada se cierra sola.

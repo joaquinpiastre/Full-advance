@@ -194,6 +194,51 @@ router.put('/:id/orden', authMiddleware, async (req: AuthRequest, res: Response)
   }
 });
 
+// Agregar un cliente YA EXISTENTE a la ruta (a diferencia de POST /clientes,
+// que crea un cliente nuevo). Queda guardado en ruta_clientes sin fecha, así
+// que va a reaparecer cada vez que se cargue esta ruta, cualquier día.
+router.post('/:id/clientes', authMiddleware, gestionRutas, async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const { cliente_id } = req.body;
+  if (!cliente_id) return res.status(400).json({ error: 'cliente_id requerido' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: clienteRows } = await client.query(
+      'SELECT id FROM clientes WHERE id=$1 AND activo=true',
+      [cliente_id]
+    );
+    if (!clienteRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Cliente no encontrado' });
+    }
+    const { rows: existente } = await client.query(
+      'SELECT id FROM ruta_clientes WHERE ruta_id=$1 AND cliente_id=$2',
+      [id, cliente_id]
+    );
+    if (existente.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'El cliente ya está en esta ruta' });
+    }
+    const { rows: ordenRows } = await client.query(
+      'SELECT COALESCE(MAX(orden),0)+1 as siguiente FROM ruta_clientes WHERE ruta_id=$1',
+      [id]
+    );
+    const { rows } = await client.query(
+      'INSERT INTO ruta_clientes (ruta_id, cliente_id, orden) VALUES ($1,$2,$3) RETURNING *',
+      [id, cliente_id, ordenRows[0].siguiente]
+    );
+    await client.query('COMMIT');
+    const { rows: clienteCompleto } = await pool.query('SELECT * FROM clientes WHERE id=$1', [cliente_id]);
+    res.status(201).json({ ...rows[0], cliente: clienteCompleto[0] });
+  } catch {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: 'Error al agregar el cliente a la ruta' });
+  } finally {
+    client.release();
+  }
+});
+
 // Quitar un cliente de la ruta (no lo elimina de la base de clientes).
 // Requiere una nota explicando el motivo, que queda registrada como alerta.
 router.delete('/:id/clientes/:clienteId', authMiddleware, gestionRutas, async (req: AuthRequest, res: Response) => {

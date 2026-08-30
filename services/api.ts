@@ -148,6 +148,9 @@ export const eliminarRuta = (id: number) =>
 export const quitarClienteDeRuta = (rutaId: number, clienteId: number, nota: string) =>
   api.delete(`/rutas/${rutaId}/clientes/${clienteId}`, { data: { nota } });
 
+export const agregarClienteExistenteARuta = (rutaId: number, clienteId: number) =>
+  api.post(`/rutas/${rutaId}/clientes`, { cliente_id: clienteId });
+
 export const obtenerEliminacionesRuta = () =>
   api.get('/rutas/eliminaciones');
 

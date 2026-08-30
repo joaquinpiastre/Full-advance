@@ -166,7 +166,7 @@ router.get('/hoy', authMiddleware, async (req: AuthRequest, res: Response) => {
     if (fijas.length === 1) {
       await pool.query(
         `INSERT INTO selecciones_ruta (usuario_id, ruta_id, semana_inicio) VALUES ($1,$2,$3)
-         ON CONFLICT (usuario_id, ruta_id, semana_inicio) DO NOTHING`,
+         ON CONFLICT (usuario_id, semana_inicio) DO NOTHING`,
         [usuario_id, fijas[0].ruta_id, semana]
       );
       const completa = await fetchAsignacionCompleta({
@@ -242,52 +242,61 @@ router.get('/equipo-ruta/:ruta_id', authMiddleware, adminOSupervisor, async (req
   }
 });
 
-// El usuario agrega o quita una ruta de su selección para la semana.
-// Si la ruta ya está seleccionada, se deselecciona (toggle).
-// Retorna { seleccionadas: number[] } con los ruta_id actualmente elegidos.
+// El usuario fija la ruta que va a hacer esta semana (reemplaza cualquier
+// elección anterior — una sola ruta por vez). No se puede cambiar mientras
+// tiene una jornada activa (la ruta queda fijada para esa sesión).
+// Retorna { ruta_id } con la ruta actualmente elegida.
 router.post('/elegir', authMiddleware, async (req: AuthRequest, res: Response) => {
   const usuario_id = req.usuario!.id;
   const { ruta_id } = req.body;
   if (!ruta_id) return res.status(400).json({ error: 'ruta_id requerido' });
   const semana = inicioSemana(new Date());
+  const client = await pool.connect();
   try {
-    const { rows: fijas } = await pool.query(
+    const { rows: jornadaActiva } = await client.query(
+      'SELECT 1 FROM jornadas WHERE usuario_id=$1 AND activa=true',
+      [usuario_id]
+    );
+    if (jornadaActiva.length) {
+      return res.status(403).json({ error: 'No podés cambiar de ruta con una jornada activa' });
+    }
+
+    const { rows: fijas } = await client.query(
       `SELECT 1 FROM asignaciones_fijas WHERE usuario_id=$1 AND activo=true`,
       [usuario_id]
     );
     if (fijas.length) {
-      const { rows: permitida } = await pool.query(
+      const { rows: permitida } = await client.query(
         `SELECT 1 FROM asignaciones_fijas WHERE usuario_id=$1 AND ruta_id=$2 AND activo=true`,
         [usuario_id, ruta_id]
       );
-      if (!permitida.length) return res.status(403).json({ error: 'Esa ruta no está habilitada para vos' });
+      if (!permitida.length) {
+        return res.status(403).json({ error: 'Esa ruta no está habilitada para vos' });
+      }
     } else {
-      const { rows: activa } = await pool.query('SELECT 1 FROM rutas WHERE id=$1 AND activa=true', [ruta_id]);
-      if (!activa.length) return res.status(404).json({ error: 'Ruta no encontrada' });
+      const { rows: activa } = await client.query('SELECT 1 FROM rutas WHERE id=$1 AND activa=true', [ruta_id]);
+      if (!activa.length) {
+        return res.status(404).json({ error: 'Ruta no encontrada' });
+      }
     }
 
-    // Toggle: si ya está seleccionada la quitamos, si no la agregamos.
-    const { rows: existente } = await pool.query(
-      `SELECT id FROM selecciones_ruta WHERE usuario_id=$1 AND ruta_id=$2 AND semana_inicio=$3`,
-      [usuario_id, ruta_id, semana]
-    );
-    if (existente.length) {
-      await pool.query(`DELETE FROM selecciones_ruta WHERE id=$1`, [existente[0].id]);
-    } else {
-      await pool.query(
-        `INSERT INTO selecciones_ruta (usuario_id, ruta_id, semana_inicio) VALUES ($1,$2,$3)
-         ON CONFLICT (usuario_id, ruta_id, semana_inicio) DO NOTHING`,
-        [usuario_id, ruta_id, semana]
-      );
-    }
-
-    const { rows: actuales } = await pool.query(
-      `SELECT ruta_id FROM selecciones_ruta WHERE usuario_id=$1 AND semana_inicio=$2`,
+    await client.query('BEGIN');
+    await client.query(
+      `DELETE FROM selecciones_ruta WHERE usuario_id=$1 AND semana_inicio=$2`,
       [usuario_id, semana]
     );
-    res.json({ seleccionadas: actuales.map((r) => r.ruta_id) });
+    await client.query(
+      `INSERT INTO selecciones_ruta (usuario_id, ruta_id, semana_inicio) VALUES ($1,$2,$3)`,
+      [usuario_id, ruta_id, semana]
+    );
+    await client.query('COMMIT');
+
+    res.json({ ruta_id });
   } catch {
+    await client.query('ROLLBACK');
     res.status(500).json({ error: 'Error al elegir ruta' });
+  } finally {
+    client.release();
   }
 });
 

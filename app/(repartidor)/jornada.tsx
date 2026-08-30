@@ -6,12 +6,16 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useJornadaStore } from '../../store/jornadaStore';
-import { registrarParada, obtenerParadas, obtenerAsignacionHoy, obtenerJornadaActiva, actualizarOrdenRuta } from '../../services/api';
+import { registrarParada, obtenerParadas, obtenerAsignacionHoy, obtenerRuta, obtenerJornadaActiva, actualizarOrdenRuta } from '../../services/api';
 import { obtenerUbicacionRapida, detenerGps } from '../../services/gps';
 import {
   agregarVisitaPendiente, obtenerVisitasPendientes,
   procesarVisitasPendientes, suscribirVisitasPendientes, VisitaPendiente,
 } from '../../services/offlineVisitas';
+import {
+  encolarAccion, obtenerAccionesPendientes,
+  procesarAccionesPendientes, suscribirAccionesPendientes, AccionPendiente,
+} from '../../services/offlineAcciones';
 import CartillaModal from '../../components/CartillaModal';
 import NuevoClienteModal from '../../components/NuevoClienteModal';
 import FotoReferenciaCliente from '../../components/FotoReferenciaCliente';
@@ -27,8 +31,9 @@ type EstadoFotos = 'esperando' | 'visita';
 export default function JornadaRepartidor() {
   const { jornada, paradaActual, setParadaActual, setJornada } = useJornadaStore();
   const [paradas, setParadas] = useState<Parada[]>([]);
-  const [asignacion, setAsignacion] = useState<any>(null);
+  const [ruta, setRuta] = useState<any>(null);
   const [clientesRuta, setClientesRuta] = useState<any[]>([]);
+  const [accionesPendientes, setAccionesPendientes] = useState<AccionPendiente[]>([]);
   const [busquedaClientes, setBusquedaClientes] = useState('');
   const [cargando, setCargando] = useState(true);
   const [estadoFotos, setEstadoFotos] = useState<EstadoFotos>('esperando');
@@ -58,37 +63,38 @@ export default function JornadaRepartidor() {
     return suscribirVisitasPendientes(cargarPendientes);
   }, [jornada]);
 
+  useEffect(() => {
+    const cargarPendientes = () => obtenerAccionesPendientes().then(setAccionesPendientes);
+    cargarPendientes();
+    return suscribirAccionesPendientes(cargarPendientes);
+  }, []);
+
+  // La ruta de "Mi Ruta" es la que quedó fijada en la jornada al iniciarla
+  // (jornada.ruta_id) — no se recalcula en vivo mientras la jornada está
+  // activa. Fallback a /asignaciones/hoy solo para jornadas activas que se
+  // iniciaron antes de este cambio (sin ruta_id todavía).
   const cargarDatos = async () => {
     if (!jornada) return;
     setCargando(true);
     setErrorCarga(null);
     try {
-      const [paradasRes, asigRes] = await Promise.allSettled([
-        obtenerParadas(jornada.id),
-        obtenerAsignacionHoy(),
-      ]);
-      if (paradasRes.status === 'fulfilled') setParadas(paradasRes.value.data);
-      if (asigRes.status === 'fulfilled') {
-        const data = asigRes.value.data;
-        setAsignacion(data);
-        if (data.necesita_eleccion && (!data.rutas || data.rutas.length === 0)) {
-          setErrorCarga('No tenés rutas seleccionadas. Volvé al Inicio y elegí tus rutas antes de empezar.');
+      const paradasRes = await obtenerParadas(jornada.id).catch(() => null);
+      if (paradasRes) setParadas(paradasRes.data);
+
+      if (jornada.ruta_id) {
+        const rutaRes = await obtenerRuta(jornada.ruta_id);
+        setRuta(rutaRes.data);
+        setClientesRuta(rutaRes.data.clientes ?? []);
+      } else {
+        const asigRes = await obtenerAsignacionHoy();
+        const data = asigRes.data;
+        if (data.necesita_eleccion && !data.ruta) {
+          setErrorCarga('No tenés una ruta seleccionada. Volvé al Inicio y elegí tu ruta antes de empezar.');
           setCargando(false);
           return;
         }
-        const seen = new Set<number>();
-        const merged: any[] = [];
-        for (const r of (data.rutas ?? [])) {
-          for (const rc of (r.clientes ?? [])) {
-            if (!seen.has(rc.cliente.id)) {
-              seen.add(rc.cliente.id);
-              merged.push({ ...rc, ruta_id: r.id });
-            }
-          }
-        }
-        setClientesRuta(merged);
-      } else if (asigRes.status === 'rejected') {
-        setErrorCarga('No se pudo cargar la ruta. Verificá tu conexión y reintentá.');
+        setRuta(data.ruta ?? null);
+        setClientesRuta(data.ruta?.clientes ?? []);
       }
     } catch (e: any) {
       setErrorCarga(e?.response?.data?.error ?? 'Error al cargar los datos. Verificá tu conexión.');
@@ -98,6 +104,10 @@ export default function JornadaRepartidor() {
 
   const iniciarParadaEnCliente = async (cliente: Cliente) => {
     if (!jornada) return;
+    if (cliente.id < 0) {
+      Alert.alert('Cliente sin sincronizar', 'Este cliente se agregó sin conexión y todavía no se sincronizó. Esperá a que haya señal e intentá de nuevo.');
+      return;
+    }
     setClientesModal(false);
     setBusquedaClientes('');
     setProcesando(true);
@@ -218,6 +228,15 @@ export default function JornadaRepartidor() {
     }
   };
 
+  // Se agrega localmente al toque (funciona online y offline) — evita
+  // depender de un refetch que fallaría si no hay conexión.
+  const handleClienteAgregado = (cliente: Cliente) => {
+    setClientesRuta((prev) => {
+      if (prev.some((rc: any) => rc.cliente.id === cliente.id)) return prev;
+      return [...prev, { id: cliente.id, cliente_id: cliente.id, ruta_id: ruta?.id ?? 0, orden: prev.length + 1, cliente }];
+    });
+  };
+
   // Si al sincronizar la visita el backend cerró la jornada automáticamente
   // (porque ya se visitaron todos los clientes de la ruta), refleja eso en
   // la app: corta el GPS y vuelve a Inicio.
@@ -264,10 +283,14 @@ export default function JornadaRepartidor() {
   const handleReordenar = (nuevos: any[]) => {
     if (busquedaClientes.trim()) return; // no reorder while filtered
     setClientesRuta(nuevos);
-    const rutas: any[] = asignacion?.rutas ?? [];
-    if (rutas.length === 1) {
-      actualizarOrdenRuta(rutas[0].id, nuevos.map((c: any) => c.cliente.id)).catch(() => {});
-    }
+    if (!ruta) return;
+    const clientesIds = nuevos.map((c: any) => c.cliente.id);
+    actualizarOrdenRuta(ruta.id, clientesIds).catch((e: any) => {
+      if (!e?.response) {
+        // Sin conexión: se guarda igual y se sincroniza cuando vuelva la señal.
+        encolarAccion({ tipo: 'reordenar_ruta', payload: { ruta_id: ruta.id, clientes: clientesIds } });
+      }
+    });
   };
 
   // Web drag state (unused on native)
@@ -435,6 +458,14 @@ export default function JornadaRepartidor() {
             </View>
           )}
 
+          {accionesPendientes.length > 0 && (
+            <View style={styles.pendientesBanner}>
+              <Text style={styles.pendientesTexto}>
+                ⏳ {accionesPendientes.length} cambio{accionesPendientes.length > 1 ? 's' : ''} de ruta pendiente{accionesPendientes.length > 1 ? 's' : ''} de sincronizar
+              </Text>
+            </View>
+          )}
+
           <TouchableOpacity style={styles.btnNuevaParada} onPress={() => setClientesModal(true)} disabled={procesando}>
             {procesando
               ? <ActivityIndicator color="#fff" />
@@ -536,7 +567,9 @@ export default function JornadaRepartidor() {
                       onPress={() => iniciarParadaEnCliente(cliente)}
                       disabled={yaVisitado}
                     >
-                      <Text style={styles.clienteNombre}>{index + 1}. {cliente.nombre}</Text>
+                      <Text style={styles.clienteNombre}>
+                        {index + 1}. {cliente.nombre}{cliente.id < 0 ? ' ⏳' : ''}
+                      </Text>
                       <Text style={styles.clienteDireccion}>{cliente.direccion}</Text>
                       {yaVisitado && <Text style={styles.clienteVisitado}>✓ Visitado</Text>}
                     </TouchableOpacity>
@@ -571,7 +604,9 @@ export default function JornadaRepartidor() {
                       onPress={() => iniciarParadaEnCliente(cliente)}
                       disabled={yaVisitado}
                     >
-                      <Text style={styles.clienteNombre}>{index + 1}. {cliente.nombre}</Text>
+                      <Text style={styles.clienteNombre}>
+                        {index + 1}. {cliente.nombre}{cliente.id < 0 ? ' ⏳' : ''}
+                      </Text>
                       <Text style={styles.clienteDireccion}>{cliente.direccion}</Text>
                       {yaVisitado && <Text style={styles.clienteVisitado}>✓ Visitado</Text>}
                     </TouchableOpacity>
@@ -608,12 +643,13 @@ export default function JornadaRepartidor() {
       <NuevoClienteModal
         visible={nuevoClienteVisible}
         color={COLORS.repartidor}
-        rutas={(asignacion?.rutas ?? []).map((r: any) => ({ id: r.id, nombre: r.nombre }))}
+        rutas={ruta ? [{ id: ruta.id, nombre: ruta.nombre }] : []}
+        clientesEnRuta={clientesRuta.map((rc: any) => rc.cliente.id)}
         onClose={() => {
           setNuevoClienteVisible(false);
           setTimeout(() => setClientesModal(true), 350);
         }}
-        onCreado={cargarDatos}
+        onCreado={handleClienteAgregado}
       />
     </View>
   );

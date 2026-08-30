@@ -214,6 +214,25 @@ CREATE TABLE IF NOT EXISTS selecciones_ruta (
   UNIQUE(usuario_id, semana_inicio)
 );
 
+-- Reconciliación: ahora se elige una sola ruta por semana (antes se permitía
+-- más de una). Si la base tenía un constraint de 3 columnas de una versión
+-- vieja, lo sacamos; si hay filas duplicadas por (usuario_id, semana_inicio)
+-- nos quedamos con la más reciente; y nos aseguramos de que el UNIQUE de
+-- 2 columnas exista.
+ALTER TABLE selecciones_ruta DROP CONSTRAINT IF EXISTS selecciones_ruta_usuario_id_ruta_id_semana_inicio_key;
+DELETE FROM selecciones_ruta a USING selecciones_ruta b
+  WHERE a.usuario_id = b.usuario_id
+    AND a.semana_inicio = b.semana_inicio
+    AND a.id < b.id;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'selecciones_ruta_usuario_id_semana_inicio_key'
+  ) THEN
+    ALTER TABLE selecciones_ruta ADD CONSTRAINT selecciones_ruta_usuario_id_semana_inicio_key UNIQUE (usuario_id, semana_inicio);
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS jornadas (
   id SERIAL PRIMARY KEY,
   usuario_id INTEGER REFERENCES usuarios(id),
@@ -222,6 +241,10 @@ CREATE TABLE IF NOT EXISTS jornadas (
   activa BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Ruta que quedó fijada para esta jornada (una sola por sesión, elegida antes
+-- de iniciar). Nullable porque jornadas viejas no la tienen.
+ALTER TABLE jornadas ADD COLUMN IF NOT EXISTS ruta_id INTEGER REFERENCES rutas(id);
 
 CREATE TABLE IF NOT EXISTS gps_points (
   id SERIAL PRIMARY KEY,

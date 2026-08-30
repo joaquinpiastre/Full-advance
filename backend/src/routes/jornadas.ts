@@ -10,9 +10,13 @@ router.post('/iniciar', authMiddleware, async (req: AuthRequest, res: Response) 
   try {
     const activa = await pool.query('SELECT id FROM jornadas WHERE usuario_id=$1 AND activa=true', [usuario_id]);
     if (activa.rows.length) return res.status(400).json({ error: 'Ya hay una jornada activa' });
+    // La ruta de la jornada queda fijada al momento de iniciarla — una sola
+    // ruta por sesión, sin recalcularla en vivo mientras está activa.
+    const ruta_id = await obtenerRutaIdHoy(usuario_id);
+    if (!ruta_id) return res.status(400).json({ error: 'Debés elegir una ruta antes de iniciar la jornada' });
     const { rows } = await pool.query(
-      'INSERT INTO jornadas (usuario_id) VALUES ($1) RETURNING *',
-      [usuario_id]
+      'INSERT INTO jornadas (usuario_id, ruta_id) VALUES ($1, $2) RETURNING *',
+      [usuario_id, ruta_id]
     );
     res.status(201).json(rows[0]);
   } catch {

@@ -7,7 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { router, useFocusEffect } from 'expo-router';
 import { useJornadaStore } from '../../store/jornadaStore';
 import {
-  obtenerAsignacionHoy, obtenerParadas, obtenerJornadaActiva,
+  obtenerAsignacionHoy, obtenerRuta, obtenerParadas, obtenerJornadaActiva,
   registrarParada, actualizarOrdenRuta, obtenerEncuestasActivas,
 } from '../../services/api';
 import { obtenerUbicacionRapida, detenerGps } from '../../services/gps';
@@ -15,6 +15,10 @@ import {
   agregarVisitaPendiente, obtenerVisitasPendientes,
   procesarVisitasPendientes, suscribirVisitasPendientes, VisitaPendiente,
 } from '../../services/offlineVisitas';
+import {
+  encolarAccion, obtenerAccionesPendientes,
+  procesarAccionesPendientes, suscribirAccionesPendientes, AccionPendiente,
+} from '../../services/offlineAcciones';
 import CartillaModal from '../../components/CartillaModal';
 import NuevoClienteModal from '../../components/NuevoClienteModal';
 import MercaderiaVencidaForm from '../../components/MercaderiaVencidaForm';
@@ -60,6 +64,7 @@ export default function RutaPreventista() {
   const [encuestasActivas, setEncuestasActivas] = useState<Encuesta[]>([]);
   const [respuestasEncuestas, setRespuestasEncuestas] = useState<Record<number, boolean>>({});
   const [pendientes, setPendientes] = useState<VisitaPendiente[]>([]);
+  const [accionesPendientes, setAccionesPendientes] = useState<AccionPendiente[]>([]);
   const [busqueda, setBusqueda] = useState('');
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const enviandoRef = useRef(false);
@@ -71,35 +76,41 @@ export default function RutaPreventista() {
     return suscribirVisitasPendientes(cargarPendientes);
   }, [jornada]);
 
+  useEffect(() => {
+    const cargarPendientes = () => obtenerAccionesPendientes().then(setAccionesPendientes);
+    cargarPendientes();
+    return suscribirAccionesPendientes(cargarPendientes);
+  }, []);
+
+  // La ruta de "Mi Ruta" es la que quedó fijada en la jornada al iniciarla
+  // (jornada.ruta_id) — no se recalcula en vivo mientras está activa.
+  // Fallback a /asignaciones/hoy solo para jornadas activas iniciadas antes
+  // de este cambio (sin ruta_id todavía).
   const cargar = useCallback(async () => {
     setCargando(true);
     setErrorCarga(null);
     try {
-      const asigRes = await obtenerAsignacionHoy();
-      const rutas: any[] = asigRes.data?.rutas ?? [];
-      const necesitaEleccion = asigRes.data?.necesita_eleccion;
-
-      if (necesitaEleccion && rutas.length === 0) {
-        setErrorCarga('Todavía no elegiste tus rutas de la semana. Volvé al Inicio y tocá "Elegir rutas".');
-        setClientes([]);
-        setCargando(false);
-        return;
-      }
-
-      const seen = new Set<number>();
-      const merged: Cliente[] = [];
-      for (const r of rutas) {
-        for (const rc of (r.clientes ?? [])) {
-          const c: Cliente = { ...rc.cliente, ruta_id: r.id, ruta_nombre: r.nombre };
-          if (!seen.has(c.id)) {
-            seen.add(c.id);
-            merged.push(c);
-          }
+      let ruta: any = null;
+      if (jornada?.ruta_id) {
+        const rutaRes = await obtenerRuta(jornada.ruta_id);
+        ruta = rutaRes.data;
+      } else {
+        const asigRes = await obtenerAsignacionHoy();
+        if (asigRes.data?.necesita_eleccion && !asigRes.data?.ruta) {
+          setErrorCarga('Todavía no elegiste tu ruta de la semana. Volvé al Inicio y tocá "Elegir ruta".');
+          setClientes([]);
+          setCargando(false);
+          return;
         }
+        ruta = asigRes.data?.ruta ?? null;
       }
-      setClientes(merged);
-      setRutaId(rutas.length === 1 ? rutas[0].id : null);
-      setRutasAsignadas(rutas.map((r: any) => ({ id: r.id, nombre: r.nombre })));
+
+      const clientesRuta: Cliente[] = (ruta?.clientes ?? []).map((rc: any) => ({
+        ...rc.cliente, ruta_id: ruta.id, ruta_nombre: ruta.nombre,
+      }));
+      setClientes(clientesRuta);
+      setRutaId(ruta?.id ?? null);
+      setRutasAsignadas(ruta ? [{ id: ruta.id, nombre: ruta.nombre }] : []);
       if (jornada) {
         const paradasRes = await obtenerParadas(jornada.id);
         setParadas(paradasRes.data);
@@ -115,6 +126,10 @@ export default function RutaPreventista() {
   const iniciarVisita = async (cliente: Cliente) => {
     if (!jornada) {
       Alert.alert('Sin jornada', 'Iniciá la jornada desde la pantalla de Inicio primero.');
+      return;
+    }
+    if (cliente.id < 0) {
+      Alert.alert('Cliente sin sincronizar', 'Este cliente se agregó sin conexión y todavía no se sincronizó. Esperá a que haya señal e intentá de nuevo.');
       return;
     }
     setProcesando(true);
@@ -258,9 +273,23 @@ export default function RutaPreventista() {
   const handleReordenar = (nuevos: Cliente[]) => {
     if (busqueda.trim()) return; // no reorder while filtered
     setClientes(nuevos);
-    if (rutaId) {
-      actualizarOrdenRuta(rutaId, nuevos.map((c) => c.id)).catch(() => {});
-    }
+    if (!rutaId) return;
+    const clientesIds = nuevos.map((c) => c.id);
+    actualizarOrdenRuta(rutaId, clientesIds).catch((e: any) => {
+      if (!e?.response) {
+        // Sin conexión: se guarda igual y se sincroniza cuando vuelva la señal.
+        encolarAccion({ tipo: 'reordenar_ruta', payload: { ruta_id: rutaId, clientes: clientesIds } });
+      }
+    });
+  };
+
+  // Se agrega localmente al toque (funciona online y offline) — evita
+  // depender de un refetch que fallaría si no hay conexión.
+  const handleClienteAgregado = (cliente: Cliente) => {
+    setClientes((prev) => {
+      if (prev.some((c) => c.id === cliente.id)) return prev;
+      return [...prev, { ...cliente, ruta_id: rutaId ?? undefined, ruta_nombre: rutasAsignadas[0]?.nombre }];
+    });
   };
 
   // Web drag state (unused on native — no overhead)
@@ -543,6 +572,13 @@ export default function RutaPreventista() {
                 </Text>
               </View>
             )}
+            {accionesPendientes.length > 0 && (
+              <View style={styles.pendientesBanner}>
+                <Text style={styles.pendientesTexto}>
+                  ⏳ {accionesPendientes.length} cambio{accionesPendientes.length > 1 ? 's' : ''} de ruta pendiente{accionesPendientes.length > 1 ? 's' : ''} de sincronizar
+                </Text>
+              </View>
+            )}
             <View style={styles.resumenHeader}>
               <Text style={styles.resumenTexto}>
                 {paradasCompletadas.length + pendientes.length} / {clientes.length} clientes visitados
@@ -607,7 +643,7 @@ export default function RutaPreventista() {
                     </View>
                   )}
                   <View style={styles.clienteInfo}>
-                    <Text style={styles.clienteNombre}>{item.nombre}</Text>
+                    <Text style={styles.clienteNombre}>{item.nombre}{item.id < 0 ? ' ⏳' : ''}</Text>
                     <Text style={styles.clienteDireccion}>{item.direccion}</Text>
                     {item.telefono && <Text style={styles.clienteTelefono}>📞 {item.telefono}</Text>}
                   </View>
@@ -651,8 +687,9 @@ export default function RutaPreventista() {
         visible={nuevoClienteVisible}
         color={COLORS.preventista}
         rutas={rutasAsignadas}
+        clientesEnRuta={clientes.map((c) => c.id)}
         onClose={() => setNuevoClienteVisible(false)}
-        onCreado={cargar}
+        onCreado={handleClienteAgregado}
       />
     </View>
   );

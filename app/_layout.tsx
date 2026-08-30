@@ -4,8 +4,10 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useAuthStore } from '../store/authStore';
 import { Redirect } from 'expo-router';
 import { iniciarSincronizacionAutomatica } from '../services/offlineVisitas';
+import { iniciarSincronizacionAcciones } from '../services/offlineAcciones';
 
 iniciarSincronizacionAutomatica();
+iniciarSincronizacionAcciones();
 
 export default function RootLayout() {
   return (

@@ -77,6 +77,7 @@ export interface Asignacion {
 export interface Jornada {
   id: number;
   usuario_id: number;
+  ruta_id?: number | null;
   fecha_inicio: string;
   fecha_fin?: string;
   activa: boolean;

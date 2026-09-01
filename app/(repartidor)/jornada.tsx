@@ -4,10 +4,9 @@ import {
   ScrollView, ActivityIndicator, Image, TextInput, FlatList, Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
 import { useJornadaStore } from '../../store/jornadaStore';
-import { registrarParada, obtenerParadas, obtenerAsignacionHoy, obtenerRuta, obtenerJornadaActiva, actualizarOrdenRuta } from '../../services/api';
-import { obtenerUbicacionRapida, detenerGps } from '../../services/gps';
+import { registrarParada, obtenerParadas, obtenerAsignacionHoy, obtenerRuta, actualizarOrdenRuta } from '../../services/api';
+import { obtenerUbicacionRapida } from '../../services/gps';
 import {
   agregarVisitaPendiente, obtenerVisitasPendientes,
   procesarVisitasPendientes, suscribirVisitasPendientes, VisitaPendiente,
@@ -27,7 +26,7 @@ import { Parada, Cliente } from '../../types';
 type EstadoFotos = 'esperando' | 'visita';
 
 export default function JornadaRepartidor() {
-  const { jornada, paradaActual, setParadaActual, setJornada } = useJornadaStore();
+  const { jornada, paradaActual, setParadaActual } = useJornadaStore();
   const [paradas, setParadas] = useState<Parada[]>([]);
   const [ruta, setRuta] = useState<any>(null);
   const [clientesRuta, setClientesRuta] = useState<any[]>([]);
@@ -219,7 +218,7 @@ export default function JornadaRepartidor() {
       setAccionDesc(['']);
       setOportunidades(['']);
 
-      procesarVisitasPendientes().then(() => { cargarDatos(); verificarJornadaCerrada(); });
+      procesarVisitasPendientes().then(() => { cargarDatos(); });
     } catch {
       Alert.alert('Error', 'No se pudo guardar la visita. Probá de nuevo.');
     } finally {
@@ -235,21 +234,6 @@ export default function JornadaRepartidor() {
       if (prev.some((rc: any) => rc.cliente.id === cliente.id)) return prev;
       return [...prev, { id: cliente.id, cliente_id: cliente.id, ruta_id: ruta?.id ?? 0, orden: prev.length + 1, cliente }];
     });
-  };
-
-  // Si al sincronizar la visita el backend cerró la jornada automáticamente
-  // (porque ya se visitaron todos los clientes de la ruta), refleja eso en
-  // la app: corta el GPS y vuelve a Inicio.
-  const verificarJornadaCerrada = async () => {
-    try {
-      const res = await obtenerJornadaActiva();
-      if (!res.data) {
-        await detenerGps();
-        setJornada(null);
-        Alert.alert('Jornada finalizada', 'Completaste todas las visitas de la ruta. La jornada se cerró automáticamente.');
-        router.replace('/(repartidor)');
-      }
-    } catch {}
   };
 
   if (!jornada) {

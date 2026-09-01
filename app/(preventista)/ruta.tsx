@@ -4,13 +4,13 @@ import {
   Alert, ScrollView, Image, TextInput, FlatList, Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { router, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { useJornadaStore } from '../../store/jornadaStore';
 import {
-  obtenerAsignacionHoy, obtenerRuta, obtenerParadas, obtenerJornadaActiva,
+  obtenerAsignacionHoy, obtenerRuta, obtenerParadas,
   registrarParada, actualizarOrdenRuta, obtenerEncuestasActivas,
 } from '../../services/api';
-import { obtenerUbicacionRapida, detenerGps } from '../../services/gps';
+import { obtenerUbicacionRapida } from '../../services/gps';
 import {
   agregarVisitaPendiente, obtenerVisitasPendientes,
   procesarVisitasPendientes, suscribirVisitasPendientes, VisitaPendiente,
@@ -32,7 +32,7 @@ import { Cliente, Encuesta } from '../../types';
 type EstadoVisita = 'esperando' | 'formulario';
 
 export default function RutaPreventista() {
-  const { jornada, setJornada } = useJornadaStore();
+  const { jornada } = useJornadaStore();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [rutaId, setRutaId] = useState<number | null>(null);
   const [rutasAsignadas, setRutasAsignadas] = useState<{ id: number; nombre: string }[]>([]);
@@ -246,28 +246,13 @@ export default function RutaPreventista() {
       setClienteActual(null);
       setParadaActual(null);
 
-      procesarVisitasPendientes().then(() => { cargar(); verificarJornadaCerrada(); });
+      procesarVisitasPendientes().then(() => { cargar(); });
     } catch {
       Alert.alert('Error', 'No se pudo guardar la visita. Probá de nuevo.');
     } finally {
       setProcesando(false);
       enviandoRef.current = false;
     }
-  };
-
-  // Si al sincronizar la visita el backend cerró la jornada automáticamente
-  // (porque ya se visitaron todos los clientes de la ruta), refleja eso en
-  // la app: corta el GPS y vuelve a Inicio.
-  const verificarJornadaCerrada = async () => {
-    try {
-      const res = await obtenerJornadaActiva();
-      if (!res.data) {
-        await detenerGps();
-        setJornada(null);
-        Alert.alert('Jornada finalizada', 'Completaste todas las visitas de la ruta. La jornada se cerró automáticamente.');
-        router.replace('/(preventista)');
-      }
-    } catch {}
   };
 
   const handleReordenar = (nuevos: Cliente[]) => {

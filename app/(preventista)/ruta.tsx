@@ -83,8 +83,10 @@ export default function RutaPreventista() {
   // `silencioso` recarga sin mostrar el spinner de pantalla completa: se usa
   // cuando la cola offline termina de sincronizar y solo hay que refrescar.
   const cargar = useCallback(async (silencioso = false) => {
-    if (!silencioso) setCargando(true);
-    setErrorCarga(null);
+    if (!silencioso) {
+      setCargando(true);
+      setErrorCarga(null);
+    }
     try {
       let ruta: any = null;
       if (jornada?.ruta_id) {
@@ -113,6 +115,7 @@ export default function RutaPreventista() {
         const paradasRes = await obtenerParadas(jornada.id);
         setParadas(paradasRes.data);
       }
+      setErrorCarga(null);
     } catch (e: any) {
       // Una recarga silenciosa que falla no tiene que romper la pantalla que
       // el usuario ya está usando: se deja lo que había y se reintenta después.

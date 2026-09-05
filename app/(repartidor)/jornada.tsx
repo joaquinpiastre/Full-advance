@@ -99,8 +99,10 @@ export default function JornadaRepartidor() {
   // sincronizar y solo hace falta refrescar los datos.
   const cargarDatos = async (silencioso = false) => {
     if (!jornada) return;
-    if (!silencioso) setCargando(true);
-    setErrorCarga(null);
+    if (!silencioso) {
+      setCargando(true);
+      setErrorCarga(null);
+    }
     try {
       const paradasRes = await obtenerParadas(jornada.id).catch(() => null);
       if (paradasRes) setParadas(paradasRes.data);
@@ -120,6 +122,7 @@ export default function JornadaRepartidor() {
         setRuta(data.ruta ?? null);
         setClientesRuta(data.ruta?.clientes ?? []);
       }
+      setErrorCarga(null);
     } catch (e: any) {
       if (!silencioso) {
         setErrorCarga(e?.response?.data?.error ?? 'Error al cargar los datos. Verificá tu conexión.');

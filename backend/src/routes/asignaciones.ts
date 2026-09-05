@@ -57,14 +57,40 @@ export async function obtenerRutaIdHoy(usuario_id: number): Promise<number | nul
   return null;
 }
 
+// Todas las rutas a las que el usuario puede cargar/agregar clientes hoy.
+// A diferencia de obtenerRutaIdHoy (que devuelve UNA sola, la de mayor
+// prioridad), acá juntamos todas las fuentes válidas: la asignación manual del
+// admin, la ruta elegida para la semana, las rutas habilitadas y la ruta que
+// quedó fijada en la jornada activa. Sin esto, un preventista que eligió su
+// ruta de la semana (el flujo normal, sin asignación manual) no podía crear
+// clientes: el backend solo miraba la tabla `asignaciones`.
+export async function rutasPermitidasHoy(usuario_id: number): Promise<number[]> {
+  const hoy = hoyArgentina();
+  const semana = inicioSemana(new Date());
+  const ids = new Set<number>();
+
+  const { rows } = await pool.query(
+    `SELECT ruta_id FROM asignaciones WHERE usuario_id=$1 AND fecha=$2
+     UNION
+     SELECT ruta_id FROM selecciones_ruta WHERE usuario_id=$1 AND semana_inicio=$3
+     UNION
+     SELECT ruta_id FROM asignaciones_fijas WHERE usuario_id=$1 AND activo=true
+     UNION
+     SELECT ruta_id FROM jornadas WHERE usuario_id=$1 AND activa=true AND ruta_id IS NOT NULL`,
+    [usuario_id, hoy, semana]
+  );
+  for (const r of rows) if (r.ruta_id != null) ids.add(Number(r.ruta_id));
+  return [...ids];
+}
+
 // Helper: arma el objeto completo de asignación (ruta + clientes)
 async function fetchAsignacionCompleta(asig: any) {
+  // row_to_json(c) devuelve el cliente COMPLETO: listar las columnas a mano
+  // hacía que las que faltaban (marcas, tipo_comercio, material_exhibicion,
+  // numero_cliente, foto_referencia_uri) llegaran vacías a la app y se
+  // borraran al guardar la cartilla desde la ruta.
   const { rows: rc } = await pool.query(
-    `SELECT rc.*,
-      c.nombre as cliente_nombre, c.direccion, c.lat, c.lng, c.telefono, c.notas,
-      c.categoria, c.razon_social, c.cuit, c.rubro, c.email, c.contacto_nombre, c.horario_atencion,
-      c.monto_compra_promedio, c.frecuencia_compra, c.forma_pago, c.dia_visita_preferido,
-      c.cartilla_actualizada_at, c.zona, c.departamento
+    `SELECT rc.id, rc.cliente_id, rc.orden, row_to_json(c) as cliente
      FROM ruta_clientes rc JOIN clientes c ON c.id=rc.cliente_id
      WHERE rc.ruta_id=$1 ORDER BY rc.orden`,
     [asig.ruta_id]
@@ -79,17 +105,7 @@ async function fetchAsignacionCompleta(asig: any) {
         id: x.id,
         cliente_id: x.cliente_id,
         orden: x.orden,
-        cliente: {
-          id: x.cliente_id, nombre: x.cliente_nombre, direccion: x.direccion,
-          lat: x.lat, lng: x.lng, telefono: x.telefono, notas: x.notas,
-          categoria: x.categoria, razon_social: x.razon_social, cuit: x.cuit, rubro: x.rubro,
-          email: x.email, contacto_nombre: x.contacto_nombre, horario_atencion: x.horario_atencion,
-          monto_compra_promedio: x.monto_compra_promedio, frecuencia_compra: x.frecuencia_compra,
-          forma_pago: x.forma_pago, dia_visita_preferido: x.dia_visita_preferido,
-          cartilla_actualizada_at: x.cartilla_actualizada_at,
-          zona: x.zona, departamento: x.departamento,
-          ruta_id: asig.ruta_id, ruta_nombre: asig.ruta_nombre,
-        },
+        cliente: { ...x.cliente, ruta_id: asig.ruta_id, ruta_nombre: asig.ruta_nombre },
       })),
     },
   };

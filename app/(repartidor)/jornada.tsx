@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert,
   ScrollView, ActivityIndicator, Image, TextInput, FlatList, Platform,
@@ -53,6 +53,17 @@ export default function JornadaRepartidor() {
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const enviandoRef = useRef(false);
 
+  // Memoizados: NuevoClienteModal recarga zonas cuando cambian sus props, así
+  // que pasarle arrays nuevos en cada render lo haría pedir datos en bucle.
+  const rutasParaModal = useMemo(
+    () => (ruta ? [{ id: ruta.id, nombre: ruta.nombre }] : []),
+    [ruta?.id, ruta?.nombre]
+  );
+  const idsClientesRuta = useMemo(
+    () => clientesRuta.map((rc: any) => rc.cliente.id),
+    [clientesRuta]
+  );
+
   useEffect(() => {
     if (jornada) cargarDatos();
   }, [jornada]);
@@ -64,8 +75,17 @@ export default function JornadaRepartidor() {
     return suscribirVisitasPendientes(cargarPendientes);
   }, [jornada]);
 
+  // Cuando la cola de acciones offline termina de vaciarse, refrescamos la ruta
+  // en silencio: así los clientes creados sin señal (id temporal negativo)
+  // pasan a mostrarse con su id real y se pueden visitar.
   useEffect(() => {
-    const cargarPendientes = () => obtenerAccionesPendientes().then(setAccionesPendientes);
+    let anteriores = 0;
+    const cargarPendientes = async () => {
+      const lista = await obtenerAccionesPendientes();
+      setAccionesPendientes(lista);
+      if (anteriores > 0 && lista.length === 0) cargarDatosRef.current?.(true);
+      anteriores = lista.length;
+    };
     cargarPendientes();
     return suscribirAccionesPendientes(cargarPendientes);
   }, []);
@@ -74,9 +94,12 @@ export default function JornadaRepartidor() {
   // (jornada.ruta_id) — no se recalcula en vivo mientras la jornada está
   // activa. Fallback a /asignaciones/hoy solo para jornadas activas que se
   // iniciaron antes de este cambio (sin ruta_id todavía).
-  const cargarDatos = async () => {
+  // `silencioso` recarga sin mostrar el spinner de pantalla completa ni pisar
+  // la pantalla con un error: se usa cuando la cola offline termina de
+  // sincronizar y solo hace falta refrescar los datos.
+  const cargarDatos = async (silencioso = false) => {
     if (!jornada) return;
-    setCargando(true);
+    if (!silencioso) setCargando(true);
     setErrorCarga(null);
     try {
       const paradasRes = await obtenerParadas(jornada.id).catch(() => null);
@@ -90,7 +113,7 @@ export default function JornadaRepartidor() {
         const asigRes = await obtenerAsignacionHoy();
         const data = asigRes.data;
         if (data.necesita_eleccion && !data.ruta) {
-          setErrorCarga('No tenés una ruta seleccionada. Volvé al Inicio y elegí tu ruta antes de empezar.');
+          if (!silencioso) setErrorCarga('No tenés una ruta seleccionada. Volvé al Inicio y elegí tu ruta antes de empezar.');
           setCargando(false);
           return;
         }
@@ -98,10 +121,17 @@ export default function JornadaRepartidor() {
         setClientesRuta(data.ruta?.clientes ?? []);
       }
     } catch (e: any) {
-      setErrorCarga(e?.response?.data?.error ?? 'Error al cargar los datos. Verificá tu conexión.');
+      if (!silencioso) {
+        setErrorCarga(e?.response?.data?.error ?? 'Error al cargar los datos. Verificá tu conexión.');
+      }
     }
     setCargando(false);
   };
+
+  // Siempre apunta a la última versión de cargarDatos, para poder llamarla
+  // desde efectos que se montan una sola vez.
+  const cargarDatosRef = useRef<((silencioso?: boolean) => void) | null>(null);
+  cargarDatosRef.current = cargarDatos;
 
   const iniciarParadaEnCliente = async (cliente: Cliente) => {
     if (!jornada) return;
@@ -255,7 +285,7 @@ export default function JornadaRepartidor() {
       </Text>
       <TouchableOpacity
         style={{ backgroundColor: COLORS.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
-        onPress={cargarDatos}
+        onPress={() => cargarDatos()}
       >
         <Text style={{ color: '#fff', fontWeight: '700' }}>Reintentar</Text>
       </TouchableOpacity>
@@ -540,15 +570,15 @@ export default function JornadaRepartidor() {
         visible={!!clienteCartilla}
         color={COLORS.repartidor}
         onClose={() => setClienteCartilla(null)}
-        onGuardado={cargarDatos}
-        onEliminado={cargarDatos}
+        onGuardado={() => cargarDatos()}
+        onEliminado={() => cargarDatos()}
       />
 
       <NuevoClienteModal
         visible={nuevoClienteVisible}
         color={COLORS.repartidor}
-        rutas={ruta ? [{ id: ruta.id, nombre: ruta.nombre }] : []}
-        clientesEnRuta={clientesRuta.map((rc: any) => rc.cliente.id)}
+        rutas={rutasParaModal}
+        clientesEnRuta={idsClientesRuta}
         onClose={() => setNuevoClienteVisible(false)}
         onCreado={handleClienteAgregado}
       />

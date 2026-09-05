@@ -3,6 +3,7 @@ import multer from 'multer';
 import fs from 'fs';
 import { pool } from '../db/client';
 import { authMiddleware, soloAdmin, AuthRequest } from '../middleware/auth';
+import { rutasPermitidasHoy, obtenerRutaIdHoy } from './asignaciones';
 
 const router = Router();
 
@@ -36,32 +37,50 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
   }
 });
 
+// Devuelve el cliente ya creado con ese client_uid (idempotencia), o null.
+async function clientePorUid(client_uid: string) {
+  const { rows } = await pool.query(
+    `SELECT c.*, (SELECT rc.ruta_id FROM ruta_clientes rc WHERE rc.cliente_id=c.id LIMIT 1) as ruta_id
+     FROM clientes c WHERE c.client_uid=$1`,
+    [client_uid]
+  );
+  return rows[0] ?? null;
+}
+
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   const {
     nombre, direccion, lat, lng, telefono, notas, numero_cliente,
     categoria, razon_social, cuit, rubro, email, contacto_nombre, horario_atencion,
     monto_compra_promedio, frecuencia_compra, forma_pago, dia_visita_preferido,
-    zona, departamento, marcas,
+    zona, departamento, marcas, tipo_comercio, material_exhibicion, client_uid,
   } = req.body;
   let { ruta_id } = req.body;
   const esAdmin = req.usuario?.rol === 'admin';
   if (!nombre || !direccion) return res.status(400).json({ error: 'Nombre y dirección requeridos' });
+
+  // Idempotencia: la app manda un client_uid propio de cada alta. Si la
+  // respuesta se perdió por mala señal y la app reintenta desde la cola
+  // offline, devolvemos el cliente que ya se creó en vez de duplicarlo.
+  const uid = typeof client_uid === 'string' && client_uid.trim() ? client_uid.trim().slice(0, 64) : null;
+  if (uid) {
+    try {
+      const yaCreado = await clientePorUid(uid);
+      if (yaCreado) return res.status(200).json(yaCreado);
+    } catch {}
+  }
+
   const client = await pool.connect();
   try {
     if (!esAdmin) {
-      // Repartidores/preventistas solo pueden asignar el cliente a una de
-      // sus rutas asignadas hoy (puede tener más de una con multi-ruta).
-      const hoy = new Date().toISOString().split('T')[0];
-      const { rows: asigRows } = await client.query(
-        'SELECT ruta_id FROM asignaciones WHERE usuario_id=$1 AND fecha=$2',
-        [req.usuario!.id, hoy]
-      );
-      if (!asigRows.length) return res.status(400).json({ error: 'No tenés una ruta asignada hoy' });
-      const rutasAsignadas: number[] = asigRows.map((r) => r.ruta_id);
+      // Repartidores/preventistas solo pueden asignar el cliente a una de las
+      // rutas que tienen habilitadas hoy: asignación manual del admin, ruta
+      // elegida para la semana, rutas fijas o la ruta de su jornada activa.
+      const rutasAsignadas = await rutasPermitidasHoy(req.usuario!.id);
+      if (!rutasAsignadas.length) return res.status(400).json({ error: 'No tenés una ruta asignada hoy' });
       if (ruta_id && !rutasAsignadas.includes(Number(ruta_id))) {
         return res.status(403).json({ error: 'Esa ruta no está entre tus rutas asignadas hoy' });
       }
-      ruta_id = ruta_id ? Number(ruta_id) : rutasAsignadas[0];
+      ruta_id = ruta_id ? Number(ruta_id) : (await obtenerRutaIdHoy(req.usuario!.id)) ?? rutasAsignadas[0];
     }
     if (!ruta_id) return res.status(400).json({ error: 'Debés asignar una ruta' });
 
@@ -71,14 +90,15 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         nombre, direccion, lat, lng, telefono, notas,
         categoria, razon_social, cuit, rubro, email, contacto_nombre, horario_atencion,
         monto_compra_promedio, frecuencia_compra, forma_pago, dia_visita_preferido,
-        zona, departamento, marcas, numero_cliente
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING *`,
+        zona, departamento, marcas, numero_cliente, tipo_comercio, material_exhibicion, client_uid
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24) RETURNING *`,
       [
         nombre, direccion, lat ?? 0, lng ?? 0, telefono ?? null, notas ?? null,
         esAdmin ? (categoria ?? null) : null, razon_social ?? null, cuit ?? null, rubro ?? null, email ?? null,
         contacto_nombre ?? null, horario_atencion ?? null,
         monto_compra_promedio ?? null, frecuencia_compra ?? null, forma_pago ?? null, dia_visita_preferido ?? null,
         zona ?? null, departamento ?? null, marcas ?? null, numero_cliente?.trim() || null,
+        tipo_comercio ?? null, material_exhibicion ?? null, uid,
       ]
     );
     const cliente = rows[0];
@@ -92,8 +112,17 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     );
     await client.query('COMMIT');
     res.status(201).json({ ...cliente, ruta_id: Number(ruta_id) });
-  } catch {
-    await client.query('ROLLBACK');
+  } catch (e: any) {
+    await client.query('ROLLBACK').catch(() => {});
+    // Dos reintentos simultáneos de la misma alta offline: el índice único de
+    // client_uid rechaza el segundo. No es un error para la app: devolvemos el
+    // cliente que sí quedó creado.
+    if (uid && e?.code === '23505') {
+      try {
+        const yaCreado = await clientePorUid(uid);
+        if (yaCreado) return res.status(200).json(yaCreado);
+      } catch {}
+    }
     res.status(500).json({ error: 'Error al crear cliente' });
   } finally {
     client.release();
@@ -107,7 +136,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     nombre, direccion, lat, lng, telefono, notas, numero_cliente,
     categoria, razon_social, cuit, rubro, email, contacto_nombre, horario_atencion,
     monto_compra_promedio, frecuencia_compra, forma_pago, dia_visita_preferido,
-    zona, departamento, marcas, ruta_id,
+    zona, departamento, marcas, tipo_comercio, material_exhibicion, ruta_id,
   } = req.body;
   if (!nombre || !direccion) return res.status(400).json({ error: 'Nombre y dirección requeridos' });
   const client = await pool.connect();
@@ -117,7 +146,8 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
       'nombre=$1', 'direccion=$2', 'lat=$3', 'lng=$4', 'telefono=$5', 'notas=$6',
       'razon_social=$7', 'cuit=$8', 'rubro=$9', 'email=$10', 'contacto_nombre=$11', 'horario_atencion=$12',
       'monto_compra_promedio=$13', 'frecuencia_compra=$14', 'forma_pago=$15', 'dia_visita_preferido=$16',
-      'zona=$17', 'departamento=$18', 'marcas=$19', 'numero_cliente=$20', 'cartilla_actualizada_at=NOW()',
+      'zona=$17', 'departamento=$18', 'marcas=$19', 'numero_cliente=$20',
+      'tipo_comercio=$21', 'material_exhibicion=$22', 'cartilla_actualizada_at=NOW()',
     ];
     const valores: any[] = [
       nombre, direccion, lat ?? 0, lng ?? 0, telefono ?? null, notas ?? null,
@@ -125,6 +155,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
       contacto_nombre ?? null, horario_atencion ?? null,
       monto_compra_promedio ?? null, frecuencia_compra ?? null, forma_pago ?? null, dia_visita_preferido ?? null,
       zona ?? null, departamento ?? null, marcas ?? null, numero_cliente?.trim() || null,
+      tipo_comercio ?? null, material_exhibicion ?? null,
     ];
     let i = valores.length + 1;
     // Solo el admin puede cambiar la categoría (A-F).

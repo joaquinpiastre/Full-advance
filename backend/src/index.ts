@@ -146,6 +146,16 @@ pool.query(`
   ALTER TABLE clientes ADD COLUMN IF NOT EXISTS numero_cliente VARCHAR(50)
 `).catch(() => {});
 
+// Identificador que genera la app al dar de alta un cliente. Sirve para que,
+// si la respuesta se pierde por mala señal y la app reintenta desde su cola
+// offline, el alta no se duplique (ver POST /clientes).
+pool.query(`ALTER TABLE clientes ADD COLUMN IF NOT EXISTS client_uid VARCHAR(64)`)
+  .then(() => pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS clientes_client_uid_key
+      ON clientes (client_uid) WHERE client_uid IS NOT NULL
+  `))
+  .catch(() => {});
+
 // Columnas del flujo preventista en paradas
 pool.query(`
   ALTER TABLE clientes

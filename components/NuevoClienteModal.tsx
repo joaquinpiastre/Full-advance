@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal, TextInput,
   ScrollView, Alert, ActivityIndicator, FlatList,
@@ -32,6 +32,13 @@ function esErrorDeRed(e: any) {
   return !e?.response;
 }
 
+// Identificador único del alta, generado en el teléfono. Viaja con el cliente
+// para que, si la respuesta se pierde por mala señal y la cola offline
+// reintenta, el backend reconozca el alta y no cree un cliente duplicado.
+function nuevoUid() {
+  return `cli-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 interface Props {
   visible: boolean;
   color?: string;
@@ -57,23 +64,44 @@ export default function NuevoClienteModal({ visible, color = COLORS.primary, onC
   const [busquedaExistente, setBusquedaExistente] = useState('');
   const [clientesDisponibles, setClientesDisponibles] = useState<Cliente[]>([]);
   const [cargandoExistentes, setCargandoExistentes] = useState(false);
+  const [errorExistentes, setErrorExistentes] = useState<string | null>(null);
   const [agregandoId, setAgregandoId] = useState<number | null>(null);
+  const guardandoRef = useRef(false);
+
+  // Las pantallas que usan este modal arman la prop `rutas` en el render (un
+  // array nuevo cada vez). Si el efecto dependiera de `rutas`, se volvería a
+  // ejecutar en cada render: cada respuesta de zonas dispara un setState, que
+  // dispara otro render, que dispara otro pedido... un bucle infinito de
+  // requests que satura la conexión y deja la pantalla "cargando" para
+  // siempre. Dependemos de los ids serializados, que sí son estables.
+  const rutasKey = (rutas ?? []).map((r) => r.id).join(',');
 
   useEffect(() => {
     if (!visible) return;
+    let vivo = true;
     setModo('nuevo');
-    obtenerDepartamentos().then((res) => setDepartamentos(res.data)).catch(() => {});
-    obtenerDistritos().then((res) => setDistritos(res.data)).catch(() => {});
-    setRutaId(rutas?.length === 1 ? rutas[0].id : null);
-  }, [visible, rutas]);
+    setBusquedaExistente('');
+    obtenerDepartamentos().then((res) => { if (vivo) setDepartamentos(res.data); }).catch(() => {});
+    obtenerDistritos().then((res) => { if (vivo) setDistritos(res.data); }).catch(() => {});
+    const ids = (rutas ?? []).map((r) => r.id);
+    setRutaId(ids.length === 1 ? ids[0] : null);
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, rutasKey]);
 
   useEffect(() => {
     if (!visible || modo !== 'existente' || clientesDisponibles.length) return;
+    let vivo = true;
     setCargandoExistentes(true);
+    setErrorExistentes(null);
     obtenerClientes()
-      .then((res) => setClientesDisponibles(res.data))
-      .catch(() => {})
-      .finally(() => setCargandoExistentes(false));
+      .then((res) => { if (vivo) setClientesDisponibles(res.data); })
+      .catch(() => {
+        if (vivo) setErrorExistentes('No se pudo traer la lista de clientes. Necesitás conexión para buscar un cliente existente.');
+      })
+      .finally(() => { if (vivo) setCargandoExistentes(false); });
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, modo]);
 
   const departamentoId = departamentos.find((d) => d.nombre === form.departamento)?.id ?? null;
@@ -90,9 +118,10 @@ export default function NuevoClienteModal({ visible, color = COLORS.primary, onC
   }, [clientesDisponibles, clientesEnRuta, busquedaExistente]);
 
   const agregarExistente = async (cliente: Cliente) => {
-    const destino = rutas?.length === 1 ? rutas[0].id : rutaId;
+    if (agregandoId !== null) return;
+    const destino = rutaId ?? (rutas?.length === 1 ? rutas[0].id : null);
     if (!destino) {
-      Alert.alert('Error', 'No se encontró la ruta de hoy');
+      Alert.alert('Sin ruta', 'No se encontró tu ruta de hoy. Volvé al Inicio, elegí la ruta y probá de nuevo.');
       return;
     }
     setAgregandoId(cliente.id);
@@ -106,6 +135,10 @@ export default function NuevoClienteModal({ visible, color = COLORS.primary, onC
         await encolarAccion({ tipo: 'agregar_cliente_existente', payload: { ruta_id: destino, cliente_id: cliente.id } });
         onCreado?.(cliente);
         onClose();
+      } else if (e?.response?.status === 409) {
+        // Ya estaba en la ruta: para el usuario el resultado es el mismo.
+        onCreado?.(cliente);
+        onClose();
       } else {
         Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo agregar el cliente');
       }
@@ -114,6 +147,7 @@ export default function NuevoClienteModal({ visible, color = COLORS.primary, onC
   };
 
   const guardar = async () => {
+    if (guardandoRef.current) return;
     if (!form.nombre.trim() || !form.direccion.trim()) {
       Alert.alert('Error', 'El nombre y la dirección son obligatorios');
       return;
@@ -122,8 +156,10 @@ export default function NuevoClienteModal({ visible, color = COLORS.primary, onC
       Alert.alert('Error', 'Elegí a qué ruta pertenece el cliente');
       return;
     }
+    guardandoRef.current = true;
     setGuardando(true);
     const datos = {
+      client_uid: nuevoUid(),
       nombre: form.nombre.trim(),
       razon_social: form.razon_social.trim() || null,
       cuit: form.cuit.trim() || null,
@@ -144,17 +180,25 @@ export default function NuevoClienteModal({ visible, color = COLORS.primary, onC
       onClose();
     } catch (e: any) {
       if (esErrorDeRed(e)) {
-        // Sin conexión: lo mostramos como agregado ya mismo (con id temporal)
-        // y se crea en el servidor solo cuando vuelva la señal.
+        // Sin conexión (o señal tan mala que se cortó el pedido): lo mostramos
+        // como agregado ya mismo, con un id temporal negativo, y se crea en el
+        // servidor solo cuando vuelva la señal. El client_uid que ya viaja en
+        // `datos` evita que se duplique si el pedido original sí había llegado.
         const tempId = -Date.now();
         await encolarAccion({ tipo: 'crear_cliente', payload: { datos, tempId } });
         setForm(FORM_VACIO);
-        onCreado?.({ id: tempId, nombre: datos.nombre, direccion: datos.direccion, lat: 0, lng: 0 } as Cliente);
+        onCreado?.({
+          ...datos,
+          id: tempId,
+          lat: 0,
+          lng: 0,
+        } as unknown as Cliente);
         onClose();
       } else {
         Alert.alert('Error', e?.response?.data?.error ?? 'No se pudo crear el cliente');
       }
     }
+    guardandoRef.current = false;
     setGuardando(false);
   };
 
@@ -197,6 +241,10 @@ export default function NuevoClienteModal({ visible, color = COLORS.primary, onC
             </View>
             {cargandoExistentes ? (
               <View style={styles.center}><ActivityIndicator color={color} /></View>
+            ) : errorExistentes ? (
+              <View style={styles.center}>
+                <Text style={styles.vacio}>{errorExistentes}</Text>
+              </View>
             ) : (
               <FlatList
                 data={clientesExistentesFiltrados}
@@ -383,9 +431,18 @@ export default function NuevoClienteModal({ visible, color = COLORS.primary, onC
             />
           </View>
 
-          <TouchableOpacity style={[styles.btnGuardar, { backgroundColor: color }]} onPress={guardar} disabled={guardando}>
+          <TouchableOpacity
+            style={[styles.btnGuardar, { backgroundColor: color }, guardando && { opacity: 0.7 }]}
+            onPress={guardar}
+            disabled={guardando}
+          >
             {guardando ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnGuardarTexto}>Crear cliente</Text>}
           </TouchableOpacity>
+          {guardando && (
+            <Text style={styles.guardandoAyuda}>
+              Guardando… si la señal está mala, el cliente queda guardado en el teléfono y se sincroniza solo.
+            </Text>
+          )}
         </ScrollView>
         )}
       </View>
@@ -479,4 +536,5 @@ const styles = StyleSheet.create({
   ayuda: { fontSize: 13, color: COLORS.textLight, fontStyle: 'italic' },
   btnGuardar: { borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 8 },
   btnGuardarTexto: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  guardandoAyuda: { fontSize: 12, color: COLORS.textLight, textAlign: 'center', lineHeight: 17, marginTop: -6 },
 });

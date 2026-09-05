@@ -58,6 +58,10 @@ ALTER TABLE clientes ADD COLUMN IF NOT EXISTS zona VARCHAR(100);
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS departamento VARCHAR(100);
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS marcas TEXT[];
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS numero_cliente VARCHAR(50);
+-- Identificador generado por la app al dar de alta un cliente: evita altas
+-- duplicadas cuando se reintenta desde la cola offline.
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS client_uid VARCHAR(64);
+CREATE UNIQUE INDEX IF NOT EXISTS clientes_client_uid_key ON clientes (client_uid) WHERE client_uid IS NOT NULL;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS horario_preferido VARCHAR(100);
 
 -- Listas de departamentos y distritos seleccionables para clasificar clientes.

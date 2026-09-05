@@ -76,18 +76,14 @@ export default function RutaPreventista() {
     return suscribirVisitasPendientes(cargarPendientes);
   }, [jornada]);
 
-  useEffect(() => {
-    const cargarPendientes = () => obtenerAccionesPendientes().then(setAccionesPendientes);
-    cargarPendientes();
-    return suscribirAccionesPendientes(cargarPendientes);
-  }, []);
-
   // La ruta de "Mi Ruta" es la que quedó fijada en la jornada al iniciarla
   // (jornada.ruta_id) — no se recalcula en vivo mientras está activa.
   // Fallback a /asignaciones/hoy solo para jornadas activas iniciadas antes
   // de este cambio (sin ruta_id todavía).
-  const cargar = useCallback(async () => {
-    setCargando(true);
+  // `silencioso` recarga sin mostrar el spinner de pantalla completa: se usa
+  // cuando la cola offline termina de sincronizar y solo hay que refrescar.
+  const cargar = useCallback(async (silencioso = false) => {
+    if (!silencioso) setCargando(true);
     setErrorCarga(null);
     try {
       let ruta: any = null;
@@ -97,8 +93,10 @@ export default function RutaPreventista() {
       } else {
         const asigRes = await obtenerAsignacionHoy();
         if (asigRes.data?.necesita_eleccion && !asigRes.data?.ruta) {
-          setErrorCarga('Todavía no elegiste tu ruta de la semana. Volvé al Inicio y tocá "Elegir ruta".');
-          setClientes([]);
+          if (!silencioso) {
+            setErrorCarga('Todavía no elegiste tu ruta de la semana. Volvé al Inicio y tocá "Elegir ruta".');
+            setClientes([]);
+          }
           setCargando(false);
           return;
         }
@@ -116,12 +114,31 @@ export default function RutaPreventista() {
         setParadas(paradasRes.data);
       }
     } catch (e: any) {
-      setErrorCarga(e?.response?.data?.error ?? 'No se pudieron cargar los clientes. Verificá tu conexión.');
+      // Una recarga silenciosa que falla no tiene que romper la pantalla que
+      // el usuario ya está usando: se deja lo que había y se reintenta después.
+      if (!silencioso) {
+        setErrorCarga(e?.response?.data?.error ?? 'No se pudieron cargar los clientes. Verificá tu conexión.');
+      }
     }
     setCargando(false);
   }, [jornada]);
 
   useFocusEffect(useCallback(() => { cargar(); }, [cargar]));
+
+  // Cuando la cola de acciones offline termina de vaciarse, refrescamos la ruta
+  // en silencio: así los clientes creados sin señal (id temporal negativo)
+  // pasan a mostrarse con su id real y se pueden visitar.
+  useEffect(() => {
+    let anteriores = 0;
+    const cargarPendientes = async () => {
+      const lista = await obtenerAccionesPendientes();
+      setAccionesPendientes(lista);
+      if (anteriores > 0 && lista.length === 0) cargar(true);
+      anteriores = lista.length;
+    };
+    cargarPendientes();
+    return suscribirAccionesPendientes(cargarPendientes);
+  }, [cargar]);
 
   const iniciarVisita = async (cliente: Cliente) => {
     if (!jornada) {
@@ -302,7 +319,7 @@ export default function RutaPreventista() {
       </Text>
       <TouchableOpacity
         style={{ backgroundColor: COLORS.preventista, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
-        onPress={cargar}
+        onPress={() => cargar()}
       >
         <Text style={{ color: '#fff', fontWeight: '700' }}>Reintentar</Text>
       </TouchableOpacity>
@@ -664,8 +681,8 @@ export default function RutaPreventista() {
         visible={!!clienteCartilla}
         color={COLORS.preventista}
         onClose={() => setClienteCartilla(null)}
-        onGuardado={cargar}
-        onEliminado={cargar}
+        onGuardado={() => cargar()}
+        onEliminado={() => cargar()}
       />
 
       <NuevoClienteModal

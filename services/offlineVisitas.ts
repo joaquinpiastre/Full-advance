@@ -5,6 +5,12 @@ import { registrarParada, subirFoto, finalizarParada } from './api';
 const STORAGE_KEY = 'visitas_pendientes_v1';
 const INTERVALO_MS = 20000;
 
+// Cuántas veces reintentamos una visita que el servidor rechaza con un error
+// suyo (5xx). Con el ciclo de 20 s da ~10 minutos de tolerancia: alcanza para
+// que el backend se reinicie o se termine de desplegar sin perder el trabajo
+// del día, y evita que una visita rota bloquee la cola para siempre.
+const MAX_INTENTOS_SERVIDOR = 30;
+
 export interface FinalizarDataPendiente {
   nota?: string;
   tiene_vencidos?: boolean;
@@ -37,6 +43,8 @@ export interface VisitaPendiente {
   fotos: FotoPendiente[];
   finalizar: FinalizarDataPendiente;
   creadoEn: number;
+  intentos?: number;
+  intentosFoto?: number;
 }
 
 let cola: VisitaPendiente[] = [];
@@ -91,6 +99,14 @@ export async function agregarVisitaPendiente(item: Omit<VisitaPendiente, 'localI
 
 function esErrorDeRed(e: any) {
   return !e?.response;
+}
+
+// Un 5xx (o 408/429) no significa que la visita esté mal: el backend puede
+// estar reiniciando o saturado. Conviene reintentar en vez de descartar el
+// trabajo del repartidor. Solo los 4xx son rechazos definitivos.
+function esErrorTemporalDelServidor(e: any) {
+  const status = e?.response?.status;
+  return status >= 500 || status === 408 || status === 429;
 }
 
 // Procesa la cola de visitas pendientes: registra la parada si falta,
@@ -149,9 +165,20 @@ export async function procesarVisitasPendientes() {
               // sin perder ni descartar el resto de la visita.
               return;
             }
-            // Error del servidor al subir esta foto puntual: la descartamos
-            // pero seguimos con el resto de la visita y la finalizamos igual,
-            // para no dejar la parada incompleta para siempre.
+            if (esErrorTemporalDelServidor(e)) {
+              // Contador propio de las fotos, para no gastar los intentos que
+              // le quedan a la visita en sí (registrar parada / finalizar).
+              item.intentosFoto = (item.intentosFoto ?? 0) + 1;
+              if (item.intentosFoto < MAX_INTENTOS_SERVIDOR) {
+                // Backend caído: reintentamos esta foto más tarde en vez de
+                // perderla.
+                await guardarCola();
+                return;
+              }
+            }
+            // Rechazo definitivo (foto inválida, demasiado grande) o demasiados
+            // reintentos: descartamos solo esta foto y seguimos finalizando la
+            // visita, para no dejar la parada incompleta para siempre.
           }
           item.fotos.shift();
           await guardarCola();
@@ -165,8 +192,17 @@ export async function procesarVisitasPendientes() {
           // Sin conexión: se reintenta en el próximo ciclo.
           return;
         }
-        // Error del servidor (ej. datos inválidos): descartamos esta visita
-        // para no bloquear la sincronización de las demás.
+        if (esErrorTemporalDelServidor(e)) {
+          item.intentos = (item.intentos ?? 0) + 1;
+          if (item.intentos < MAX_INTENTOS_SERVIDOR) {
+            // Backend caído o reiniciando: la visita queda en la cola y
+            // frenamos acá para no quemar los intentos de las demás.
+            await guardarCola();
+            return;
+          }
+        }
+        // Rechazo definitivo del servidor (datos inválidos) o demasiados
+        // reintentos: descartamos esta visita para no bloquear las demás.
         cola.splice(i, 1);
         await guardarCola();
         continue;
